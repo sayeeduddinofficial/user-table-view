@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SplunkOps</title>
+    <meta name="description" content="Splunk VM Provisioning and Management Platform" />
+    <meta name="author" content="Cloud Provisioner" />
+
+    <meta property="og:title" content="SplunkOps" />
+    <meta property="og:description" content="Splunk VM Provisioning and Management Platform" />
+    <meta property="og:type" content="website" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@Splunk" />
+    
+    <!-- <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><style>.flash{fill:%231e90ff;}</style></defs><polygon class='flash' points='16,2 10,14 18,14 12,30 22,12 14,12 20,2'/></svg>" type="image/svg+xml" /> -->
+    <script>
+  const theme = localStorage.getItem('theme');
+  if (theme === 'dark') {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.add('light');
+  }
+</script>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

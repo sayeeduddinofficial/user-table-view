@@ -1,0 +1,1 @@
+export const MAX_ALLOWED_SSH_KEYS = 3 as const;
