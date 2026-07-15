@@ -566,3 +566,10 @@ export const TIMEZONES = [
   { value: "Asia/Singapore", label: "Singapore Time (SGT)" },
   { value: "Australia/Sydney", label: "Sydney Time (AEST/AEDT)" }
 ];
+
+export const KUBERNETES_VERSIONS = [
+  { value: "1.36", label: "1.36" },
+  { value: "1.35", label: "1.35" },
+  { value: "1.34", label: "1.34" },
+  { value: "1.33", label: "1.33" },
+];

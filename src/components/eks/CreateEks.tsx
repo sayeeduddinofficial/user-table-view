@@ -15,6 +15,14 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Header } from "../layout/Header";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { AWS_REGIONS, KUBERNETES_VERSIONS } from "@/types";
 
 type ConfigurationMode = "quick" | "custom";
 
@@ -32,11 +40,11 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
   const vpcs = useAppStore((s) => s.vpcs);
   const setVpcs = useAppStore((s) => s.setVpcs);
 
-  const [region, setRegion] = useState("Ohio");
+  const [region, setRegion] = useState("us-east-2");
   const [configuration, setConfiguration] =
     useState<ConfigurationMode>("quick");
   const [name, setName] = useState("");
-  const [kubernetesVersion, setKubernetesVersion] = useState("1.30");
+  const [kubernetesVersion, setKubernetesVersion] = useState("1.36");
   const [vpc, setVpc] = useState<string>("");
   const [subnetIds, setSubnetIds] = useState<string[]>([]);
   const [availableSubnets, setAvailableSubnets] = useState<
@@ -213,14 +221,18 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
           </div>
 
           <Field label="AWS Region">
-            <select
-              value={region}
-              onChange={(e) => setRegion(e.target.value)}
-              className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
-            >
-              <option>Ohio</option>
-              <option>N.Virginia</option>
-            </select>
+            <Select value={region} onValueChange={setRegion}>
+              <SelectTrigger className="bg-muted/50">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AWS_REGIONS.map((r) => (
+                  <SelectItem key={r.value} value={r.value}>
+                    {r.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
 
           <Field
@@ -242,16 +254,21 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
             label="Kubernetes version"
             hint="Select Kubernetes version for this cluster."
           >
-            <select
+            <Select
               value={kubernetesVersion}
-              onChange={(e) => setKubernetesVersion(e.target.value)}
-              className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
+              onValueChange={(e) => setKubernetesVersion(e)}
             >
-              <option>1.30</option>
-              <option>1.31</option>
-              <option>1.32</option>
-              <option>1.33</option>
-            </select>
+              <SelectTrigger className="bg-muted/50">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {KUBERNETES_VERSIONS.map((r) => (
+                  <SelectItem key={r.value} value={r.value}>
+                    {r.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
 
           <Field
