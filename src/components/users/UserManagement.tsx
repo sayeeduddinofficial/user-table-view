@@ -3,11 +3,20 @@
  * Top-level orchestrator using React Query hooks
  */
 
-import { useState } from "react";
-// import { Plus } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Search, Users as UsersIcon, ShieldCheck, ShieldAlert, User as UserIcon } from "lucide-react";
 import { useAuth } from "@/hooks/useLogin";
 // import { isAdmin } from "@/utils/roles";
 import { useDialog } from "@/components/ui/dialog-context";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 // import { Button } from "@/components/ui/button";
 import {
   Dialog,
