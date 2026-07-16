@@ -52,6 +52,8 @@ export function UserManagement() {
 
   // const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"all" | "SuperAdmin" | "SplunkOps.Admin" | "SplunkOps.User">("all");
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   // async function handleCreate(values: UserFormValues) {
