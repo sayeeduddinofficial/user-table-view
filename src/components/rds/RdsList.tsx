@@ -8,7 +8,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/Header";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import { useResources } from "@/lib/lbLocalStore";
 import { useDialog } from "@/components/ui/dialog-context";
@@ -19,6 +18,7 @@ export type RdsStatus = "Available" | "Creating" | "Deleting" | "Stopped" | "Mod
 
 export type RdsRow = {
   id: string;
+  requestId: string;
   dbIdentifier: string;
   status: RdsStatus;
   role: RdsRole;
@@ -32,9 +32,17 @@ export type RdsRow = {
   clusterId?: string;
 };
 
+const formatDate = (date: Date) => {
+  const day = date.getDate().toString().padStart(2, '0');
+  const month = date.toLocaleString('en-US', { month: 'short' });
+  const year = date.getFullYear();
+  return `${day} ${month} ${year}`;
+};
+
 const SEED: RdsRow[] = [
   {
     id: "cluster-1",
+    requestId: "req-rds-001",
     dbIdentifier: "splunkops-aurora-cluster",
     status: "Available",
     role: "Regional cluster",
@@ -43,11 +51,12 @@ const SEED: RdsRow[] = [
     upgradeRollout: "SECOND",
     region: "us-east-2",
     size: "2 Instances",
-    created: new Date(Date.now() - 1000 * 60 * 60 * 24 * 10).toLocaleDateString(),
+    created: formatDate(new Date(Date.now() - 1000 * 60 * 60 * 24 * 10)),
     isCluster: true,
   },
   {
     id: "instance-1",
+    requestId: "",
     dbIdentifier: "splunkops-aurora-cluster-instance-1",
     status: "Available",
     role: "Writer instance",
@@ -56,12 +65,13 @@ const SEED: RdsRow[] = [
     upgradeRollout: "SECOND",
     region: "us-east-2a",
     size: "db.r6g.large",
-    created: new Date(Date.now() - 1000 * 60 * 60 * 24 * 10).toLocaleDateString(),
+    created: formatDate(new Date(Date.now() - 1000 * 60 * 60 * 24 * 10)),
     isCluster: false,
     clusterId: "cluster-1",
   },
   {
     id: "instance-2",
+    requestId: "",
     dbIdentifier: "splunkops-aurora-cluster-instance-2",
     status: "Available",
     role: "Reader instance",
@@ -70,12 +80,13 @@ const SEED: RdsRow[] = [
     upgradeRollout: "SECOND",
     region: "us-east-2b",
     size: "db.r6g.large",
-    created: new Date(Date.now() - 1000 * 60 * 60 * 24 * 9).toLocaleDateString(),
+    created: formatDate(new Date(Date.now() - 1000 * 60 * 60 * 24 * 9)),
     isCluster: false,
     clusterId: "cluster-1",
   },
   {
     id: "standalone-1",
+    requestId: "req-rds-004",
     dbIdentifier: "splunkops-mysql-db",
     status: "Available",
     role: "Standalone",
@@ -84,7 +95,7 @@ const SEED: RdsRow[] = [
     upgradeRollout: "—",
     region: "us-east-1",
     size: "db.t3.medium",
-    created: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toLocaleDateString(),
+    created: formatDate(new Date(Date.now() - 1000 * 60 * 60 * 24 * 5)),
     isCluster: false,
   },
 ];
@@ -148,7 +159,6 @@ export function RdsList() {
 
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set(["cluster-1"]));
-  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const clusters = rows.filter((r) => r.isCluster);
   const standalones = rows.filter((r) => !r.isCluster && !r.clusterId);
@@ -163,9 +173,6 @@ export function RdsList() {
 
   const toggleExpand = (id: string) =>
     setExpanded((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
-
-  const toggleSelect = (id: string) =>
-    setSelected((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const handleDelete = async (row: RdsRow) => {
     if (row.isCluster && instancesOf(row.id).length > 0) {
@@ -183,7 +190,7 @@ export function RdsList() {
     if (ok) { remove(row.id); toast.success(`${row.dbIdentifier} deleted`); }
   };
 
-  const COLS = ["DB Identifier", "Status", "Role", "Engine", "Upgrade Rollout", "Region", "Size", "Created", "Actions"];
+  const COLS = ["Request ID", "DB Identifier", "Status", "Role", "Engine", "Upgrade Rollout", "Region", "Size", "Created", "Actions"];
 
   const renderRow = (row: RdsRow, depth = 0, isLast = false) => {
     const instances = row.isCluster ? instancesOf(row.id) : [];
@@ -198,10 +205,8 @@ export function RdsList() {
           className={`transition-colors hover:bg-accent/20 ${isOpenCluster ? "" : (isInstance && !isLast) ? "" : "border-b border-border/40 last:border-0"
             }`}
         >
-          <td className="px-5 py-3.5">
-            <Checkbox checked={selected.has(row.id)} onCheckedChange={() => toggleSelect(row.id)} />
-          </td>
 
+          <td className="px-5 py-3.5 text-sm text-muted-foreground">{row.requestId}</td>
           <td className="px-5 py-3.5 relative">
             {/* Parent rail stub — from toggle center down to row bottom, only when expanded */}
             {row.isCluster && isOpen && instances.length > 0 && (
@@ -337,15 +342,6 @@ export function RdsList() {
             <table className="w-full text-sm min-w-[1100px]">
               <thead>
                 <tr className="text-xs uppercase tracking-wide text-muted-foreground border-b border-border/50">
-                  <th className="px-5 py-3 w-10">
-                    <Checkbox
-                      checked={rows.length > 0 && rows.every((r) => selected.has(r.id))}
-                      onCheckedChange={() => {
-                        const allSel = rows.every((r) => selected.has(r.id));
-                        setSelected(allSel ? new Set() : new Set(rows.map((r) => r.id)));
-                      }}
-                    />
-                  </th>
                   {COLS.map((h) => (
                     <th key={h} className={`px-5 py-3 text-left font-medium whitespace-nowrap ${h === "Actions" ? "text-right" : ""}`}>
                       {h}
@@ -356,7 +352,7 @@ export function RdsList() {
               <tbody>
                 {filteredClusters.length === 0 && filteredStandalones.length === 0 && (
                   <tr>
-                    <td colSpan={10} className="px-5 py-16 text-center text-muted-foreground">
+                    <td colSpan={9} className="px-5 py-16 text-center text-muted-foreground">
                       No RDS resources found.
                     </td>
                   </tr>

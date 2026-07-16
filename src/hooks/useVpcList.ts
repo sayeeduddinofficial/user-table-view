@@ -60,7 +60,7 @@ export function useVpcList() {
     setSelected(allChecked ? [] : filtered.map((v: any) => v.id));
   const toggleOne = (id: string) =>
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
-  const clearSelection = () => setSelected([]);
+  const clearSelection = useCallback(() => { setSelected([]); }, []);
 
   return {
     tab,

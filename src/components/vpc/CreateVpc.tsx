@@ -3,7 +3,7 @@ import { useAppStore } from "@/store/appStore";
 import { useDialog } from "@/components/ui/dialog-context";
 import { Button } from "@/components/ui/button";
 import { useNavigate, Link } from "react-router-dom";
-import { Info, X, ChevronRight, ChevronDown, ExternalLink, FileText, Loader2, Layers } from "lucide-react";
+import { Info, X, ChevronRight, ChevronDown, FileText, Loader2, Layers, XCircle } from "lucide-react";
 import { ConnectorOverlay, type Connection } from "./ConnectorOverlay";
 import { provisionVpcApi, ApiError, type CreateVpcPayload } from "@/services/vpcService";
 import { Textarea } from "@/components/ui/textarea";
@@ -26,7 +26,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "../ui/input";
-import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { fetchVpcListApi } from "@/services/vpcService";
 
 
@@ -101,6 +100,7 @@ export function CreateVpc({ onClose }: { onClose?: () => void } = {}) {
 
   // vpc-only
   const [name, setName] = useState("");
+  const [nameError, setNameError] = useState("");
 
   // vpc-and-more
   const [autoGen, setAutoGen] = useState(true);
@@ -122,6 +122,7 @@ export function CreateVpc({ onClose }: { onClose?: () => void } = {}) {
   const [tags, setTags] = useState<{ key: string; value: string }[]>([]);
   const [customSubnetCidrs, setCustomSubnetCidrs] = useState<Record<string, string>>({});
   const [businessJustification, setBusinessJustification] = useState("");
+  const [businessJustificationError, setBusinessJustificationError] = useState("");
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false); 
   const [hasActiveVpc, setHasActiveVpc] = useState(false);
@@ -264,10 +265,10 @@ useEffect(() => {
   const ipv4CidrError = !isCidrPrefixValid(ipv4Cidr);
 
   
-  const REGION_CODE: Record<string, string> = {
-    Ohio: "us-east-2",
-    "V.Virginia": "us-east-1",
-  };
+ const REGION_CODE: Record<string, string> = {
+  "US East (Ohio)": "us-east-2",
+  "US East (N. Virginia)": "us-east-1",
+};
 
   const buildTagsObject = (): Record<string, string> => {
     const obj: Record<string, string> = {};
@@ -323,38 +324,69 @@ useEffect(() => {
     };
   };
 
-    // ─── replaces the old create() function ───────────────────────────────────
+  const NAME_REGEX = /^[A-Za-z0-9-]+$/;
+
+  const validateName = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return "Name is required.";
+    }
+    if (!NAME_REGEX.test(trimmed)) {
+      return "Only letters, numbers and hyphens (-) are allowed.";
+    }
+    return "";
+  };
+
+  const validateBusinessJustification = (value: string) => {
+    if (value.trim().length < 20) {
+      return `Minimum 20 characters required (${value.trim().length}/20).`;
+    }
+    return "";
+  };
+
   const validateBeforeConfirm = (): boolean => {
+    let valid = true;
+    // Name validation
+    const currentName =
+      mode === "vpc-only"
+        ? name
+        : autoGen
+        ? autoName
+        : "";
+    const nameValidation =
+      mode === "vpc-only" || autoGen
+        ? validateName(currentName)
+        : "";
+    setNameError(nameValidation);
+    if (nameValidation) {
+      valid = false;
+    }
+
+    // Business Justification validation
+    const justificationValidation =
+      validateBusinessJustification(businessJustification);
+      setBusinessJustificationError(justificationValidation);
+      if (justificationValidation) {
+        valid = false;
+      }
+
+    // CIDR validation
     if (!isCidrPrefixValid(ipv4Cidr)) {
       alert({
         title: "Invalid IPv4 CIDR block",
         description: "CIDR prefix must be between /16 and /28.",
         severity: "error",
       });
-      return false;
+      valid = false;
     }
     if (mode === "vpc-and-more") {
-      for (const s of subnetCidrs) {
-        const cidr = customSubnetCidrs[s.label] ?? s.cidr;
-        if (!isCidrPrefixValid(cidr)) {
-          alert({
-            title: "Invalid subnet CIDR block",
-            description: `${s.label}: CIDR prefix must be between /16 and /28.`,
-            severity: "error",
-          });
-          return false;
-        }
+      const err = validateName(autoName);
+      setNameError(err);
+      if (err) {
+        return false;
       }
     }
-    if (businessJustification.trim().length < 20) {
-      alert({
-        title: "Business justification required",
-        description: "Please provide at least 20 characters of justification.",
-        severity: "error",
-      });
-      return false;
-    }
-    return true;
+    return valid;
   };
 
 const create = async () => {
@@ -540,6 +572,9 @@ const create = async () => {
                 setRegion={setRegion}
                 name={name}
                 setName={setName}
+                nameError={nameError}
+                setNameError={setNameError}
+                validateName={validateName}
                 ipv4Mode={ipv4Mode}
                 setIpv4Mode={setIpv4Mode}
                 ipv4Cidr={ipv4Cidr}
@@ -589,15 +624,30 @@ const create = async () => {
                     id="auto-name"
                     placeholder="Enter Name tag"
                     value={autoGen ? autoName : ""}
-                    onChange={(e) => setAutoName(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setAutoName(value);
+                      if (nameError) {
+                          setNameError(validateName(value));
+                      }
+                    }}
+                    onBlur={() => setNameError(validateName(autoName))}
                     disabled={!autoGen}
-                    className="bg-muted/50"
+                    className={`bg-muted/50 ${
+                        nameError ? "border-red-500" : ""
+                    }`}
                   />
 
-                  <p className="text-xs text-muted-foreground">
-                    Enter a value for the Name tag. This value will be used to auto-generate
+                  {nameError ? (
+                    <p className="text-xs text-red-500">
+                      {nameError}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Enter a value for the Name tag. This value will be used to auto-generate
                     Name tags for all resources in the VPC.
-                  </p>
+                    </p>
+                  )}                  
                 </div>
                
 
@@ -1203,16 +1253,34 @@ const create = async () => {
 
           <div className="relative">
             <Textarea
-              id="justification"
-              className="resize-none overflow-y-auto"
+              className={`resize-none ${
+                  businessJustificationError ? "border-red-500" : ""
+              }`}
               placeholder="Provide a brief justification for this VPC request."
               value={businessJustification}
-              onChange={(e) =>
-                setBusinessJustification(e.target.value.slice(0, 250))
+              onChange={(e) => {
+                const value = e.target.value;
+                setBusinessJustification(value);
+                if (businessJustificationError) {
+                  setBusinessJustificationError(
+                    validateBusinessJustification(value)
+                  );
+                }
+              }}
+              onBlur={() =>
+                setBusinessJustificationError(
+                  validateBusinessJustification(businessJustification)
+                )
               }
               rows={3}
               maxLength={250}
             />
+
+            {businessJustificationError && (
+              <div className="mt-1 text-xs text-red-500">
+                Business justification must contain at least 20 characters.
+              </div>
+            )}
 
             <div className="mt-2 text-right text-xs text-slate-400">
               {businessJustification.length}/250
@@ -1320,7 +1388,7 @@ function cidrSize(cidr: string) {
 /* ---------- VPC-only sub-form (extracted to keep parent readable) ---------- */
 function VpcOnlyFields(p: any) {
   const {
-    name, setName,
+    name, setName, nameError, setNameError, validateName,
     ipv4Mode, setIpv4Mode, ipv4Cidr, setIpv4Cidr,ipv4CidrError,
     ipv4IpamPool, setIpv4IpamPool, ipv4IpamNetmask, setIpv4IpamNetmask,
     ipv6Mode, setIpv6Mode, ipv6IpamPool, setIpv6IpamPool,
@@ -1338,19 +1406,25 @@ function VpcOnlyFields(p: any) {
             id="name-tag"
             value={name}
             onChange={(e) => {
-              const value = e.target.value;
-              if (/^[A-Za-z0-9-]*$/.test(value)) {
-                setName(value);
-              }
+              setName(e.target.value);
+              setNameError(validateName(e.target.value));
             }}
+            onBlur={() => setNameError(validateName(name))}
             placeholder="my-vpc-01"
-            className="bg-muted/50"
+            className={`bg-muted/50 ${
+              nameError ? "border-destructive" : ""
+            }`}
             spellCheck={false}
           />
-
-          <p className="text-xs text-muted-foreground">
-            Creates a tag with a key of <code className="rounded bg-muted px-1 py-0.5 text-[11px]">Name</code> and the value you specify.
-          </p>
+          {nameError ? (
+            <div className="mt-1 flex items-center gap-1 text-xs text-red-500"><XCircle size={14} className="mt-0.5 shrink-0" />
+              <p className="text-xs text-red-500">{nameError}</p>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Creates a tag with a key of <code className="rounded bg-muted px-1 py-0.5 text-[11px]">Name</code> and the value you specify.
+            </p>
+          )}
         </div>
 
       <Field label="IPv4 CIDR block" info>
@@ -1479,9 +1553,7 @@ function VpcOnlyFields(p: any) {
       </div>
 
       <Field label="VPC encryption control ($)" info>
-        <div className="text-xs text-muted-foreground mt-1 mb-2">Monitor mode provides visibility into encryption status without blocking traffic. Enforce mode prevents unencrypted traffic.
-          <a href="https://aws.amazon.com/vpc/pricing/" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-primary text-xs ml-1 hover:underline">Additional charges apply<ExternalLink size={12} /></a>
-        </div>
+        <div className="text-xs text-muted-foreground mt-1 mb-2">Monitor mode provides visibility into encryption status without blocking traffic. Enforce mode prevents unencrypted traffic.</div>
         <div className="grid grid-cols-3 gap-3">
           <SelectCard selected={encryption === "none"} onClick={() => setEncryption("none")} label="None" />
           <SelectCard selected={encryption === "monitor"} onClick={() => setEncryption("monitor")} disabled label="Monitor mode"

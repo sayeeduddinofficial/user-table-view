@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDialog } from "@/components/ui/dialog-context";
-import { Copy, Database, Clock3, Lock, RefreshCw, Search, Trash2, History } from "lucide-react";
+import { Database, Clock3, Lock, RefreshCw, Search, Trash2, History } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Loader } from "@/components/common/Loader";
 import { S3Bucket, encryptionLabel, regionLabel } from "@/utils/s3.utils";
+import { CopyIconButton } from "@/components/s3/shared";
 import { useAppStore } from "@/store/appStore";
 
 function formatDate(value?: string): string {
@@ -196,24 +197,18 @@ export function BucketsTable({
                   <td className="px-5 py-4 whitespace-nowrap">{statusBadge(r)}</td>
                   <td className="px-5 py-4 text-right whitespace-nowrap">
                     <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          navigator.clipboard.writeText(`arn:aws:s3:::${r.name}`);
-                          alert({ title: "ARN copied", severity: "success" });
-                        }}
+                      <CopyIconButton
+                        value={`arn:aws:s3:::${r.name}`}
+                        label="Copy ARN"
+                        alertTitle="ARN copied"
                         className="h-auto w-auto p-1.5 text-muted-foreground hover:text-foreground"
-                        tooltip="Copy ARN"
-                      >
-                        <Copy size={14} />
-                      </Button>
+                      />
                       <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => onDelete(r.id)}
                         className="h-auto w-auto p-1.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        tooltip="Delete bucket"
+                        tooltip="Delete Bucket"
                       >
                         <Trash2 size={14} />
                       </Button>

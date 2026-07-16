@@ -2,20 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useDialog } from "@/components/ui/dialog-context";
 import {
-  ChevronRight, Copy, Download, FileText, Folder, FolderPlus, Link2, RefreshCw, Search, Trash2, Upload,
+  ChevronRight, Download, FileText, Folder, FolderPlus, Link2, RefreshCw, Search, Trash2, Upload,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Loader } from "@/components/common/Loader";
+import { DataTable, type Column } from "@/components/common/DataTable";
 import { Header } from "@/components/layout/Header";
 import { CreateFolderDialog } from "./CreateFolderDialog";
 import { UploadDialog } from "./UploadDialog";
 import { DeleteObjectsDialog } from "./DeleteObjectsDialog";
-import { DetailCard, DetailField } from "./shared";
+import { CopyIconButton, DetailCard, DetailField } from "./shared";
 import { S3Bucket, regionLabel } from "@/utils/s3.utils";
-import { fetchObjectsApi, createFolderApi, uploadObjectApi, deleteObjectApi, downloadObjectApi } from "@/services/objectService";
+import { fetchObjectsApi, createFolderApi, uploadObjectApi, deleteObjectApi, downloadObjectApi, type ObjectsPagination } from "@/services/objectService";
 
 const DETAIL_TABS = ["Objects", "Properties"] as const;
 type DetailTab = typeof DETAIL_TABS[number];
@@ -58,6 +58,7 @@ export function BucketDetail({ bucket, onBack }: { bucket: S3Bucket; onBack: () 
   const path = prefixParam ? prefixParam.split("/").filter(Boolean).map((seg) => `${seg}/`) : [];
 
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [sel, setSel] = useState<string[]>([]);
   const [creatingFolder, setCreatingFolder] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -92,10 +93,13 @@ export function BucketDetail({ bucket, onBack }: { bucket: S3Bucket; onBack: () 
     setSearch("");
   };
 
+  const prefixKey = path.join("");
+
   const enterFolder = (folder: string) => {
+    const normalizedFolder = folder.endsWith("/") ? folder : `${folder}/`;
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
-      next.set("prefix", `${prefixParam}${folder}`);
+      next.set("prefix", `${prefixKey}${normalizedFolder}`);
       next.delete("object");
       return next;
     });
@@ -106,17 +110,41 @@ export function BucketDetail({ bucket, onBack }: { bucket: S3Bucket; onBack: () 
   const toggle = (n: string) =>
     setSel((s) => (s.includes(n) ? s.filter((x) => x !== n) : [...s, n]));
 
-  const prefixKey = path.join("");
-
   const [rawObjects, setRawObjects] = useState<ObjEntry[]>([]);
+  const [allFileNames, setAllFileNames] = useState<string[]>([]);
+  const [objectCache, setObjectCache] = useState<Record<string, ObjEntry>>({});
   const [loadingObjects, setLoadingObjects] = useState(false);
+  const [page, setPage] = useState(1);
+  const OBJECTS_PAGE_SIZE = 10;
+  const [pagination, setPagination] = useState<ObjectsPagination>({
+    total: 0,
+    page: 1,
+    limit: OBJECTS_PAGE_SIZE,
+    totalPages: 1,
+    hasNext: false,
+    hasPrev: false,
+  });
+
+  // Debounce search input before it drives a backend request
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 350);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, prefixKey, bucket.id]);
 
   const loadObjects = async () => {
     setLoadingObjects(true);
     try {
-      const response = await fetchObjectsApi(bucket.id, prefixKey);
+      const response = await fetchObjectsApi(bucket.id, prefixKey, {
+        search: debouncedSearch,
+        page,
+        limit: OBJECTS_PAGE_SIZE,
+      });
       const folders: ObjEntry[] = response.folders.map((f) => ({
-        name: `${f.name}/`,
+        name: `${f.name}`,
         type: "Folder",
       }));
       const files: ObjEntry[] = response.files.map((f) => ({
@@ -126,7 +154,24 @@ export function BucketDetail({ bucket, onBack }: { bucket: S3Bucket; onBack: () 
         modified: formatDate(f.lastModified),
         storage: f.storageClass,
       }));
-      setRawObjects([...folders, ...files]);
+      const pageObjects = [...folders, ...files];
+      setRawObjects(pageObjects);
+      setAllFileNames(response.allFileNames ?? pageObjects.filter((o) => o.type !== "Folder").map((o) => o.name));
+      const resolvedPagination = response.pagination ?? {
+        total: pageObjects.length,
+        page: 1,
+        limit: OBJECTS_PAGE_SIZE,
+        totalPages: 1,
+        hasNext: false,
+        hasPrev: false,
+      };
+      setPagination(resolvedPagination);
+      setObjectCache((cache) => {
+        const next = { ...cache };
+        pageObjects.forEach((o) => { next[o.name] = o; });
+        return next;
+      });
+      if (resolvedPagination.page !== page) setPage(resolvedPagination.page);
     } catch (error) {
       console.error("Failed to load objects", error);
       alert({ title: "Unable to load objects", severity: "error" });
@@ -137,13 +182,15 @@ export function BucketDetail({ bucket, onBack }: { bucket: S3Bucket; onBack: () 
 
   useEffect(() => {
     void loadObjects();
-    setSel([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bucket.id, prefixKey, debouncedSearch, page]);
+
+  useEffect(() => {
+    setSel([]);
+    setObjectCache({});
   }, [bucket.id, prefixKey]);
 
-  const objects = rawObjects.filter((o) =>
-    search ? o.name.toLowerCase().includes(search.toLowerCase()) : true
-  );
+  const objects = rawObjects;
 
 
   const renderObjectActions = (o: ObjEntry) => {
@@ -162,32 +209,21 @@ export function BucketDetail({ bucket, onBack }: { bucket: S3Bucket; onBack: () 
         : "p-1.5 rounded-md text-muted-foreground/30 cursor-not-allowed";
     return (
       <div className="flex items-center justify-end gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={(e) => {
-            e.stopPropagation();
-            navigator.clipboard.writeText(s3Uri);
-            alert({ title: "S3 URI copied", severity: "success" });
-          }}
+        <CopyIconButton
+          value={s3Uri}
+          label="Copy S3 URI"
+          alertTitle="S3 URI copied"
+          stopPropagation
           className={`h-auto w-auto ${btnClass(true)}`}
-          tooltip="Copy S3 URI"
-        >
-          <Copy size={14} />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={(e) => {
-            e.stopPropagation();
-            navigator.clipboard.writeText(url);
-            alert({ title: "URL copied", severity: "success" });
-          }}
+        />
+        <CopyIconButton
+          value={url}
+          icon={Link2}
+          label="Copy URL"
+          alertTitle="URL copied"
+          stopPropagation
           className={`h-auto w-auto ${btnClass(true)}`}
-          tooltip="Copy URL"
-        >
-          <Link2 size={14} />
-        </Button>
+        />
         <Button
           variant="ghost"
           size="icon"
@@ -215,6 +251,84 @@ export function BucketDetail({ bucket, onBack }: { bucket: S3Bucket; onBack: () 
       </div>
     );
   };
+
+  const columns: Column<ObjEntry>[] = [
+    {
+      key: "select",
+      header: (
+        <Checkbox
+          checked={objects.length > 0 && objects.every((o) => sel.includes(o.name))}
+          onCheckedChange={(checked) =>
+            setSel((s) =>
+              checked
+                ? Array.from(new Set([...s, ...objects.map((o) => o.name)]))
+                : s.filter((n) => !objects.some((o) => o.name === n))
+            )
+          }
+          aria-label="Select all"
+        />
+      ),
+      render: (o) => (
+        <Checkbox
+          checked={sel.includes(o.name)}
+          onClick={(e) => e.stopPropagation()}
+          onCheckedChange={() => toggle(o.name)}
+          aria-label={`Select ${o.name}`}
+        />
+      ),
+      className: "w-10",
+    },
+    {
+      key: "name",
+      header: "Name",
+      className: "whitespace-nowrap",
+      render: (o) =>
+        o.type === "Folder" ? (
+          <span
+            className="flex items-center gap-2 text-primary hover:underline cursor-pointer"
+            onClick={() => enterFolder(o.name)}
+          >
+            <Folder size={14} className="text-primary" />
+            {o.name}
+          </span>
+        ) : (
+          <span className="flex items-center gap-2">
+            <FileText size={14} className="text-muted-foreground" />
+            {o.name}
+          </span>
+        ),
+    },
+    {
+      key: "type",
+      header: "Type",
+      className: "whitespace-nowrap",
+      render: (o) => o.type,
+    },
+    {
+      key: "modified",
+      header: "Last modified",
+      className: "whitespace-nowrap text-muted-foreground",
+      render: (o) => o.modified ?? "-",
+    },
+    {
+      key: "size",
+      header: "Size",
+      className: "whitespace-nowrap text-muted-foreground",
+      render: (o) => o.size ?? "-",
+    },
+    {
+      key: "storage",
+      header: "Storage class",
+      className: "whitespace-nowrap text-muted-foreground",
+      render: (o) => o.storage ?? "-",
+    },
+    {
+      key: "actions",
+      header: <span className="flex justify-end">Actions</span>,
+      className: "text-right whitespace-nowrap",
+      render: renderObjectActions,
+    },
+  ];
 
   return (
     <>
@@ -270,146 +384,71 @@ export function BucketDetail({ bucket, onBack }: { bucket: S3Bucket; onBack: () 
           </div>
 
           {tab === "Objects" && (
-            <div className="bg-card border border-border rounded-lg">
-              <div className="px-5 py-4 flex items-start justify-between gap-4 flex-wrap">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-lg font-semibold">Objects</h2>
-                    <Badge className="bg-orange-500 hover:bg-orange-500 text-white border-transparent rounded-full h-5 min-w-5 justify-center px-1.5">
-                      {objects.length}
-                    </Badge>
+            <div className="space-y-4">
+              <div className="bg-card border border-border rounded-lg">
+                <div className="px-5 py-4 flex items-start justify-between gap-4 flex-wrap">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-lg font-semibold">Objects</h2>
+                      <Badge className="bg-orange-500 hover:bg-orange-500 text-white border-transparent rounded-full h-5 min-w-5 justify-center px-1.5">
+                        {pagination.total}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Objects are entities stored in S3. Select objects to copy URIs, download or delete.
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Objects are entities stored in S3. Select objects to copy URIs, download or delete.
-                  </p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-auto w-auto p-2 rounded-full"
+                      tooltip="Refresh"
+                      disabled={loadingObjects}
+                      onClick={() => void loadObjects()}
+                    >
+                      <RefreshCw size={14} className={loadingObjects ? "animate-spin" : ""} />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={sel.length === 0}
+                      onClick={() => setDeletingObjects(true)}
+                    >
+                      <Trash2 size={14} className="mr-1.5" /> Delete
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => setCreatingFolder(true)}>
+                      <FolderPlus size={14} className="mr-1.5" /> Create Folder
+                    </Button>
+                    <Button size="sm" onClick={() => setUploading(true)}>
+                      <Upload size={14} className="mr-1.5" /> Upload
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-auto w-auto p-2 rounded-full"
-                    tooltip="Refresh"
-                    disabled={loadingObjects}
-                    onClick={() => void loadObjects()}
-                  >
-                    <RefreshCw size={14} className={loadingObjects ? "animate-spin" : ""} />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={sel.length === 0}
-                    onClick={() => setDeletingObjects(true)}
-                  >
-                    <Trash2 size={14} className="mr-1.5" /> Delete
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setCreatingFolder(true)}>
-                    <FolderPlus size={14} className="mr-1.5" /> Create folder
-                  </Button>
-                  <Button size="sm" onClick={() => setUploading(true)}>
-                    <Upload size={14} className="mr-1.5" /> Upload
-                  </Button>
+
+                {/* Search */}
+                <div className="px-5 pb-4 flex items-center gap-3">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Find objects by prefix"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="pl-9 bg-background/50"
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* Search + pagination */}
-              <div className="px-5 pb-3 flex items-center gap-3">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    placeholder="Find objects by prefix"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9 bg-background/50"
-                  />
-                </div>
-                <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                  <button className="p-1.5 rounded border border-border hover:bg-accent/40 disabled:opacity-40" disabled>
-                    <ChevronRight size={14} className="rotate-180" />
-                  </button>
-                  <span className="px-2 text-foreground">1</span>
-                  <button className="p-1.5 rounded border border-border hover:bg-accent/40 disabled:opacity-40" disabled>
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
-              </div>
-
-              {/* Objects table */}
-              <div className="border-t border-border overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm min-w-[900px]">
-                    <thead>
-                      <tr className="text-xs uppercase tracking-wide text-muted-foreground border-b border-border/50">
-                        <th className="px-5 py-3 w-10">
-                          <Checkbox
-                            checked={sel.length === objects.length && objects.length > 0}
-                            onCheckedChange={(checked) => setSel(checked ? objects.map((o) => o.name) : [])}
-                            aria-label="Select all"
-                          />
-                        </th>
-                        {["Name", "Type", "Last modified", "Size", "Storage class"].map((h) => (
-                          <th key={h} className="px-5 py-3 text-left font-medium whitespace-nowrap">
-                            {h}
-                          </th>
-                        ))}
-                        <th className="px-5 py-3 text-right font-medium whitespace-nowrap">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {loadingObjects ? (
-                        <tr>
-                          <td colSpan={7}>
-                            <Loader label="Loading objects..." />
-                          </td>
-                        </tr>
-                      ) : objects.length === 0 ? (
-                        <tr>
-                          <td colSpan={7} className="px-5 py-16 text-center text-muted-foreground text-sm">
-                            This bucket is empty. Click <span className="text-foreground">Upload</span> to add objects.
-                          </td>
-                        </tr>
-                      ) : (
-                        objects.map((o) => (
-                        <tr
-                          key={o.name}
-                          data-state={sel.includes(o.name) ? "selected" : undefined}
-                          className="border-b border-border/40 last:border-0 hover:bg-accent/20 data-[state=selected]:bg-accent/30 transition-colors"
-                        >
-                          <td className="px-5 py-4">
-                            <Checkbox
-                              checked={sel.includes(o.name)}
-                              onClick={(e) => e.stopPropagation()}
-                              onCheckedChange={() => toggle(o.name)}
-                              aria-label={`Select ${o.name}`}
-                            />
-                          </td>
-                          <td className="px-5 py-4 whitespace-nowrap">
-                            {o.type === "Folder" ? (
-                              <span
-                                className="flex items-center gap-2 text-primary hover:underline cursor-pointer"
-                                onClick={() => enterFolder(o.name)}
-                              >
-                                <Folder size={14} className="text-primary" />
-                                {o.name}
-                              </span>
-                            ) : (
-                              <span className="flex items-center gap-2">
-                                <FileText size={14} className="text-muted-foreground" />
-                                {o.name}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-5 py-4 whitespace-nowrap">{o.type}</td>
-                          <td className="px-5 py-4 whitespace-nowrap text-muted-foreground">{o.modified ?? "-"}</td>
-                          <td className="px-5 py-4 whitespace-nowrap text-muted-foreground">{o.size ?? "-"}</td>
-                          <td className="px-5 py-4 whitespace-nowrap text-muted-foreground">{o.storage ?? "-"}</td>
-                          <td className="px-5 py-4 text-right whitespace-nowrap">{renderObjectActions(o)}</td>
-                        </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+              <DataTable
+                columns={columns}
+                data={objects}
+                isLoading={loadingObjects}
+                emptyMessage="This bucket is empty. Click Upload to add objects."
+                pagination={pagination}
+                onPageChange={setPage}
+                rowKey={(o) => o.name}
+              />
             </div>
           )}
 
@@ -464,6 +503,7 @@ export function BucketDetail({ bucket, onBack }: { bucket: S3Bucket; onBack: () 
       <UploadDialog
         open={uploading}
         onOpenChange={setUploading}
+        existingNames={allFileNames}
         onUpload={async (entries) => {
           const results = await Promise.allSettled(
             entries.map((entry) => {
@@ -504,7 +544,7 @@ export function BucketDetail({ bucket, onBack }: { bucket: S3Bucket; onBack: () 
       <DeleteObjectsDialog
         bucket={bucket}
         path={path}
-        objects={objects.filter((o) => sel.includes(o.name))}
+        objects={sel.map((name) => objectCache[name]).filter((o): o is ObjEntry => Boolean(o))}
         open={deletingObjects}
         onOpenChange={setDeletingObjects}
         onConfirm={async () => {

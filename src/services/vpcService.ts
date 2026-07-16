@@ -70,6 +70,7 @@ export interface VpcDetailRaw {
   updated_at?: string;
   resource_name: string;
   metadata_json?: Record<string, any>;
+  aws_tags_json?: Record<string, string> | null;
   vpc_db_id?: number | null;
   aws_vpc_id: string | null;
   vpc_name?: string;

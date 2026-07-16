@@ -29,7 +29,7 @@ export function CreateFolderDialog({
     >
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Create folder</DialogTitle>
+          <DialogTitle>Create Folder</DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground">
           Use folders to group objects in buckets. When you create a folder, S3 creates an object using the name that you specify followed by a slash (/). This object then appears as folder on the console.
@@ -44,14 +44,16 @@ export function CreateFolderDialog({
               placeholder="Enter folder name"
               className="flex-1 h-9 px-3 text-sm rounded border border-border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
             />
-            <span className="text-muted-foreground">/</span>
+
           </div>
           <p className="text-xs text-muted-foreground mt-2">
             Folder names can't contain "/".
           </p>
         </div>
         <div className="flex items-center justify-end gap-3 pt-2">
-          <button onClick={() => onOpenChange(false)} className="text-sm text-primary hover:underline">Cancel</button>
+         <Button variant="outline" onClick={() => onOpenChange(false)}>
+                   Cancel
+          </Button>
           <Button
             size="sm"
             disabled={!valid || isSubmitting}
@@ -62,7 +64,7 @@ export function CreateFolderDialog({
               if (success) onOpenChange(false);
             }}
           >
-            {isSubmitting ? "Creating..." : "Create folder"}
+            {isSubmitting ? "Creating..." : "Create Folder"}
           </Button>
         </div>
       </DialogContent>

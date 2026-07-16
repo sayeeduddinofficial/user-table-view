@@ -1,5 +1,7 @@
-import { Search, Filter } from "lucide-react";
+import { Search, Filter, Plus } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -19,6 +21,7 @@ export function VMFilterBar({
   searchQuery, roleFilter, statusFilter, uniqueRoles,
   onSearchChange, onRoleChange, onStatusChange,
 }: Props) {
+  const navigate = useNavigate();
   return (
     <Card className="sticky top-16 z-30 bg-card/80 backdrop-blur border-border/50 p-0 mb-2">
       <CardContent className="py-0 px-0">
@@ -60,6 +63,14 @@ export function VMFilterBar({
                 <SelectItem value="terminated">Terminated</SelectItem>
               </SelectContent>
             </Select>
+
+            <Button
+              onClick={() => navigate("/requests/new")}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Create VM
+            </Button>
           </div>
         </div>
       </CardContent>

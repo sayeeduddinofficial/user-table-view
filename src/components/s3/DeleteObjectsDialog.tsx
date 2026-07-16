@@ -47,7 +47,7 @@ export function DeleteObjectsDialog({
     >
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Delete objects</DialogTitle>
+          <DialogTitle>Delete Objects</DialogTitle>
         </DialogHeader>
 
         <div className="border border-amber-500/40 bg-amber-500/10 dark:bg-amber-950/30 rounded p-4 text-sm space-y-2">
@@ -99,7 +99,6 @@ export function DeleteObjectsDialog({
                         >
                           {o.type === "Folder" ? <Folder size={14} /> : <FileText size={14} />}
                           {o.name}
-                          <ExternalLink size={12} />
                         </a>
                       </td>
                       <td className="px-5 py-2 text-muted-foreground">{o.type === "Folder" ? "Folder" : o.type}</td>
@@ -139,7 +138,7 @@ export function DeleteObjectsDialog({
               if (success) onOpenChange(false);
             }}
           >
-            {isSubmitting ? "Deleting..." : "Delete objects"}
+            {isSubmitting ? "Deleting..." : "Delete Objects"}
           </Button>
         </div>
       </DialogContent>

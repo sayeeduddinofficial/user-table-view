@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, ChevronRight, FileText } from "lucide-react";
+import { AlertTriangle, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDialog } from "@/components/ui/dialog-context";
 import { Section, FieldRow, RadioCard, RadioRow } from "./shared";
@@ -20,6 +20,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 export function CreateBucketWizard({ onCancel, onSubmit }: {
   onCancel: () => void;
@@ -29,6 +30,7 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
   const [form, setForm] = useState<BucketForm>(initialForm);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [justificationTouched, setJustificationTouched] = useState(false);
   const set = <K extends keyof BucketForm>(k: K, v: BucketForm[K]) => setForm((f) => ({ ...f, [k]: v }));
   const isDirectory = form.bucketType === "directory";
   const isRegional = !isDirectory && form.namespace === "regional";
@@ -86,19 +88,19 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
 
   return (
     <div className="bg-background min-h-full">
-      <div className="px-6 py-3 text-sm flex items-center gap-2 border-b border-border flex-wrap">
+      {/* <div className="px-6 py-3 text-sm flex items-center gap-2 border-b border-border flex-wrap">
         <span className="text-primary cursor-pointer hover:underline" onClick={onCancel}>S3 Buckets</span>
         <ChevronRight size={12} className="text-muted-foreground" />
-        <span className="font-semibold">Create bucket</span>
-      </div>
+        <span className="font-semibold">Create Bucket</span>
+      </div> */}
 
       <div className="max-w-5xl mx-auto px-8 py-6 space-y-8">
         <div>
-          <h1 className="text-2xl font-bold">Create bucket</h1>
+          <h1 className="text-2xl font-bold">Create Bucket</h1>
           <p className="text-sm text-muted-foreground mt-1">Buckets are containers for data stored in S3.</p>
         </div>
         {/* General configuration */}
-        <Section title="General configuration">
+        <Section title="General Configuration">
           <FieldRow label="AWS Region">
             <Select value={form.region} onValueChange={(v) => set("region", v)}>
               <SelectTrigger className="w-full bg-background/50">
@@ -112,7 +114,7 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
             </Select>
           </FieldRow>
 
-          <FieldRow label="Bucket type">
+          <FieldRow label="Bucket Type">
             <div className="grid grid-cols-2 gap-3">
               <RadioCard
                 checked={form.bucketType === "general"}
@@ -175,7 +177,7 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
           )}
 
           {!isDirectory && (
-            <FieldRow label="Bucket namespace">
+            <FieldRow label="Bucket Namespace">
               <RadioRow
                 checked={form.namespace === "global"}
                 onChange={() => set("namespace", "global")}
@@ -191,7 +193,7 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
             </FieldRow>
           )}
 
-          <FieldRow label="Bucket name">
+          <FieldRow label="Bucket Name">
             {isDirectory ? (
               <>
                 <p className="text-xs text-muted-foreground mb-2">
@@ -200,7 +202,7 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium block mb-1">Base name</label>
-                    <input
+                    <Input
                       value={form.baseName}
                       onChange={(e) => {
                         const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "");
@@ -462,7 +464,7 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
 
 
         {/* Encryption */}
-        <Section title="Default encryption">
+        <Section title="Default Encryption">
           <p className="text-xs text-muted-foreground -mt-2 mb-3">
             Server-side encryption is automatically applied to new objects stored in this bucket.
           </p>
@@ -501,22 +503,29 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
           <div className="space-y-3">
             <Textarea
               id="justification"
-              className="resize-none overflow-y-auto"
+              className={`resize-none overflow-y-auto ${justificationTouched && form.justification.trim().length > 0 && form.justification.trim().length < 20 ? "border-red-500 ring-1 ring-red-200" : ""}`}
               placeholder="Provide a brief justification for this bucket request."
               value={form.justification}
               onChange={(e) => set("justification", e.target.value)}
+              onBlur={() => setJustificationTouched(true)}
               rows={3}
               maxLength={250}
             />
-            <div className="flex justify-end mt-1">
-              <p className="text-xs text-muted-foreground">
-                {form.justification.length}/250
-              </p>
+            <div className="flex justify-between items-center">
+              {justificationTouched && form.justification.trim().length > 0 && form.justification.trim().length < 20 ? (
+                <div className="text-xs text-red-600">
+                  Business justification must contain at least 20 characters.
+                </div>
+              ) : <span />}
+              <p className="text-xs text-muted-foreground">{form.justification.length}/250</p>
             </div>
           </div>
         </section>
 
-        <div className="flex items-center justify-end gap-3 pt-2">
+        <div className="flex items-center justify-between gap-3 pt-2">
+          <Button variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
           <Button
             size="sm"
             disabled={
@@ -532,7 +541,7 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
               setIsConfirmOpen(true);
             }}
           >
-            Create bucket
+            Create Bucket
           </Button>
         </div>
       </div>

@@ -1,7 +1,45 @@
-import { Info } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Check, Copy, Info, LucideIcon } from "lucide-react";
 import { useDialog } from "@/components/ui/dialog-context";
-import { Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+export function CopyIconButton({
+  value, icon: Icon = Copy, label = "Copy", alertTitle = "Copied", iconSize = 14, className, stopPropagation,
+}: {
+  value: string;
+  icon?: LucideIcon;
+  label?: string;
+  alertTitle?: string;
+  iconSize?: number;
+  className?: string;
+  stopPropagation?: boolean;
+}) {
+  const { alert } = useDialog();
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timeout = window.setTimeout(() => setCopied(false), 1500);
+    return () => window.clearTimeout(timeout);
+  }, [copied]);
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={(e) => {
+        if (stopPropagation) e.stopPropagation();
+        navigator.clipboard.writeText(value);
+        setCopied(true);
+        alert({ title: alertTitle, severity: "success" });
+      }}
+      className={className}
+      tooltip={copied ? "Copied" : label}
+    >
+      {copied ? <Check size={iconSize} /> : <Icon size={iconSize} />}
+    </Button>
+  );
+}
 
 export function Section({ title, info, children }: { title: string; info?: boolean; children: React.ReactNode }) {
   return (
@@ -88,23 +126,17 @@ export function DetailCard({ title, subtitle, action, children }: { title: strin
 }
 
 export function DetailField({ label, value, mono, copy, help }: { label: string; value: string; mono?: boolean; copy?: boolean; help?: string }) {
-  const { alert } = useDialog();
-
   return (
     <div className="mb-3 last:mb-0">
       <div className="text-xs font-semibold mb-1">{label}</div>
       {help && <p className="text-xs text-muted-foreground mb-1">{help}</p>}
       <div className={`text-sm break-all flex items-start gap-2 ${mono ? "font-mono text-xs" : ""}`}>
         {copy && (
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => { navigator.clipboard.writeText(value); alert({ title: "Copied", severity: "success" }); }}
+          <CopyIconButton
+            value={value}
+            iconSize={12}
             className="h-auto w-auto p-0 text-muted-foreground hover:text-foreground mt-0.5 shrink-0"
-            tooltip="Copy"
-          >
-            <Copy size={12} />
-          </Button>
+          />
         )}
         <span className={copy ? "text-primary" : ""}>{value}</span>
       </div>

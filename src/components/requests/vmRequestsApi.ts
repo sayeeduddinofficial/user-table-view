@@ -6,6 +6,22 @@
 import { apiClient, env } from "@/lib/api";
 import type { ApiResponse } from "@/types/api";
 
+/** Maps backend service identifiers to display labels */
+export const SERVICE_LABELS: Record<string, string> = {
+  "vm-service": "EC2",
+  "vpc-service": "VPC",
+  "s3-service": "S3",
+  "lb-service": "Load Balancer",
+  "rds-service": "RDS",
+  "eks-cluster-service": "EKS",
+  "route53-service": "Route 53",
+};
+
+/** Ordered list for dropdowns / selects */
+export const SERVICE_OPTIONS = Object.entries(SERVICE_LABELS).map(
+  ([value, label]) => ({ value, label })
+);
+
 export interface VMRequest {
   request_id: string;
   user_name: string;
@@ -89,6 +105,7 @@ export interface VMRequestsQueryParams {
   page?: number;
   limit?: number;
   status?: string;
+  service?: string;
   search?: string;
 }
 
@@ -111,6 +128,7 @@ export async function fetchVMRequestsApi(params: VMRequestsQueryParams = {}): Pr
     limit: String(params.limit ?? 10),
   };
   if (params.status && params.status !== "all") query.status = params.status;
+  if (params.service && params.service !== "all") query.service = params.service;
   if (params.search?.trim()) query.search = params.search.trim();
 
   const response = await apiClient.get<ApiResponse<VMRequestsResponse>>(

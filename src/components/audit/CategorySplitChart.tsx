@@ -10,6 +10,7 @@ const CATEGORY_COLORS = {
   "User Mgmt": "#f472b6",
   Settings: "#fb923c",
   Requests: "#818cf8",
+  "Load Balancer": "#facc15",
 };
 
 const renderActiveShape = (props: any) => {

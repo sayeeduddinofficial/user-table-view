@@ -3,7 +3,7 @@ import { useAppStore } from "@/store/appStore";
 import { useDialog } from "@/components/ui/dialog-context";
 import { Button } from "@/components/ui/button";
 import { useNavigate, Link } from "react-router-dom";
-import { ChevronRight, FileText, ChevronDown, X } from "lucide-react";
+import { ChevronRight, FileText, ChevronDown } from "lucide-react";
 import { fetchVpcListApi, fetchVpcDetailsApi } from "@/services/vpcService";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -31,6 +31,32 @@ const REGION_CODE: Record<string, string> = {
   "N.Virginia": "us-east-1",
 };
 
+const REGION_VPC_DEFAULTS: Record<
+  string,
+  { vpcId: string; subnets: string[]; vpcName: string }
+> = {
+  "us-east-1": {
+    vpcId: "vpc-00f1dd2c4bab98af5",
+    vpcName: "Splunk-Poc",
+    subnets: [
+      "subnet-0012ebab3c854f686",
+      "subnet-0e86b2ff8dbb39142",
+      "subnet-099455525bf2dcc2a",
+      "subnet-001ddb7543f91402",
+      "subnet-0fb10e5760a9e210",
+    ],
+  },
+  "us-east-2": {
+    vpcId: "vpc-02e99db96569078e6",
+    vpcName: "splunk-poc",
+    subnets: [
+      "subnet-03dd40d08c73d4a60",
+      "subnet-09ed5e5b5485dc2d",
+      "subnet-03dffb5100db7ab4e",
+    ],
+  },
+};
+
 export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
   const navigate = useNavigate();
   const close = () => (onClose ? onClose() : navigate("/aws/eks"));
@@ -41,21 +67,26 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
   const setVpcs = useAppStore((s) => s.setVpcs);
 
   const [region, setRegion] = useState("us-east-2");
+  const regionCode = REGION_CODE[region] ?? region;
+  const regionDefaults = REGION_VPC_DEFAULTS[regionCode];
+
   const [configuration, setConfiguration] =
     useState<ConfigurationMode>("quick");
   const [name, setName] = useState("");
   const [kubernetesVersion, setKubernetesVersion] = useState("1.36");
-  const [vpc, setVpc] = useState<string>("");
-  const [subnetIds, setSubnetIds] = useState<string[]>([]);
+  const [vpc, setVpc] = useState<string>(() => regionDefaults?.vpcId ?? "");
+  const [subnetIds, setSubnetIds] = useState<string[]>(
+    () => regionDefaults?.subnets ?? [],
+  );
   const [availableSubnets, setAvailableSubnets] = useState<
     { id: string; label: string }[]
   >([]);
   const [subnetsLoading, setSubnetsLoading] = useState(false);
   const [businessJustification, setBusinessJustification] = useState("");
+  const [justificationTouched, setJustificationTouched] = useState(false);
+  const [justificationError, setJustificationError] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const regionCode = REGION_CODE[region] ?? region;
 
   // Load VPCs if not already loaded
   useEffect(() => {
@@ -72,14 +103,40 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
     [vpcs, regionCode],
   );
 
-  // Reset selected VPC when region changes / options change
+  const isVpcReadonly = Boolean(regionDefaults);
+
+  const regionDefaultVpcOption = regionDefaults
+    ? {
+        id: regionDefaults.vpcId,
+        name: regionDefaults.vpcName,
+        awsVpcId: regionDefaults.vpcId,
+      }
+    : null;
+
+  const vpcOptions = useMemo(() => {
+    if (!regionDefaultVpcOption) return regionVpcs;
+    const containsDefault = regionVpcs.some(
+      (v: any) => v.id === regionDefaultVpcOption.id,
+    );
+    return containsDefault
+      ? regionVpcs
+      : [regionDefaultVpcOption, ...regionVpcs];
+  }, [regionVpcs, regionDefaultVpcOption]);
+
+  // Ensure default region VPC / subnet selection stays in sync for configured regions
   useEffect(() => {
+    if (regionDefaults) {
+      setVpc(regionDefaults.vpcId);
+      setSubnetIds(regionDefaults.subnets);
+      return;
+    }
+
     if (vpc && !regionVpcs.some((v: any) => v.id === vpc)) {
       setVpc("");
       setAvailableSubnets([]);
       setSubnetIds([]);
     }
-  }, [regionVpcs, vpc]);
+  }, [regionDefaults, regionVpcs]);
 
   // Fetch subnets for selected VPC
   useEffect(() => {
@@ -98,7 +155,15 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
           label: `${s.aws_subnet_id} (${s.subnet_type}, ${s.availability_zone}, ${s.cidr})`,
         }));
         setAvailableSubnets(subs);
-        setSubnetIds([]);
+
+        if (regionDefaults?.vpcId === vpc) {
+          const defaultSubnetIds = regionDefaults.subnets.filter((id) =>
+            subs.some((sub) => sub.id === id),
+          );
+          setSubnetIds(defaultSubnetIds);
+        } else {
+          setSubnetIds([]);
+        }
       })
       .catch(() => {
         if (!cancelled) setAvailableSubnets([]);
@@ -109,7 +174,7 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
     return () => {
       cancelled = true;
     };
-  }, [vpc]);
+  }, [vpc, regionDefaults]);
 
   const selectedVpc = regionVpcs.find((v: any) => v.id === vpc);
 
@@ -125,6 +190,12 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
     }
     if (subnetIds.length === 0) {
       alert({ title: "Please select at least one subnet", severity: "error" });
+      return;
+    }
+    if (businessJustification.trim().length < 20) {
+      setJustificationTouched(true);
+      setJustificationError(true);
+      alert({ title: "Business justification must contain at least 20 characters.", severity: "error" });
       return;
     }
 
@@ -273,19 +344,24 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
 
           <Field
             label="VPC"
-            hint="Select a VPC to use for your EKS cluster resources."
+            hint={
+              isVpcReadonly
+                ? `This region is locked to the preset Splunk-Poc VPC and cannot be changed.`
+                : "Select a VPC to use for your EKS cluster resources."
+            }
           >
             <select
               value={vpc}
               onChange={(e) => setVpc(e.target.value)}
+              disabled={isVpcReadonly}
               className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
             >
               <option value="">
-                {regionVpcs.length === 0
+                {vpcOptions.length === 0
                   ? `No VPCs available in ${regionCode}`
                   : "Select a VPC"}
               </option>
-              {regionVpcs.map((v: any) => (
+              {vpcOptions.map((v: any) => (
                 <option key={v.id} value={v.id}>
                   {v.name}
                   {v.awsVpcId ? ` (${v.awsVpcId})` : ""}
@@ -302,7 +378,7 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
               options={availableSubnets}
               value={subnetIds}
               onChange={setSubnetIds}
-              disabled={!vpc || subnetsLoading}
+              disabled={!vpc || subnetsLoading || isVpcReadonly}
               placeholder={
                 !vpc
                   ? "Select a VPC first"
@@ -310,7 +386,9 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
                     ? "Loading subnets…"
                     : availableSubnets.length === 0
                       ? "No subnets found for this VPC"
-                      : "Select subnets"
+                      : isVpcReadonly
+                        ? "Fixed subnet selection for this region"
+                        : "Select subnets"
               }
             />
           </Field>
@@ -327,18 +405,29 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
           <div className="relative">
             <Textarea
               id="justification"
-              className="resize-none overflow-y-auto"
+              className={`resize-none overflow-y-auto ${justificationTouched && justificationError ? "border-red-500 ring-1 ring-red-200" : ""}`}
               placeholder="Provide a brief justification for this EKS request."
               value={businessJustification}
-              onChange={(e) =>
-                setBusinessJustification(e.target.value.slice(0, 250))
-              }
+              onChange={(e) => {
+                const value = e.target.value.slice(0, 250);
+                setBusinessJustification(value);
+                if (justificationTouched) setJustificationError(value.trim().length < 20);
+              }}
+              onBlur={() => {
+                setJustificationTouched(true);
+                setJustificationError(businessJustification.trim().length < 20);
+              }}
               rows={3}
               maxLength={250}
             />
 
-            <div className="mt-2 text-right text-xs text-slate-400">
-              {businessJustification.length}/250
+            <div className="flex justify-between items-center mt-2">
+              {justificationTouched && justificationError ? (
+                <div className="text-xs text-red-600">
+                  Business justification must contain at least 20 characters.
+                </div>
+              ) : <span />}
+              <p className="text-xs text-slate-400">{businessJustification.length}/250</p>
             </div>
           </div>
         </div>
@@ -351,8 +440,13 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
             Cancel
           </button>
           <Button
-            onClick={() => setShowConfirm(true)}
-            disabled={!name.trim() || !vpc || subnetIds.length === 0}
+            onClick={() => {
+              setJustificationTouched(true);
+              setJustificationError(businessJustification.trim().length < 20);
+              if (!name.trim() || !vpc || subnetIds.length === 0 || businessJustification.trim().length < 20) return;
+              setShowConfirm(true);
+            }}
+            disabled={!name.trim() || !vpc || subnetIds.length === 0 || businessJustification.trim().length < 20}
           >
             Create
           </Button>
@@ -584,14 +678,6 @@ function MultiSelect({
                 className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-primary/40 bg-primary/10 text-primary text-xs"
               >
                 {opt?.label ?? id}
-                <button
-                  type="button"
-                  onClick={() => toggle(id)}
-                  className="hover:text-primary/70"
-                  aria-label={`Remove ${opt?.label ?? id}`}
-                >
-                  <X size={12} />
-                </button>
               </span>
             );
           })}

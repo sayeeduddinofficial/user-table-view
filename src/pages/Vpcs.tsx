@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Info, RotateCcw } from "lucide-react";
 import { useDialog } from "@/components/ui/dialog-context";
-import { deleteVpcApi, fetchVpcListApi } from "@/services/vpcService";
+import { deleteVpcApi } from "@/services/vpcService";
 
 /**
  * VPCs main page. State lives in {@link useVpcList}, mutations go through
@@ -58,7 +58,7 @@ function formatCreatedDate(dateString: string | undefined | null) {
 }
 
 export default function Vpcs() {
-  const { query, setQuery, filtered, selected, allChecked, toggleAll, toggleOne, refresh, loading } = useVpcList();
+  const { query, setQuery, filtered, selected, allChecked, toggleAll, toggleOne, refresh, loading, clearSelection } = useVpcList();
   const currentUser = useAppStore((s) => s.currentUser);
   const hasActiveVpc = !!currentUser && filtered.some((v: any) => Number(v.userId) === Number(currentUser.id) || Number(v.user_id) === Number(currentUser.id));
 
@@ -82,24 +82,19 @@ export default function Vpcs() {
   const [deletingVpcId, setDeletingVpcId] = useState<string | null>(null);
 
 const handleDeleteRow = (vpc: any) => {
-  setDeletingVpcId(vpc.id);
   setDialog({
     icon: "destroy",
     title: `Delete ${vpc.name || vpc.id}?`,
     onConfirm: async () => {
+      setDeletingVpcId(vpc.id);  // show red "Deleting" badge immediately
       try {
-        await deleteVpcApi(vpc.awsVpcId);
-        alert({
-          title: `Deleted VPC ${vpc.name || vpc.id}`,
-          severity: "success",
-        });
+        await deleteVpcApi(vpc.awsVpcId);  // waits until AWS deletion is done
+        useAppStore.getState().deleteVpc(vpc.id);  // remove from store
+        alert({ title: `VPC deleted successfully`, severity: "success" });
       } catch (error) {
-        alert({
-          title: `Failed to delete VPC ${vpc.name || vpc.id}`,
-          severity: "error",
-        });
+        alert({ title: `Failed to delete VPC ${vpc.name || vpc.id}`, severity: "error" });
       } finally {
-        setDeletingVpcId(null);
+        setDeletingVpcId(null);  // clear deleting state
       }
     },
   });
@@ -116,8 +111,7 @@ const { alert } = useDialog();
 
 const handleRefresh = async () => {
   await refresh();
-  try {      
-    await fetchVpcListApi();
+  try {
     alert({
       title: "Refreshed",
       severity: "success",
@@ -249,7 +243,7 @@ const handleRefresh = async () => {
                   {filtered.length === 0 && (
                     <tr>
                       <td
-                        colSpan={12}
+                        colSpan={11}
                         className="px-5 py-16 text-center text-muted-foreground text-sm"
                       >
                         No VPCs found. Click{" "}
@@ -259,7 +253,7 @@ const handleRefresh = async () => {
                     </tr>
                   )}
                   {filtered.map((v: any) => {
-                    const isDeleting = deletingVpcId === v.id;
+                    const isDeleting = deletingVpcId === v.id || v.status === "deleting";
                     const statusBadgeClass = isDeleting
                       ? "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs bg-destructive/10 text-destructive border border-destructive/20 capitalize"
                       : "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 capitalize";
@@ -318,7 +312,8 @@ const handleRefresh = async () => {
                       <td className="px-5 py-4 text-right">
                         <button
                           onClick={() => handleDeleteRow(v)}
-                          className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          disabled={v?.status == 'deleting'}
+                          className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:cursor-not-allowed"
                           aria-label="Delete VPC"
                         >
                           <Trash2 size={15} />

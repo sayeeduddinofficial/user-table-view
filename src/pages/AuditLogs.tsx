@@ -90,6 +90,10 @@ const CATEGORY_BADGE_CONFIG: Record<
     icon: Database,
     className: "bg-purple-500/15 text-purple-400 border border-purple-500/25",
   },
+  "Load Balancer": {
+    icon: Server,
+    className: "bg-yellow-500/15 text-yellow-400 border border-yellow-500/25",
+  }
 };
 
 // ─── Category config for stat cards ──────────────────────────────────────────

@@ -40,7 +40,8 @@ export function useS3Buckets() {
   const loadBuckets = async (): Promise<boolean> => {
     try {
       const items = await fetchBucketsApi();
-      setBuckets(items.map(mapApiBucket));
+      const mapped = items.map(mapApiBucket).filter((b) => b.meta.status?.toUpperCase() !== "FAILED");
+      setBuckets(mapped);
       return true;
     } catch (error) {
       console.error("Failed to load buckets", error);

@@ -34,7 +34,7 @@ export function DeleteBucketDialog({
     >
       <DialogContent className="max-w-xl gap-8">
         <DialogHeader>
-          <DialogTitle>Delete bucket "{bucket?.name}"?</DialogTitle>
+          <DialogTitle>Delete Bucket "{bucket?.name}"?</DialogTitle>
         </DialogHeader>
         <div className="border border-amber-500/40 bg-amber-500/10 dark:bg-amber-950/30 rounded p-4 text-sm">
           <div className="flex gap-3">
@@ -57,7 +57,9 @@ export function DeleteBucketDialog({
           />
         </div>
         <div className="flex items-center justify-end gap-3 pt-2">
-          <button onClick={() => onOpenChange(false)} className="text-sm text-primary hover:underline">Cancel</button>
+         <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
           <Button
             size="sm"
             variant="destructive"
@@ -71,7 +73,7 @@ export function DeleteBucketDialog({
               }
             }}
           >
-            {isDeleting ? "Deleting..." : "Delete bucket"}
+            {isDeleting ? "Deleting..." : "Delete Bucket"}
           </Button>
         </div>
       </DialogContent>

@@ -280,7 +280,7 @@ export default function Leadership() {
     },
     {
       key: 'launches' as const,
-      label: 'Launched today', value: kpis.launchedToday.toLocaleString(),
+      label: 'VMs launched today', value: kpis.launchedToday.toLocaleString(),
       sub: `vs ${kpis.launchedYesterday} yesterday`,
       icon: Cpu, color: 'text-sky-400',
       trend: kpis.launchTrend,

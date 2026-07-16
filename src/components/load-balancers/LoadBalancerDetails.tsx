@@ -53,6 +53,22 @@ export function LoadBalancerDetails({
   ];
 
   const lbTypeLabel = lb.type === "application" ? "Application" : lb.type === "network" ? "Network" : lb.type;
+  const statusClassName = {
+    pending: "text-gray-400",
+    provisioning: "text-blue-400",
+    creating: "text-blue-400",
+    completed: "text-emerald-400",
+    active: "text-emerald-400",
+    failed: "text-red-400",
+    destroying: "text-orange-400",
+    deleting: "text-orange-400",
+    terminating: "text-orange-400",
+    destroyed: "text-gray-400",
+    deleted: "text-gray-400",
+    terminated: "text-gray-400",
+    retrying: "text-indigo-400",
+    retrying_terminate: "text-purple-400",
+  }[lb.status?.toLowerCase() ?? "pending"] ?? "text-gray-400";
 
   return (
     <div className="space-y-4">
@@ -107,7 +123,7 @@ export function LoadBalancerDetails({
             </div>
             <div>
               <p className="text-muted-foreground">Status</p>
-              <p className={lb.status === "active" ? "text-green-600 font-medium" : "font-medium"}>
+              <p className={`${statusClassName} font-medium`}>
                 {lb.status.charAt(0).toUpperCase() + lb.status.slice(1)}
               </p>
               <p className="mt-5 text-muted-foreground">IP address type</p>

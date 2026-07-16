@@ -252,7 +252,7 @@ export const LeadershipCharts = forwardRef<HTMLDivElement, Props>(function Leade
 
   const shapeCost = useMemo(() => {
     return data.costByInstanceType
-      .filter(item => item.total_cost > 0)
+      .filter(item => item.total_cost > 0 && item.instance_type && item.instance_type.trim() !== "")
       .map((item, i) => ({
         name: item.instance_type,
         value: item.total_cost,

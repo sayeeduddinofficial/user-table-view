@@ -73,10 +73,14 @@ export function VpcDetails({
   }
 
   if (error || !detail) {
-    return (
-      <div className="text-center py-8">
-        <h1 className="text-2xl font-bold">VPC not found</h1>
-        <p className="text-muted-foreground mt-2">{error ?? "The VPC you're looking for doesn't exist."}</p>
+   return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <p className="text-muted-foreground">VPC not found</p>
+          <Link to="/aws/vpcs" className="text-primary hover:underline mt-2 inline-block">
+            Back to VPCs
+          </Link>
+        </div>
       </div>
     );
   }
@@ -95,6 +99,7 @@ export function VpcDetails({
     routeTables: detail.route_tables ?? [],
     natGateways: detail.nat_gateways ?? [],
     metadata: detail.metadata_json ?? {},
+    awsTags: detail.aws_tags_json ?? null,  
     requestId: detail.request_id,
     enableDnsHostnames: detail.enable_dns_hostnames ?? false,
     dhcpOptionsId: detail.dhcp_options_id,
@@ -180,7 +185,7 @@ export function VpcDetails({
         {tab === "resource" && <ResourceMapTab vpc={vpc} />}
         {tab === "cidrs" && <CidrsTab cidr={cidr} />}
         {tab === "flow" && <FlowLogsTab vpcId={vpc.id} />}
-        {tab === "tags" && <TagsTab name={vpc.name} tags={vpc.metadata?.tags ?? {}} />}
+        {tab === "tags" && <TagsTab name={vpc.name}  tags={vpc.awsTags ?? vpc.metadata?.tags ?? {}} />}
         {tab === "integrations" && <IntegrationsTab ownerId={ownerId} />}
 
       </div>

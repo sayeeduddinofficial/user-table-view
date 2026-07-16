@@ -85,37 +85,6 @@ export default function Route53() {
     >
       <RefreshCw size={14} />
     </Button>
-
-    <Button
-      variant="outline"
-      className="shrink-0"
-      disabled
-    >
-      View Details
-    </Button>
-
-    <Button
-      variant="outline"
-      className="shrink-0"
-      disabled
-    >
-      Edit
-    </Button>
-
-    <Button
-      variant="outline"
-      className="shrink-0"
-      disabled
-    >
-      Delete
-    </Button>
-
-    <Link to="/aws/createrecord">
-  <Button className="bg-primary hover:bg-primary/90 text-white shrink-0">
-    <Plus size={14} className="mr-1.5" />
-    Create Record
-  </Button>
-</Link>
   </div>
 
   {/* Table */}
@@ -124,9 +93,9 @@ export default function Route53() {
       <table className="w-full text-sm min-w-[1200px]">
         <thead>
           <tr className="text-xs uppercase tracking-wide text-muted-foreground border-b border-border/50">
-            <th className="px-5 py-3 w-10">
+            {/* <th className="px-5 py-3 w-10">
               <Checkbox />
-            </th>
+            </th> */}
 
             <th className="px-5 py-3 text-left font-medium whitespace-nowrap">
               Hosted Zone Name
@@ -160,9 +129,9 @@ export default function Route53() {
 
         <tbody>
           <tr className="border-b border-border/40 hover:bg-accent/20 transition-colors">
-            <td className="px-5 py-4">
+            {/* <td className="px-5 py-4">
               <Checkbox />
-            </td>
+            </td> */}
 
             <td className="px-5 py-4">
               <Link
@@ -201,9 +170,9 @@ export default function Route53() {
           </tr>
 
           <tr className="border-b border-border/40 hover:bg-accent/20 transition-colors">
-            <td className="px-5 py-4">
+            {/* <td className="px-5 py-4">
               <Checkbox />
-            </td>
+            </td> */}
 
             <td className="px-5 py-4">
               <Link

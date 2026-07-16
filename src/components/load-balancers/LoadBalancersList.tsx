@@ -1,4 +1,4 @@
-import { useMemo, useState,useEffect, type ReactNode } from "react";
+import { useMemo, useState, useEffect, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Search,
@@ -25,7 +25,7 @@ type LbRow = {
   requestId: string;
   name: string;
   state: string;
-  statusColor: string; 
+  statusColor: string;
   type: string;
   scheme: string;
   ipType: string;
@@ -46,28 +46,43 @@ export function LoadBalancersList() {
   const { alert, confirm } = useDialog();
   const user = useAppStore((s: any) => s.currentUser);
   const [lbs, setLbs] = useState<LbItem[]>([]);
-   const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [chooserOpen, setChooserOpen] = useState(false);
   const [globalFilter, setGlobalFilter] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [provisioningLb, setProvisioningLb] = useState<ProvisioningLbItem | null>(null);
   const [existingLbs, setExistingLbs] = useState<ExistingLbItem[]>([]);
+  const [userOwnedLbs, setUserOwnedLbs] = useState<LbItem[]>([]);
   const [checkingProvisioning, setCheckingProvisioning] = useState(false);
   const [checkingExisting, setCheckingExisting] = useState(false);
 
-   const fetchLbs = async () => {
-    setLoading(true);
+  const fetchLbs = async (showLoading = false) => {
+    if (showLoading) setLoading(true);
     try {
       const res = await lbApi.list();
       setLbs((res as any).data ?? []);
     } catch {
       alert({ title: "Failed to load load balancers", severity: "error" });
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
     }
   };
 
-  useEffect(() => { fetchLbs(); }, []);
+  const refreshUserOwnedLbs = async () => {
+    if (!user?.id) {
+      setUserOwnedLbs([]);
+      return;
+    }
+
+    try {
+      const res = await lbApi.list(user.id);
+      setUserOwnedLbs((res as any).data ?? []);
+    } catch {
+      setUserOwnedLbs([]);
+    }
+  };
+
+  useEffect(() => { fetchLbs(true); }, []);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -76,6 +91,20 @@ export function LoadBalancersList() {
       .then((res) => setProvisioningLb(res.loadBalancer ?? null))
       .catch(() => setProvisioningLb(null))
       .finally(() => setCheckingProvisioning(false));
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setUserOwnedLbs([]);
+      return;
+    }
+
+    let isMounted = true;
+    refreshUserOwnedLbs().catch(() => undefined);
+
+    return () => {
+      isMounted = false;
+    };
   }, [user?.id]);
 
   useEffect(() => {
@@ -97,11 +126,19 @@ export function LoadBalancersList() {
     });
     if (!confirmed) return;
 
+    const previousLbs = lbs;
+    const previousUserOwnedLbs = userOwnedLbs;
+    setLbs((prev) => prev.filter((lb) => lb.id !== id));
+    setUserOwnedLbs((prev) => prev.filter((lb) => lb.id !== id));
+
     try {
       await lbApi.deleteSdk(id);
-      await fetchLbs();
+      await fetchLbs(false);
+      await refreshUserOwnedLbs();
       alert({ title: `Load balancer "${name}" deleted`, severity: "success" });
     } catch (err: any) {
+      setLbs(previousLbs);
+      setUserOwnedLbs(previousUserOwnedLbs);
       alert({
         title: `Failed to delete "${name}"`,
         description: err?.message ?? "Unknown error",
@@ -111,65 +148,61 @@ export function LoadBalancersList() {
   };
 
   const formatDate = (date: string | Date) =>
-  new Date(date).toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+    new Date(date).toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+
+  const lbStatusConfig: Record<string, { color: string }> = {
+    pending: { color: "bg-gray-500/20 text-gray-400 border-gray-500/30" },
+    provisioning: { color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+    creating: { color: "bg-blue-500/20 text-blue-400 border-blue-500/30" },
+    completed: { color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+    active: { color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
+    failed: { color: "bg-red-500/20 text-red-400 border-red-500/30" },
+    destroying: { color: "bg-orange-500/20 text-orange-400 border-orange-500/30" },
+    deleting: { color: "bg-orange-500/20 text-orange-400 border-orange-500/30" },
+    terminating: { color: "bg-orange-500/20 text-orange-400 border-orange-500/30" },
+    destroyed: { color: "bg-gray-500/20 text-gray-400 border-gray-500/30" },
+    deleted: { color: "bg-gray-500/20 text-gray-400 border-gray-500/30" },
+    terminated: { color: "bg-gray-500/20 text-gray-400 border-gray-500/30" },
+    retrying: { color: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30" },
+    retrying_terminate: { color: "bg-purple-500/20 text-purple-400 border-purple-500/30" },
+  };
+
   const getStatusColor = (status: string) => {
-  switch (status.toLowerCase()) {
-    case "active":
-    case "completed":
-      return "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
-
-    case "creating":
-    case "provisioning":
-      return "bg-amber-500/10 text-amber-400 border border-amber-500/20";
-
-    case "failed":
-      return "bg-red-500/10 text-red-400 border border-red-500/20";
-
-    case "deleting":
-    case "terminating":
-      return "bg-orange-500/10 text-orange-400 border border-orange-500/20";
-
-    case "deleted":
-    case "terminated":
-      return "bg-slate-500/10 text-slate-400 border border-slate-500/20";
-
-    default:
-      return "bg-slate-500/10 text-slate-400 border border-slate-500/20";
-  }
-};
+    return lbStatusConfig[status.toLowerCase()]?.color ?? lbStatusConfig.pending.color;
+  };
 
   const rows: LbRow[] = useMemo(() =>
-  lbs.map((lb) => ({
-    id: lb.id,
-    requestId: lb.request_id ?? "-",
-    name: lb.name,
-    state: lb.status === "active"
-    ? "Completed"
-    : lb.status.charAt(0).toUpperCase() + lb.status.slice(1),
+    lbs.map((lb) => ({
+      id: lb.id,
+      requestId: lb.request_id ?? "-",
+      name: lb.name,
+      state: lb.status === "active"
+        ? "Completed"
+        : lb.status.charAt(0).toUpperCase() + lb.status.slice(1),
 
-  statusColor: getStatusColor(lb.status),
+      statusColor: getStatusColor(lb.status),
 
-    type: lb.type === "application" ? "ALB" : lb.type === "network" ? "NLB" : lb.type.toUpperCase(),
-    scheme: lb.scheme,
-    ipType: lb.ip_address_type,
-    vpcId: lb.vpc_id,
-    vpc: lb.vpc_id,
-    subnets: lb.subnets.map((s) => s.subnet_id).join(", ") || "-",
-    region: lb.region,
-    azs: lb.subnets.map((s) => s.availability_zone).join(", ") || "-",
-    securityGroups: (lb.security_group_ids ?? []).join(", ") || "-",
-    dnsName: "-",
-    arn: "-",
-    dateCreated: formatDate(lb.created_at),
-    created: formatDate(lb.created_at),
-  })), [lbs]
-);
-  
-  
+      type: lb.type === "application" ? "ALB" : lb.type === "network" ? "NLB" : lb.type.toUpperCase(),
+      scheme: lb.scheme,
+      ipType: lb.ip_address_type,
+      vpcId: lb.vpc_id,
+      vpc: lb.vpc_id,
+      subnets: lb.subnets.map((s) => s.subnet_id).join(", ") || "-",
+      region: lb.region,
+      azs: lb.subnets.map((s) => s.availability_zone).join(", ") || "-",
+      securityGroups: (lb.security_group_ids ?? []).join(", ") || "-",
+      dnsName: "-",
+      arn: "-",
+      dateCreated: formatDate(lb.created_at),
+      created: formatDate(lb.created_at),
+    })), [lbs]
+  );
+
+
 
   const filtered = useMemo(() => {
     const g = globalFilter.trim().toLowerCase();
@@ -204,12 +237,13 @@ export function LoadBalancersList() {
   // }
 
   const sorted = filtered;
+  const hasUserCreatedBalancer = !!user?.id && userOwnedLbs.length > 0;
   const createDisabledReason = provisioningLb
     ? `"${provisioningLb.name}" is still provisioning. Wait for it to finish before creating another.`
-    : existingLbs.length > 0
+    : hasUserCreatedBalancer
       ? "You already have a load balancer under your name. Use the existing one or delete it before creating a new one."
       : null;
-  const isCreateDisabled = !!createDisabledReason || checkingProvisioning || checkingExisting;
+  const isCreateDisabled = !!createDisabledReason;
 
   const allSelected = sorted.length > 0 && sorted.every((r) => selected.has(r.id));
   const toggleAll = () => {
@@ -260,8 +294,8 @@ export function LoadBalancersList() {
           <StatCard
             icon={<Clock3 className="h-4 w-4 text-amber-400" />}
             iconBg="bg-amber-500/10"
-            value={rows.filter((r) => r.state === "Pending").length}
-            label="Pending"
+            value={rows.filter((r) => r.state === "Provisioning").length}
+            label="Provisioning"
           />
         </div>
 
@@ -293,18 +327,14 @@ export function LoadBalancersList() {
 
           <Button
             className="bg-primary hover:bg-primary/90 text-white gap-1.5 shrink-0"
-            disabled={isCreateDisabled}
-            title={createDisabledReason ?? undefined}
+            title={!loading ? createDisabledReason ?? undefined : undefined}
+            tooltip={!loading && createDisabledReason ? "Maximum 1 balancer limit reached." : undefined}
             onClick={() => {
-              if (isCreateDisabled) {
-                alert({
-                  title: createDisabledReason ?? "Create is temporarily unavailable",
-                  severity: "warning",
-                });
-                return;
+              if (!loading && !isCreateDisabled) {
+                setChooserOpen(true);
               }
-              setChooserOpen(true);
             }}
+            disabled={loading || isCreateDisabled}
           >
             <Plus size={14} />
             Create Load Balancer
@@ -409,7 +439,7 @@ export function LoadBalancersList() {
                     <td className="px-5 py-4 font-mono text-muted-foreground">
                       {r.vpc}
                     </td>
-{/* 
+                    {/* 
                     <td className="px-5 py-4">
                       {r.subnets}
                     </td> */}
@@ -422,24 +452,32 @@ export function LoadBalancersList() {
                       {r.created}
                     </td>
 
-                     <td className="px-5 py-4">
-                        <span
-                          className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs capitalize ${r.statusColor}`}
-                        >
-                          {/* <CheckCircle2 size={12} /> */}
-                          {r.state}
-                        </span>
-                      </td>
+                    <td className="px-5 py-4">
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs capitalize ${r.statusColor}`}
+                      >
+                        {/* <CheckCircle2 size={12} /> */}
+                        {r.state}
+                      </span>
+                    </td>
 
                     <td className="px-5 py-4 text-right">
 
                       <button
                         onClick={() => handleRemove(r.id, r.name)}
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        disabled={r.state.toLowerCase() === "provisioning"}
+                        className={`p-1.5 rounded-md transition-colors ${r.state.toLowerCase() === "provisioning"
+                            ? "cursor-not-allowed opacity-50 text-muted-foreground"
+                            : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                          }`}
+                        title={
+                          r.state.toLowerCase() === "provisioning"
+                            ? "Cannot delete while provisioning"
+                            : "Delete Load Balancer"
+                        }
                       >
                         <Trash2 size={15} />
                       </button>
-
                     </td>
 
                   </tr>

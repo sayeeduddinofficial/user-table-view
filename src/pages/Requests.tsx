@@ -33,13 +33,14 @@ import {
   deleteVMRequestApi,
    deleteVpcRequestApi, 
    deleteLbRequestApi,
+  SERVICE_LABELS,
+  SERVICE_OPTIONS,
   type VMRequest as Request,
 } from "@/components/requests/vmRequestsApi";
 import { DataTable, type Column } from "@/components/common/DataTable";
 import ChooseServices from "@/components/dialogs/ChooseServices";
 import { fetchVpcListApi } from "@/services/vpcService";
-
-
+import { deleteBucketApi } from "@/services/bucketService";
 
 const statusConfig: Record<string, { color: string; label: string }> = {
   pending: {
@@ -76,16 +77,6 @@ const statusConfig: Record<string, { color: string; label: string }> = {
   },
 };
 
-const serviceLabels: Record<string, string> = {
-  "vm-service": "EC2",
-  "vpc-service": "VPC",
-  "s3-service": "S3",
-  "lb-service": "LB",
-  "rds-service": "RDS",
-  "eks-cluster-service": "EKS",
-  "route53-service": "Route 53",
-};
-
 
 export default function VMRequests() {
   const [open, setOpen] = useState(false);
@@ -95,6 +86,7 @@ export default function VMRequests() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [serviceFilter, setServiceFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({
     total: 0, page: 1, limit: 10, totalPages: 1, hasNext: false, hasPrev: false,
@@ -122,13 +114,18 @@ export default function VMRequests() {
         page: currentPage,
         limit: 10,
         status: statusFilter !== "all" ? statusFilter : undefined,
+        service: serviceFilter !== "all" ? serviceFilter : undefined,
         search: searchQuery.trim() || undefined,
       });
 
-      setRequests(result.data);
+      const visibleData = result.data.filter(
+        (req) => !(req.service === "s3-service" && req.status === "failed")
+      );
+
+      setRequests(visibleData);
       setPagination(result.pagination);
 
-      result.data.forEach((req) => {
+      visibleData.forEach((req) => {
         if (
           req.status === "pending" ||
           req.status === "provisioning" ||
@@ -145,7 +142,7 @@ export default function VMRequests() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, searchQuery]);
+  }, [page, statusFilter, serviceFilter, searchQuery]);
 
   useEffect(() => {
     isMounted.current = true;
@@ -154,7 +151,7 @@ export default function VMRequests() {
       Object.values(watchers.current).forEach(clearTimeout);
       watchers.current = {};
     };
-  }, [page, statusFilter]);
+  }, [page, statusFilter, serviceFilter]);
 
   useEffect(() => {
     const currentUser = useAppStore.getState().currentUser;
@@ -391,7 +388,21 @@ export default function VMRequests() {
       watchRequest(requestId, service);
       setActiveRequest(requestId, service);
       navigate("/console");
-    }  
+    } 
+    else if (service === "s3-service") {
+      await deleteBucketApi(requestId);
+      setRequests((prev) =>
+        prev.map((r) =>
+          r.request_id === requestId
+            ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
+            : r,
+        ),
+      );
+      watchRequest(requestId, service);
+      setActiveRequest(requestId, service);
+      navigate("/console");
+    }
+
     else {
       const deleteResult = await deleteVMRequestApi(requestId);
       console.log("Delete request result:", deleteResult);
@@ -454,7 +465,7 @@ export default function VMRequests() {
       header: "Service",
       render: (req) => (
         <Badge variant="outline" className="border-gray-500/30">
-          {serviceLabels[req.service ?? ""] ?? req.service ?? "Unknown"}
+          {SERVICE_LABELS[req.service ?? ""] ?? req.service ?? "Unknown"}
         </Badge>
       ),
     },
@@ -621,7 +632,7 @@ export default function VMRequests() {
                     />
                   </div>
                   <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
-                    <SelectTrigger className="w-[180px] bg-background/50">
+                    <SelectTrigger className="w-[160px] bg-background/50">
                       <SelectValue placeholder="All Status" />
                     </SelectTrigger>
                     <SelectContent>
@@ -633,6 +644,17 @@ export default function VMRequests() {
                       <SelectItem value="failed">Failed</SelectItem>
                       <SelectItem value="destroying">Terminating</SelectItem>
                       <SelectItem value="destroyed">Terminated</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={serviceFilter} onValueChange={(v) => { setServiceFilter(v); setPage(1); }}>
+                    <SelectTrigger className="w-[160px] bg-background/50">
+                      <SelectValue placeholder="All Services" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Services</SelectItem>
+                      {SERVICE_OPTIONS.map((s) => (
+                        <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <Button variant="outline" className="gap-2" onClick={() => fetchRequests(page)}>

@@ -41,7 +41,8 @@ import {
   Clock,
   AlertCircle,
   Info,
-  FileText 
+  FileText,
+  XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSSHKeys } from "@/hooks/useSSHKeys";
@@ -109,6 +110,8 @@ export function VMRequestForm({ onSubmit, isSubmitting = false }: Props) {
   const [roleConfigs, setRoleConfigs] = useState<VMRoleConfig[]>([]);
   const [splunkVersion, setSplunkVersion] = useState("10.2.3");
   const [justification, setJustification] = useState("");
+  const [justificationTouched, setJustificationTouched] = useState(false);
+  const [justificationError, setJustificationError] = useState(false);
 
   // ── Runtime Policy Logic ──────────────────────────────────────────────────
   const runtimePolicyInfo = (() => {
@@ -1208,18 +1211,29 @@ const onOpenDialog = () => {
 
           <Textarea
             id="justification"
-            className="resize-none overflow-y-auto"
+            className={`resize-none overflow-y-auto ${justificationTouched && justificationError ? "border-red-500 ring-1 ring-red-200" : ""}`}
             placeholder="Provide a brief justification for this VM request."
             value={justification}
-            onChange={(e) => setJustification(e.target.value)}
+            onChange={(e) => {
+              const value = e.target.value;
+              setJustification(value);
+              if (justificationTouched) setJustificationError(value.trim().length < 20);
+            }}
+            onBlur={() => {
+              setJustificationTouched(true);
+              setJustificationError(justification.trim().length < 20);
+            }}
             rows={3}
             maxLength={250}
           />
 
-          <div className="flex justify-end mt-1">
-            <p className="text-xs text-muted-foreground">
-              {justification.length}/250
-            </p>
+          <div className="flex justify-between items-center mt-1">
+            {justificationTouched && justificationError ? (
+              <div className="text-xs text-red-600">
+                Business justification must contain at least 20 characters.
+              </div>
+            ) : <span />}
+            <p className="text-xs text-muted-foreground">{justification.length}/250</p>
           </div>
         </div>
       </section>

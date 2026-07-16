@@ -137,6 +137,7 @@ export function LoadBalancerCreate({ kind }: Props) {
   const [existingLbDialogOpen, setExistingLbDialogOpen] = useState(false);
   const [nameFormatError, setNameFormatError] = useState(false);
   const [justificationError, setJustificationError] = useState(false);
+  const [justificationTouched, setJustificationTouched] = useState(false);
   const [provisioningLb, setProvisioningLb] = useState<import("@/services/lbApi").ProvisioningLbItem | null>(null);
   const [checkingProvisioning, setCheckingProvisioning] = useState(false);
   const [name, setName] = useState("");
@@ -148,9 +149,10 @@ export function LoadBalancerCreate({ kind }: Props) {
   const [ipType, setIpType] = useState("ipv4");
   const [ipv6SourceNat, setIpv6SourceNat] = useState<"off" | "on">("off");
 
+  const hasActiveBalancer = existingLbs.some((lb) => ["active", "completed"].includes(String(lb.state || "").toLowerCase()));
   const disabledReason = provisioningLb
     ? `"${provisioningLb.name}" is still provisioning. Wait for it to finish before creating another.`
-    : existingLbs.length > 0
+    : hasActiveBalancer || existingLbs.length > 0
       ? "You already have a load balancer under your name. Use the existing one or delete it before creating a new one."
       : null;
   // const [vpc, setVpc] = useState(isAlb ? "vpc-0a1b2c (splunkops-vpc)" : "vpc-bbd2a2c1 (prudent-default-vpc)");
@@ -164,6 +166,20 @@ export function LoadBalancerCreate({ kind }: Props) {
   const [ipamPool, setIpamPool] = useState("");
   const [azSubnets, setAzSubnets] = useState<Record<string, { subnet: string; ipv4: string; eip?: string }>>({});
   const [listenerSeq, setListenerSeq] = useState(1);
+
+  const getAzSubnetEntry = (entry?: { subnet?: string; ipv4?: string; eip?: string }) => ({
+    subnet: entry?.subnet ?? "",
+    ipv4: entry?.ipv4 ?? "Assigned by AWS",
+    eip: entry?.eip ?? "",
+  });
+
+  const updateAzSubnet = (az: string, changes: Partial<{ subnet: string; ipv4: string; eip?: string }>) => {
+    setAzSubnets((prev) => {
+      const current = prev[az] ? getAzSubnetEntry(prev[az]) : getAzSubnetEntry();
+      return { ...prev, [az]: { ...current, ...changes } };
+    });
+  };
+
   const [listeners, setListeners] = useState<ListenerConfig[]>(() => [createListener(1, isAlb, 80)]);
   const [loadBalancerTags, setLoadBalancerTags] = useState<TagRow[]>([]);
   const [reviewIssueOpen, setReviewIssueOpen] = useState(true);
@@ -194,6 +210,7 @@ export function LoadBalancerCreate({ kind }: Props) {
   const [vpc, setVpc] = useState("");
   const [azs, setAzs] = useState<string[]>([]);
   const [sgs, setSgs] = useState<string[]>([]);
+  const [selectedSgId, setSelectedSgId] = useState("");
   const [vpcList, setVpcList] = useState<VpcItem[]>([]);
   const [subnetMap, setSubnetMap] = useState<Record<string, SubnetItem[]>>({});
   const [sgOptions, setSgOptions] = useState<SgItem[]>([]);
@@ -213,12 +230,36 @@ export function LoadBalancerCreate({ kind }: Props) {
     ? vpcList.filter((v) => v.id === ALLOWED_VPCS[selectedRegion])
     : vpcList;
 
-
   const [eipOptions, setEipOptions] = useState<EipItem[]>([]);
   const [allAzs, setAllAzs] = useState<AzItem[]>([]);
   const [loadingRegion, setLoadingRegion] = useState(false);
   const [loadingVpc, setLoadingVpc] = useState(false);
   const [nameErrorMsg, setNameErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (azs.length === 0) return;
+    setAzSubnets((prev) => {
+      const next = { ...prev };
+      let changed = false;
+
+      azs.forEach((az) => {
+        if (!next[az]) {
+          next[az] = getAzSubnetEntry();
+          changed = true;
+        }
+      });
+
+      return changed ? next : prev;
+    });
+  }, [azs]);
+
+  useEffect(() => {
+    if (loadingRegion || vpc || !selectedRegion) return;
+    const preferredVpc = filteredVpcList.find((item) => item.id === ALLOWED_VPCS[selectedRegion]) ?? (filteredVpcList.length === 1 ? filteredVpcList[0] : null);
+    if (preferredVpc) {
+      setVpc(preferredVpc.id);
+    }
+  }, [loadingRegion, selectedRegion, filteredVpcList, vpc]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -266,6 +307,11 @@ export function LoadBalancerCreate({ kind }: Props) {
     ]).then(([sgRes, tgRes]) => {
       setSgOptions(sgRes.securityGroups);
       setTgOptions(tgRes.targetGroups);
+      if (sgs.length === 0 && sgRes.securityGroups.length > 0) {
+        const firstSg = sgRes.securityGroups[0].id;
+        setSgs([firstSg]);
+        setSelectedSgId(firstSg);
+      }
     }).finally(() => setLoadingVpc(false));
   }, [vpc, selectedRegion]);
 
@@ -276,6 +322,9 @@ export function LoadBalancerCreate({ kind }: Props) {
       lbApi.subnets(selectedRegion, vpc).then((res) => {
         const forAz = res.subnets.filter((s) => s.az === az);
         setSubnetMap((prev) => ({ ...prev, [az]: forAz }));
+        if (!azSubnets[az]?.subnet && forAz.length === 1) {
+          updateAzSubnet(az, { subnet: forAz[0].id });
+        }
       }).catch(() => { });
     });
   }, [azs, vpc, selectedRegion]);
@@ -602,7 +651,7 @@ export function LoadBalancerCreate({ kind }: Props) {
         </Section>
 
         {/* Basic configuration */}
-        <Section id="basic-configuration" title="Basic configuration">
+        <Section id="basic-configuration" title="Basic Configuration">
           <Field label="AWS Region">
 
             <Select
@@ -616,7 +665,7 @@ export function LoadBalancerCreate({ kind }: Props) {
               <SelectContent>
                 {REGIONS.map(([value, label]) => (
                   <SelectItem key={value} value={value}>
-                    {label} ({value})
+                    {label}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -624,7 +673,7 @@ export function LoadBalancerCreate({ kind }: Props) {
           </Field>
 
           <Field
-            label="Load balancer name"
+            label="Load Balancer Name"
           >
             <p className="text-xs text-muted-foreground m-1">Name must be unique within your AWS account and can't be changed after the load balancer is created.</p>
             <input
@@ -665,7 +714,7 @@ export function LoadBalancerCreate({ kind }: Props) {
             </div>
           </Field>
 
-          <Field label="Load balancer IP address type">
+          <Field label="Load Balancer IP Address Type">
             <div className="space-y-2">
               {[
                 { value: "ipv4", title: "IPv4", desc: "Includes only IPv4 addresses.", disabled: false },
@@ -693,18 +742,29 @@ export function LoadBalancerCreate({ kind }: Props) {
         </Section>
 
         {/* Network mapping */}
-        <Section id="network-mapping" title="Network mapping">
+        <Section id="network-mapping" title="Network Mapping">
           <Field label="VPC">
             <div className="flex gap-2 md:gap-2">
-              <select value={vpc} onChange={(e) => setVpc(e.target.value)} disabled={loadingRegion} className="flex-1 bg-input/40 border border-border rounded-md px-3 py-2 text-sm">
-                <option value="">{loadingRegion ? "Loading VPCs..." : "Select a VPC"}</option>
-                {filteredVpcList.map((v) => <option key={v.id} value={v.id}>{v.id} ({v.name}) — {v.cidr}</option>)}
-              </select>
+              <div className="flex-1">
+                <Select
+                  value={vpc || undefined}
+                  onValueChange={(value) => setVpc(value)}
+                  disabled={loadingRegion}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder={loadingRegion ? "Loading VPCs..." : "Select a VPC"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredVpcList.map((v) => (
+                      <SelectItem key={v.id} value={v.id}>
+                        {v.id} ({v.name}) — {v.cidr}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
-
-              <button className="p-2 border border-border rounded-md hover:bg-accent/40">
-                <RefreshCw size={14} />
-              </button>
+            
               <Link to="/aws/vpcs" className="px-3 py-2 border border-border rounded-md text-xs text-primary hover:bg-primary/10">
                 Create VPC ↗
               </Link>
@@ -838,14 +898,14 @@ export function LoadBalancerCreate({ kind }: Props) {
           </Field>
         )} */}
 
-          <Field label="Availability Zones and subnets">
+          <Field label="Availability Zones and Subnets">
             <div className="space-y-2">
               {loadingRegion && <p className="text-xs text-muted-foreground">Loading availability zones...</p>}
               {!loadingRegion && allAzs.length === 0 && <p className="text-xs text-muted-foreground">Select a region to load availability zones.</p>}
               {allAzs.map((az) => {
                 const k = az.name;
                 const checked = azs.includes(k);
-                const detail = azSubnets[k] ?? { subnet: "", ipv4: "Assigned by AWS" };
+                const detail = getAzSubnetEntry(azSubnets[k]);
                 const subnetsForAz = subnetMap[k] ?? [];
                 return (
                   <div key={k} className="border border-border/60 rounded-md">
@@ -857,10 +917,22 @@ export function LoadBalancerCreate({ kind }: Props) {
                       <div className={`px-3 pb-3 pl-9 border-t border-border/60 pt-3 ${isAlb ? "" : "space-y-3"}`}>
                         <div>
                           <div className="text-xs font-medium mb-1">Subnet</div>
-                          <select value={detail.subnet} onChange={(e) => setAzSubnets((p) => ({ ...p, [k]: { ...detail, subnet: e.target.value } }))} disabled={!vpc} className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm">
-                            <option value="">{!vpc ? "Select a VPC first" : "Select a subnet"}</option>
-                            {subnetsForAz.map((s) => <option key={s.id} value={s.id}>{s.id} ({s.name}) — {s.cidr}</option>)}
-                          </select>
+                          <Select
+                            value={detail.subnet || undefined}
+                            onValueChange={(value) => updateAzSubnet(k, { subnet: value })}
+                            disabled={!vpc}
+                          >
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder={!vpc ? "Select a VPC" : "Select a subnet"} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {subnetsForAz.map((s) => (
+                                <SelectItem key={s.id} value={s.id}>
+                                  {s.id} ({s.name}) — {s.cidr}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
 
                         {!isAlb && (
@@ -869,18 +941,18 @@ export function LoadBalancerCreate({ kind }: Props) {
                             <div className="text-xs text-muted-foreground mb-2">The front-end IPv4 address of the load balancer in the selected Availability Zone.</div>
                             <div className="space-y-2">
                               <label className="flex items-start gap-2 cursor-pointer text-sm">
-                                <input type="checkbox" checked={detail.ipv4 === "Assigned by AWS"} onChange={() => setAzSubnets((p) => ({ ...p, [k]: { ...detail, ipv4: "Assigned by AWS" } }))} className="mt-1 accent-primary" />
+                                <input type="checkbox" checked={detail.ipv4 === "Assigned by AWS"} onChange={(e) => updateAzSubnet(k, { ipv4: e.target.checked ? "Assigned by AWS" : "" })} className="mt-1 accent-primary" />
                                 <div><div className="text-sm">Assigned by AWS</div><div className="text-xs text-muted-foreground">A public IPv4 address auto-assigned by AWS.</div></div>
                               </label>
                               <label className="flex items-start gap-2 cursor-pointer text-sm">
-                                <input type="checkbox" checked={detail.ipv4 === "Use an Elastic IP"} onChange={() => setAzSubnets((p) => ({ ...p, [k]: { ...detail, ipv4: "Use an Elastic IP", eip: detail.eip ?? "" } }))} className="mt-1 accent-primary" />
+                                <input type="checkbox" checked={detail.ipv4 === "Use an Elastic IP"} onChange={() => updateAzSubnet(k, { ipv4: "Use an Elastic IP", eip: detail.eip ?? "" })} className="mt-1 accent-primary" />
                                 <div><div className="text-sm">Use an Elastic IP address</div><div className="text-xs text-muted-foreground">Choose an existing Elastic IP allocation in this zone.</div></div>
                               </label>
                               {detail.ipv4 === "Use an Elastic IP" && (
                                 <div className="pl-6">
                                   <div className="text-sm">IP address</div>
                                   <div className="text-xs text-muted-foreground">Specify an elastic IP address to provide your load balancer with a static IPv4 address in the selected Availability Zone.</div>
-                                  <select value={detail.eip ?? ""} onChange={(e) => setAzSubnets((p) => ({ ...p, [k]: { ...detail, eip: e.target.value } }))} className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm">
+                                  <select value={detail.eip ?? ""} onChange={(e) => updateAzSubnet(k, { eip: e.target.value })} className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm">
                                     <option value="">Select an Elastic IP</option>
                                     {eipOptions.map((e) => <option key={e.allocationId} value={e.allocationId}>{e.allocationId} ({e.publicIp})</option>)}
                                   </select>
@@ -908,36 +980,64 @@ export function LoadBalancerCreate({ kind }: Props) {
 
 
         {/* Security groups */}
-        <Section id="security-groups" title="Security groups">
+        <Section id="security-groups" title="Security Groups">
           <Field label={isAlb ? "Security groups" : "Security groups - recommended"}>
-            <div className="flex gap-2">
-              <select value="" onChange={(e) => { const v = e.target.value; if (v && !sgs.includes(v) && sgs.length < 5) setSgs((p) => [...p, v]); }} disabled={!vpc || loadingVpc} className="flex-1 bg-input/40 border border-border rounded-md px-3 py-2 text-sm">
-                <option value="">{!vpc ? "Select a VPC first" : loadingVpc ? "Loading..." : "Select up to 5 security groups"}</option>
-                {sgOptions.filter((o) => !sgs.includes(o.id)).map((o) => (<option key={o.id} value={o.id}>{o.name} ({o.id})</option>))}
-              </select>
+            <div className="flex flex-col gap-2">
+              <Select
+                value=""
+                onValueChange={(value) => {
+                  if (value && !sgs.includes(value) && sgs.length < 5) {
+                    setSgs((p) => [...p, value]);
+                  }
+                  setSelectedSgId("");
+                }}
+                disabled={!vpc || loadingVpc}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder={!vpc ? "Select a VPC" : loadingVpc ? "Loading..." : "Select a security group"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {sgOptions.map((o) => (
+                    <SelectItem key={o.id} value={o.id} disabled={sgs.includes(o.id) && selectedSgId !== o.id}>
+                      {o.name} ({o.id})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {sgError && (
                 <p className="mt-1 flex items-center gap-1 text-xs text-red-500">
                   <XCircle size={12} /> At least one security group is required.
                 </p>
               )}
 
-              {sgs.map((g) => {
-                const sg = sgOptions.find((o) => o.id === g);
-                return (
-                  <span key={g} className="inline-flex items-center gap-2 px-2.5 py-1 text-xs border border-border rounded-md bg-primary/10 text-primary">
-                    {sg ? `${sg.name} (${sg.id})` : g}
-                    <button type="button" onClick={() => setSgs((p) => p.filter((x) => x !== g))} className="hover:text-foreground" aria-label={`Remove ${g}`}><X size={12} /></button>
-                  </span>
-                );
-              })}
-
-
+              <div className="flex flex-wrap gap-2">
+                {sgs.map((g) => {
+                  const sg = sgOptions.find((o) => o.id === g);
+                  return (
+                    <span key={g} className="inline-flex items-center gap-2 px-2.5 py-1 text-xs border border-border rounded-md bg-primary/10 text-primary">
+                      {sg ? `${sg.name} (${sg.id})` : g}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const nextSgs = sgs.filter((x) => x !== g);
+                          setSgs(nextSgs);
+                          setSelectedSgId(nextSgs[nextSgs.length - 1] ?? "");
+                        }}
+                        className="hover:text-foreground"
+                        aria-label={`Remove ${g}`}
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  );
+                })}
+              </div>
             </div>
           </Field>
         </Section>
 
         {/* Listeners */}
-        <Section id="listeners-routing" title="Listeners and routing">
+        <Section id="listeners-routing" title="Listeners and Routing">
           <p className="text-xs text-muted-foreground mb-3">
             A listener is a process that checks for connection requests using the protocol and port you configure.
           </p>
@@ -1019,24 +1119,35 @@ export function LoadBalancerCreate({ kind }: Props) {
                               return (
                                 <div key={tg.id} className="grid grid-cols-[1fr_auto_110px_70px_auto] gap-2 items-end">
                                   <div>
-                                    <select
-                                      value={tg.group}
-                                      onChange={(e) => updateTargetGroup(listener.id, tg.id, { group: e.target.value })}
-                                      className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
-                                    >
-                                      <option value="">Select a target group</option>
-                                      {filteredTgOptions.map((opt) => {
-                                        const isAssociated = (opt.loadBalancerArns ?? []).length > 0;
-                                        return (
-                                          <option key={opt.arn} value={opt.arn} disabled={isAssociated}>
-                                            {opt.name} ({opt.protocol}:{opt.port}){isAssociated ? " — already in use" : ""}
-                                          </option>
-                                        );
-                                      })}
-                                    </select>
+                                    <Select
+                                        value={tg.group}
+                                        onValueChange={(value) =>
+                                          updateTargetGroup(listener.id, tg.id, { group: value })
+                                        }
+                                      >
+                                        <SelectTrigger className="w-full">
+                                          <SelectValue placeholder="Select a target group" />
+                                        </SelectTrigger>
 
+                                        <SelectContent>
+                                          {filteredTgOptions.map((opt) => {
+                                            const isAssociated = (opt.loadBalancerArns ?? []).length > 0;
+
+                                            return (
+                                              <SelectItem
+                                                key={opt.arn}
+                                                value={opt.arn}
+                                                disabled={isAssociated}
+                                              >
+                                                {opt.name} ({opt.protocol}:{opt.port})
+                                                {isAssociated ? " — already in use" : ""}
+                                              </SelectItem>
+                                            );
+                                          })}
+                                        </SelectContent>
+                                      </Select>
                                   </div>
-                                  <button type="button" className="p-2 border border-border rounded-md self-end"><RefreshCw size={14} /></button>
+                                
                                   <div>
                                     <div className="text-[11px] text-muted-foreground mb-1">Weight</div>
                                     <input
@@ -1069,7 +1180,7 @@ export function LoadBalancerCreate({ kind }: Props) {
                             type="button"
                             onClick={() => addTargetGroup(listener.id)}
                             disabled={listener.targetGroups.length >= 5}
-                            className="inline-flex items-center gap-1 text-xs px-4 py-1.5 border border-primary/60 text-primary rounded-full hover:bg-primary/10 font-medium"
+                            className="mt-2 inline-flex items-center gap-1 text-xs px-4 py-1.5 border border-primary/60 text-primary rounded-full hover:bg-primary/10 font-medium"
                           >
                             Add target group
                           </button>
@@ -1197,7 +1308,6 @@ export function LoadBalancerCreate({ kind }: Props) {
 
                     {isAlb && listener.action === "fixed-response" && (
                       <div className="border-l-2 border-border pl-4">
-                        ...
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <div className="text-sm font-medium mb-0.5">Response code</div>
@@ -1340,15 +1450,19 @@ export function LoadBalancerCreate({ kind }: Props) {
               onChange={(e) => {
                 const value = e.target.value;
                 setJustifications(value);
-                setJustificationError(value.trim().length > 0 && value.trim().length < 20);
+                if (justificationTouched) setJustificationError(value.trim().length > 0 && value.trim().length < 20);
+              }}
+              onBlur={() => {
+                setJustificationTouched(true);
+                setJustificationError(justifications.trim().length > 0 && justifications.trim().length < 20);
               }}
               rows={3}
               maxLength={250}
             />
             <div className="flex justify-between items-center">
               {justificationError ? (
-                <div className="flex items-center gap-1 text-xs text-red-600">
-                  <XCircle size={12} /> Minimum 20 characters required ({justifications.trim().length}/20).
+                <div className="text-xs text-red-600">
+                  Business justification must contain at least 20 characters.
                 </div>
               ) : <span />}
               <p className="text-xs text-muted-foreground">{justifications.length}/250</p>
@@ -1473,7 +1587,7 @@ export function LoadBalancerCreate({ kind }: Props) {
               disabled={!!disabledReason || !isJustificationValid}
               className="bg-warning text-warning-foreground hover:bg-warning/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              Create load balancer
+              Create Load Balancer
             </Button>
           </span>
         </div>

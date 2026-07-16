@@ -9,17 +9,38 @@ export interface ObjectEntry {
   storageClass?: string;
 }
 
+export interface ObjectsPagination {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  hasNext: boolean;
+  hasPrev: boolean;
+}
+
 export interface ListObjectsResponse {
   path: string;
   folders: ObjectEntry[];
   files: ObjectEntry[];
+  allFileNames: string[];
+  pagination: ObjectsPagination;
 }
 
-export async function fetchObjectsApi(requestId: string, prefix = ''): Promise<ListObjectsResponse> {
+export async function fetchObjectsApi(
+  requestId: string,
+  prefix = '',
+  options: { search?: string; page?: number; limit?: number } = {}
+): Promise<ListObjectsResponse> {
+  const params: Record<string, string> = {};
+  if (prefix) params.prefix = prefix;
+  if (options.search) params.search = options.search;
+  if (options.page) params.page = String(options.page);
+  if (options.limit) params.limit = String(options.limit);
+
   return apiClient.get<ListObjectsResponse>(
     env.bucketService,
     `buckets/${encodeURIComponent(requestId)}/objects`,
-    prefix ? { prefix } : undefined
+     Object.keys(params).length ? params : undefined
   );
 }
 
