@@ -6,6 +6,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { Info, X, ChevronRight, ChevronDown, FileText, Loader2, Layers, XCircle } from "lucide-react";
 import { ConnectorOverlay, type Connection } from "./ConnectorOverlay";
 import { provisionVpcApi, ApiError, type CreateVpcPayload } from "@/services/vpcService";
+import { setPendingVpc } from "@/utils/pendingVpc";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -412,6 +413,7 @@ const create = async () => {
     });
 
     if (requestId) {
+      if (currentUser?.id) setPendingVpc(currentUser.id, requestId);
       setActiveRequest(requestId, "vpc-service");
       const consoleSearch = new URLSearchParams({
         request: requestId,

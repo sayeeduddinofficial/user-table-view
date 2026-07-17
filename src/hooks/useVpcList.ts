@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useDialog } from "@/components/ui/dialog-context";
 import { useAppStore } from "@/store/appStore";
 import { fetchVpcListApi, ApiError } from "@/services/vpcService";
+import { getPendingVpc, clearPendingVpc } from "@/utils/pendingVpc";
 
 type Tab = "vpcs" | "encryption";
 
@@ -62,6 +63,26 @@ export function useVpcList() {
     setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   const clearSelection = useCallback(() => { setSelected([]); }, []);
 
+  // Track pending VPC per user (list GET does not return VPCs still in provisioning state).
+  const currentUser = useAppStore((s) => s.currentUser);
+  const [hasPending, setHasPending] = useState<boolean>(() => !!getPendingVpc(currentUser?.id));
+
+  useEffect(() => {
+    const pending = getPendingVpc(currentUser?.id);
+    if (!pending) {
+      setHasPending(false);
+      return;
+    }
+    // If the pending requestId now shows up in the list, provisioning finished — clear it.
+    const showedUp = vpcs.some((v: any) => v.id === pending.requestId);
+    if (showedUp && currentUser?.id) {
+      clearPendingVpc(currentUser.id);
+      setHasPending(false);
+    } else {
+      setHasPending(true);
+    }
+  }, [vpcs, currentUser?.id]);
+
   return {
     tab,
     setTab,
@@ -78,6 +99,7 @@ export function useVpcList() {
     howItWorksOpen,
     setHowItWorksOpen,
     loading,
+    hasPending,
     refresh: loadVpcs,
   };
 }
