@@ -65,21 +65,21 @@ export function useVpcList() {
 
   // Track pending VPC per user (list GET does not return VPCs still in provisioning state).
   const currentUser = useAppStore((s) => s.currentUser);
-  const [hasPending, setHasPending] = useState<boolean>(() => !!getPendingVpc(currentUser?.id));
+  const [pendingCount, setPendingCount] = useState<number>(() => (getPendingVpc(currentUser?.id) ? 1 : 0));
 
   useEffect(() => {
     const pending = getPendingVpc(currentUser?.id);
     if (!pending) {
-      setHasPending(false);
+      setPendingCount(0);
       return;
     }
     // If the pending requestId now shows up in the list, provisioning finished — clear it.
     const showedUp = vpcs.some((v: any) => v.id === pending.requestId);
     if (showedUp && currentUser?.id) {
       clearPendingVpc(currentUser.id);
-      setHasPending(false);
+      setPendingCount(0);
     } else {
-      setHasPending(true);
+      setPendingCount(1);
     }
   }, [vpcs, currentUser?.id]);
 
@@ -99,7 +99,8 @@ export function useVpcList() {
     howItWorksOpen,
     setHowItWorksOpen,
     loading,
-    hasPending,
+    hasPending: pendingCount > 0,
+    pendingCount,
     refresh: loadVpcs,
   };
 }
