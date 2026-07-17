@@ -363,6 +363,20 @@ if (nameValidation) {
   valid = false;
 }
 
+// Uniqueness: VPC name must be unique within the same region (across both modes).
+if (valid && !nameValidation) {
+  const proposedName = (mode === "vpc-only" ? name : `${autoName}-vpc`).trim().toLowerCase();
+  const regionCode = (REGION_CODE[region] ?? region).toLowerCase();
+  const dup = existingVpcs.some(
+    (v) => v.name.toLowerCase() === proposedName && v.region.toLowerCase() === regionCode
+  );
+  if (dup) {
+    setNameError(`A VPC with name "${proposedName}" already exists in ${region}. Names must be unique per region.`);
+    valid = false;
+  }
+}
+
+
     // Business Justification validation
     const justificationValidation =
       validateBusinessJustification(businessJustification);
