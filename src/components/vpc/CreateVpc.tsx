@@ -413,6 +413,7 @@ const create = async () => {
     });
 
     if (requestId) {
+      if (currentUser?.id) setPendingVpc(currentUser.id, requestId);
       setActiveRequest(requestId, "vpc-service");
       const consoleSearch = new URLSearchParams({
         request: requestId,
