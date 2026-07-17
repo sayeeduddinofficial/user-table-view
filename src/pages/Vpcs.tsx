@@ -58,7 +58,7 @@ function formatCreatedDate(dateString: string | undefined | null) {
 }
 
 export default function Vpcs() {
-  const { query, setQuery, filtered, selected, allChecked, toggleAll, toggleOne, refresh, loading, clearSelection, hasPending } = useVpcList();
+  const { query, setQuery, filtered, selected, allChecked, toggleAll, toggleOne, refresh, loading, clearSelection, hasPending, pendingCount } = useVpcList();
   const currentUser = useAppStore((s) => s.currentUser);
   const hasCompletedVpc = !!currentUser && filtered.some((v: any) => Number(v.userId) === Number(currentUser.id) || Number(v.user_id) === Number(currentUser.id));
   const hasActiveVpc = hasCompletedVpc || hasPending;
