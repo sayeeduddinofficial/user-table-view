@@ -58,12 +58,12 @@ function formatCreatedDate(dateString: string | undefined | null) {
 }
 
 export default function Vpcs() {
-  const { query, setQuery, filtered, selected, allChecked, toggleAll, toggleOne, refresh, loading, clearSelection, hasPending } = useVpcList();
+  const { query, setQuery, filtered, selected, allChecked, toggleAll, toggleOne, refresh, loading, clearSelection, hasPending, pendingCount } = useVpcList();
   const currentUser = useAppStore((s) => s.currentUser);
   const hasCompletedVpc = !!currentUser && filtered.some((v: any) => Number(v.userId) === Number(currentUser.id) || Number(v.user_id) === Number(currentUser.id));
   const hasActiveVpc = hasCompletedVpc || hasPending;
 
-  const totalVpcs = filtered.length;
+  const totalVpcs = filtered.length + pendingCount;
   const activeSubnets = filtered.reduce(
     (total, v) => total + (v.subnetCount ?? 0),
     0,
@@ -72,7 +72,7 @@ export default function Vpcs() {
     (total, v) => total + (v.natGateways ?? 0),
     0,
   );
-  const provisioning = filtered.filter((v: any) => v.status === "provisioning").length;
+  const provisioning = filtered.filter((v: any) => v.status === "provisioning").length + pendingCount;
   
   const [dialog, setDialog] = useState<{
     icon?: "destroy" | "retry" | "info";
