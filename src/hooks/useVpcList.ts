@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { useDialog } from "@/components/ui/dialog-context";
 import { useAppStore } from "@/store/appStore";
 import { fetchVpcListApi, ApiError } from "@/services/vpcService";
+import { getPendingVpc, clearPendingVpc } from "@/utils/pendingVpc";
 
 type Tab = "vpcs" | "encryption";
 
