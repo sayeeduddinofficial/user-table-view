@@ -127,6 +127,7 @@ export function CreateVpc({ onClose }: { onClose?: () => void } = {}) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false); 
   const [hasActiveVpc, setHasActiveVpc] = useState(false);
+  const [existingVpcs, setExistingVpcs] = useState<Array<{ name: string; region: string }>>([]);
   const currentUser = useAppStore((s) => s.currentUser);
 
 useEffect(() => {
@@ -135,6 +136,7 @@ useEffect(() => {
     .then((list) => {
       const mine = list.filter((v) => Number(v.userId) === Number(currentUser.id));
       setHasActiveVpc(mine.length > 0);
+      setExistingVpcs(list.map((v: any) => ({ name: String(v.name ?? "").trim(), region: String(v.region ?? "").trim() })));
     })
     .catch(() => {});
 }, [currentUser]);
