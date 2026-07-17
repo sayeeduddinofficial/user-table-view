@@ -82,11 +82,12 @@ export default function Vpcs() {
   const [deletingVpcId, setDeletingVpcId] = useState<string | null>(null);
 
 const handleDeleteRow = (vpc: any) => {
+  setDeletingVpcId(vpc.id);
   setDialog({
     icon: "destroy",
     title: `Delete ${vpc.name || vpc.id}?`,
     onConfirm: async () => {
-      setDeletingVpcId(vpc.id);  // show red "Deleting" badge immediately
+      setDeletingVpcId(vpc.id);
       try {
         await deleteVpcApi(vpc.awsVpcId);  // waits until AWS deletion is done
         useAppStore.getState().deleteVpc(vpc.id);  // remove from store
@@ -103,6 +104,8 @@ const handleDeleteRow = (vpc: any) => {
 const handleClose = (confirmed: boolean) => {
   if (confirmed) {
     dialog?.onConfirm?.();
+  } else {
+    setDeletingVpcId(null);
   }
   setDialog(null);
 };
@@ -284,7 +287,6 @@ const handleRefresh = async () => {
                       </td>
                       <td className="px-5 py-4">
                         <span className={statusBadgeClass}>
-                          <CheckCircle2 size={12} />
                           {statusLabel}
                         </span>
                       </td>
@@ -312,7 +314,7 @@ const handleRefresh = async () => {
                       <td className="px-5 py-4 text-right">
                         <button
                           onClick={() => handleDeleteRow(v)}
-                          disabled={v?.status == 'deleting'}
+                          disabled={deletingVpcId === v.id || v?.status === 'deleting'}
                           className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:cursor-not-allowed"
                           aria-label="Delete VPC"
                         >

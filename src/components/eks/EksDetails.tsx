@@ -89,10 +89,15 @@ export function EksDetails({
                 </span>
               }
             />
-            <Field label="Kubernetes version" value={CLUSTER.kubernetesVersion} />
+            <Field
+              label="Kubernetes version"
+              value={CLUSTER.kubernetesVersion}
+            />
             <Field
               label="Support period"
-              value={<span className="text-primary">{CLUSTER.supportPeriod}</span>}
+              value={
+                <span className="text-primary">{CLUSTER.supportPeriod}</span>
+              }
             />
             <Field label="Provider" value={CLUSTER.provider} />
             <Field

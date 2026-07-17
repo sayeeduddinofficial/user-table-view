@@ -7,7 +7,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Copy,
   MinusCircle,
   RefreshCw,
   Search,
@@ -18,6 +17,7 @@ import { toast } from "sonner";
 import { useParams, Link } from "react-router-dom";
 import { fetchVpcDetailsApi, ApiError, type VpcDetailRaw } from "@/services/vpcService";
 import { useDialog } from "@/components/ui/dialog-context";
+import { CopyText } from "@/components/eks/eksShared";
 
 type DetailTab = "details" | "resource" | "cidrs" | "flow" | "tags" | "integrations";
 
@@ -119,7 +119,6 @@ export function VpcDetails({
   tabs.push(
     { key: "resource", label: "Resource map" },
     { key: "cidrs", label: "CIDRs" },
-    { key: "tags", label: "Tags" },
   );
 
   return (
@@ -201,8 +200,7 @@ function DetailsGrid({ vpc, cidr, ownerId }: { vpc: any; cidr: string; ownerId: 
     <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-5 text-sm">
       <Field label="VPC ID" value={
         <span className="inline-flex items-center gap-1.5">
-          <Copy size={12} className="text-muted-foreground cursor-pointer" onClick={() => { navigator.clipboard.writeText(vpc.id); toast.success("Copied"); }} />
-          {vpc.id}
+          <CopyText text={vpc.id} />
         </span>
       } />
       <Field label="Status" value={
@@ -229,15 +227,10 @@ function DetailsGrid({ vpc, cidr, ownerId }: { vpc: any; cidr: string; ownerId: 
 
       <Field label="IPv6 CIDR" value="–" />
       <Field label="Network Address Usage metrics" value="Disabled" />
-      <Field label="Route 53 Resolver DNS Firewall rule groups" value={
-        <span className="inline-flex items-center gap-1.5 text-destructive">
-          <XCircle size={14} /> Failed to load rule groups
-        </span>
-      } />
+      <Field label="Route 53 Resolver DNS Firewall rule groups" value={vpc.ruleGroups ?? "–"} />
       <Field label="Owner ID" value={
         <span className="inline-flex items-center gap-1.5">
-          <Copy size={12} className="text-muted-foreground cursor-pointer" onClick={() => { navigator.clipboard.writeText(ownerId); toast.success("Copied"); }} />
-          {ownerId}
+          <CopyText text={ownerId} />
         </span>
       } />
 
@@ -568,7 +561,6 @@ function CidrsTab({ cidr }: { cidr: string }) {
         <div className="flex items-center gap-2">
           <h2 className="text-base font-semibold">IPv4 CIDRs</h2>
         </div>
-        <Button variant="outline" size="sm" onClick={() => toast.info("Edit CIDRs")}>Edit CIDRs</Button>
       </div>
       <table className="w-full text-sm">
         <thead>

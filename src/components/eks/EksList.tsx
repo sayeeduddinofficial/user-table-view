@@ -140,7 +140,7 @@ export function EksList() {
             icon={<Clock className="h-4 w-4 text-amber-400" />}
             iconBg="bg-amber-500/10"
             value={provisioning}
-            label="Pending"
+            label="Provisioning"
           />
         </div>
 
@@ -232,7 +232,6 @@ export function EksList() {
                     </td>
                     <td className="px-5 py-4">
                       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 capitalize">
-                        <CheckCircle2 size={12} />
                         {v.status ?? "—"}
                       </span>
                     </td>

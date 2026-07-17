@@ -348,19 +348,17 @@ useEffect(() => {
     let valid = true;
     // Name validation
     const currentName =
-      mode === "vpc-only"
-        ? name
-        : autoGen
-        ? autoName
-        : "";
-    const nameValidation =
-      mode === "vpc-only" || autoGen
-        ? validateName(currentName)
-        : "";
-    setNameError(nameValidation);
-    if (nameValidation) {
-      valid = false;
-    }
+  mode === "vpc-only"
+    ? name
+    : autoName;
+
+const nameValidation = validateName(currentName);
+
+setNameError(nameValidation);
+
+if (nameValidation) {
+  valid = false;
+}
 
     // Business Justification validation
     const justificationValidation =
@@ -610,7 +608,17 @@ const create = async () => {
                     <Checkbox
                       id="auto-generate"
                       checked={autoGen}
-                      onCheckedChange={(checked) => setAutoGen(checked === true)}
+                      onCheckedChange={(checked) => {
+  const enabled = checked === true;
+
+  setAutoGen(enabled);
+
+  // Clear the field whenever the mode changes
+  setAutoName("");
+
+  // Clear any existing validation message
+  setNameError("");
+}}
                     />
                     <Label
                       htmlFor="auto-generate"
@@ -621,22 +629,23 @@ const create = async () => {
                   </div>
 
                   <Input
-                    id="auto-name"
-                    placeholder="Enter Name tag"
-                    value={autoGen ? autoName : ""}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setAutoName(value);
-                      if (nameError) {
-                          setNameError(validateName(value));
-                      }
-                    }}
-                    onBlur={() => setNameError(validateName(autoName))}
-                    disabled={!autoGen}
-                    className={`bg-muted/50 ${
-                        nameError ? "border-red-500" : ""
-                    }`}
-                  />
+  id="auto-name"
+  placeholder="Enter Name tag"
+  value={autoName}
+  onChange={(e) => {
+    const value = e.target.value;
+
+    setAutoName(value);
+
+    if (nameError) {
+      setNameError(validateName(value));
+    }
+  }}
+  onBlur={() => setNameError(validateName(autoName))}
+  className={`bg-muted/50 ${
+    nameError ? "border-red-500" : ""
+  }`}
+/>
 
                   {nameError ? (
                     <p className="text-xs text-red-500">
@@ -699,10 +708,8 @@ const create = async () => {
                 ) : (
                   <p className="text-xs text-muted-foreground">
                     Determine the starting IP and the size of your VPC using CIDR notation.
-                    CIDR block size must be between{" "}
+                    CIDR block size must be {" "}
                     <code className="rounded bg-muted px-1 py-0.5 text-[11px]">/16</code>{" "}
-                    and{" "}
-                    <code className="rounded bg-muted px-1 py-0.5 text-[11px]">/28</code>.
                   </p>
                 )}
               </div>
@@ -1414,6 +1421,7 @@ function VpcOnlyFields(p: any) {
             className={`bg-muted/50 ${
               nameError ? "border-destructive" : ""
             }`}
+            maxLength={80}
             spellCheck={false}
           />
           {nameError ? (
@@ -1466,8 +1474,7 @@ function VpcOnlyFields(p: any) {
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                CIDR block size must be between <code className="rounded bg-muted px-1 py-0.5 text-[11px]">/16</code> and{" "}
-                <code className="rounded bg-muted px-1 py-0.5 text-[11px]">/28</code>.
+                CIDR block size must be <code className="rounded bg-muted px-1 py-0.5 text-[11px]">/16</code>
               </p>
             )}
           </div>
