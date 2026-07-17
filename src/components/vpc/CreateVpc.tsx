@@ -127,6 +127,7 @@ export function CreateVpc({ onClose }: { onClose?: () => void } = {}) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false); 
   const [hasActiveVpc, setHasActiveVpc] = useState(false);
+  const [existingVpcs, setExistingVpcs] = useState<Array<{ name: string; region: string }>>([]);
   const currentUser = useAppStore((s) => s.currentUser);
 
 useEffect(() => {
@@ -135,6 +136,7 @@ useEffect(() => {
     .then((list) => {
       const mine = list.filter((v) => Number(v.userId) === Number(currentUser.id));
       setHasActiveVpc(mine.length > 0);
+      setExistingVpcs(list.map((v: any) => ({ name: String(v.name ?? "").trim(), region: String(v.region ?? "").trim() })));
     })
     .catch(() => {});
 }, [currentUser]);
@@ -360,6 +362,20 @@ setNameError(nameValidation);
 if (nameValidation) {
   valid = false;
 }
+
+// Uniqueness: VPC name must be unique within the same region (across both modes).
+if (valid && !nameValidation) {
+  const proposedName = (mode === "vpc-only" ? name : `${autoName}-vpc`).trim().toLowerCase();
+  const regionCode = (REGION_CODE[region] ?? region).toLowerCase();
+  const dup = existingVpcs.some(
+    (v) => v.name.toLowerCase() === proposedName && v.region.toLowerCase() === regionCode
+  );
+  if (dup) {
+    setNameError(`A VPC with name "${proposedName}" already exists in ${region}. Names must be unique per region.`);
+    valid = false;
+  }
+}
+
 
     // Business Justification validation
     const justificationValidation =
