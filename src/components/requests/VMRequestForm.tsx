@@ -62,6 +62,21 @@ type Props = {
   isSubmitting?: boolean;
 };
 
+// AMI options per region (Quick Start images as shown in the AWS console).
+// Each region falls back to the default 7-option list unless overridden.
+const DEFAULT_AMI_OPTIONS = [
+  { value: "amazon-linux", label: "Amazon Linux" },
+  { value: "macos", label: "macOS" },
+  { value: "ubuntu", label: "Ubuntu" },
+  { value: "windows", label: "Windows" },
+  { value: "red-hat", label: "Red Hat" },
+  { value: "suse-linux", label: "SUSE Linux" },
+  { value: "debian", label: "Debian" },
+];
+const AMI_OPTIONS_BY_REGION: Record<string, { value: string; label: string }[]> = {};
+const getAmiOptions = (region: string) =>
+  AMI_OPTIONS_BY_REGION[region] ?? DEFAULT_AMI_OPTIONS;
+
 export function VMRequestForm({ onSubmit, isSubmitting = false }: Props) {
   const { alert } = useDialog();
   const navigate = useNavigate();
@@ -99,6 +114,7 @@ export function VMRequestForm({ onSubmit, isSubmitting = false }: Props) {
     Record<string, { count: number; instanceType: string }>
   >({});
   const [category, setCategory] = useState<CategoryType | null>(null);
+  const [ami, setAmi] = useState<string>("amazon-linux");
   const [allInOneInstanceType, setAllInOneInstanceType] = useState("");
   const [cat5InstanceTypes, setCat5InstanceTypes] = useState<
     Record<string, string>
@@ -422,6 +438,13 @@ const onOpenDialog = () => {
     });
     return;
   }
+  if (category === 1 && !ami) {
+    alert({
+      title: "Please select an AMI",
+      severity: "error",
+    });
+    return;
+  }
   const trimmedJustification = justification.trim();
 
   if (!trimmedJustification) {
@@ -520,6 +543,7 @@ const onOpenDialog = () => {
       environmentTag,
       projectIdentifier,
       ...(category !== 1 && { splunkVersion }),
+      ...(category === 1 && { ami }),
       deploymentMode,
       region,
       regions: deploymentMode === "multi-region" ? selectedRegions : [region],
@@ -861,6 +885,30 @@ const onOpenDialog = () => {
               </>
             )}
           </div>
+
+          {category === 1 && (
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2">
+                <Layers className="h-4 w-4" />
+                AMI (Amazon Machine Image)
+              </Label>
+              <Select value={ami} onValueChange={setAmi}>
+                <SelectTrigger className="bg-muted/50">
+                  <SelectValue placeholder="Select AMI..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {getAmiOptions(region).map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Options are based on the selected region
+              </p>
+            </div>
+          )}
         </div>
       </section>
 
@@ -1305,10 +1353,7 @@ const onOpenDialog = () => {
                 </div>
               </div>
 
-              <div
-                className={`grid gap-3 ${category === 1 ? "grid-cols-1" : "grid-cols-2"
-                  }`}
-              >
+              <div className="grid gap-3 grid-cols-2">
                 <div className="p-3 rounded-lg bg-muted/50 border border-border">
                   <p className="text-xs text-muted-foreground mb-1">Project</p>
                   <p className="font-medium text-foreground">{projectIdentifier}</p>
@@ -1319,6 +1364,15 @@ const onOpenDialog = () => {
                     <p className="text-xs text-muted-foreground mb-1">Splunk Version</p>
                     <p className="font-medium text-foreground">
                       {SPLUNK_VERSIONS.find(v => v.value === splunkVersion)?.label}
+                    </p>
+                  </div>
+                )}
+
+                {category === 1 && (
+                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-xs text-muted-foreground mb-1">AMI</p>
+                    <p className="font-medium text-foreground">
+                      {getAmiOptions(region).find(o => o.value === ami)?.label ?? ami}
                     </p>
                   </div>
                 )}
