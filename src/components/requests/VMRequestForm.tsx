@@ -1353,10 +1353,7 @@ const onOpenDialog = () => {
                 </div>
               </div>
 
-              <div
-                className={`grid gap-3 ${category === 1 ? "grid-cols-1" : "grid-cols-2"
-                  }`}
-              >
+              <div className="grid gap-3 grid-cols-2">
                 <div className="p-3 rounded-lg bg-muted/50 border border-border">
                   <p className="text-xs text-muted-foreground mb-1">Project</p>
                   <p className="font-medium text-foreground">{projectIdentifier}</p>
@@ -1367,6 +1364,15 @@ const onOpenDialog = () => {
                     <p className="text-xs text-muted-foreground mb-1">Splunk Version</p>
                     <p className="font-medium text-foreground">
                       {SPLUNK_VERSIONS.find(v => v.value === splunkVersion)?.label}
+                    </p>
+                  </div>
+                )}
+
+                {category === 1 && (
+                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-xs text-muted-foreground mb-1">AMI</p>
+                    <p className="font-medium text-foreground">
+                      {getAmiOptions(region).find(o => o.value === ami)?.label ?? ami}
                     </p>
                   </div>
                 )}
