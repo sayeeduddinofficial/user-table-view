@@ -919,13 +919,41 @@ const onOpenDialog = () => {
                 AMI (Amazon Machine Image)
               </Label>
               <Select value={ami} onValueChange={setAmi}>
-                <SelectTrigger className="bg-muted/50">
-                  <SelectValue placeholder="Select AMI..." />
+                <SelectTrigger className="bg-muted/50 h-auto py-2">
+                  <SelectValue placeholder="Select AMI...">
+                    {(() => {
+                      const sel = getAmiOptions(region).find((o) => o.value === ami);
+                      if (!sel) return "Select AMI...";
+                      return (
+                        <div className="flex flex-col items-start text-left">
+                          <span className="font-medium">{sel.label}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {sel.amiId} ({sel.arch})
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </SelectValue>
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-96">
                   {getAmiOptions(region).map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
+                    <SelectItem key={opt.value} value={opt.value} className="py-2">
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-medium">{opt.label}</span>
+                          {opt.freeTier && (
+                            <span className="text-[10px] text-emerald-500 font-medium">
+                              Free tier eligible
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {opt.amiId} ({opt.arch})
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          Virtualization: {opt.virtualization} · Root device: {opt.rootDevice}
+                        </span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
