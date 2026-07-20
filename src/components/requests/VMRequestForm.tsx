@@ -438,6 +438,13 @@ const onOpenDialog = () => {
     });
     return;
   }
+  if (category === 1 && !ami) {
+    alert({
+      title: "Please select an AMI",
+      severity: "error",
+    });
+    return;
+  }
   const trimmedJustification = justification.trim();
 
   if (!trimmedJustification) {
