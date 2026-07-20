@@ -114,6 +114,7 @@ export function VMRequestForm({ onSubmit, isSubmitting = false }: Props) {
     Record<string, { count: number; instanceType: string }>
   >({});
   const [category, setCategory] = useState<CategoryType | null>(null);
+  const [ami, setAmi] = useState<string>("amazon-linux");
   const [allInOneInstanceType, setAllInOneInstanceType] = useState("");
   const [cat5InstanceTypes, setCat5InstanceTypes] = useState<
     Record<string, string>
