@@ -1422,14 +1422,20 @@ const onOpenDialog = () => {
                   </div>
                 )}
 
-                {category === 1 && (
-                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                    <p className="text-xs text-muted-foreground mb-1">AMI</p>
-                    <p className="font-medium text-foreground">
-                      {getAmiOptions(region).find(o => o.value === ami)?.label ?? ami}
-                    </p>
-                  </div>
-                )}
+                {category === 1 && (() => {
+                  const sel = getAmiOptions(region).find(o => o.value === ami);
+                  return (
+                    <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                      <p className="text-xs text-muted-foreground mb-1">AMI</p>
+                      <p className="font-medium text-foreground">{sel?.label ?? ami}</p>
+                      {sel && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {sel.amiId} · {sel.arch} · Virt: {sel.virtualization} · Root: {sel.rootDevice}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
