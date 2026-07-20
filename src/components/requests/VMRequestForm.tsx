@@ -141,6 +141,14 @@ export function VMRequestForm({ onSubmit, isSubmitting = false }: Props) {
   >({});
   const [category, setCategory] = useState<CategoryType | null>(null);
   const [ami, setAmi] = useState<string>(() => getAmiOptions(getDefaultRegion())[0]?.value ?? "");
+
+  // Reset AMI when the region's option list changes and current value is no longer valid
+  useEffect(() => {
+    const opts = getAmiOptions(region);
+    if (!opts.some((o) => o.value === ami)) {
+      setAmi(opts[0]?.value ?? "");
+    }
+  }, [region]); // eslint-disable-line react-hooks/exhaustive-deps
   const [allInOneInstanceType, setAllInOneInstanceType] = useState("");
   const [cat5InstanceTypes, setCat5InstanceTypes] = useState<
     Record<string, string>
