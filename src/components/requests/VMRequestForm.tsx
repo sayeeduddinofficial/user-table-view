@@ -62,19 +62,45 @@ type Props = {
   isSubmitting?: boolean;
 };
 
-// AMI options per region (Quick Start images as shown in the AWS console).
-// Each region falls back to the default 7-option list unless overridden.
-const DEFAULT_AMI_OPTIONS = [
-  { value: "amazon-linux", label: "Amazon Linux" },
-  { value: "macos", label: "macOS" },
-  { value: "ubuntu", label: "Ubuntu" },
-  { value: "windows", label: "Windows" },
-  { value: "red-hat", label: "Red Hat" },
-  { value: "suse-linux", label: "SUSE Linux" },
-  { value: "debian", label: "Debian" },
+// AMI options per region (Quick Start-style entries, similar to the AWS console).
+// NOTE: These are sample/placeholder entries; text will be finalized later.
+type AmiOption = {
+  value: string;
+  label: string;
+  amiId: string;
+  arch: string;
+  virtualization: string;
+  rootDevice: string;
+  freeTier?: boolean;
+};
+
+const OHIO_AMI_OPTIONS: AmiOption[] = [
+  { value: "al2023-kernel-6-18", label: "Amazon Linux 2023 kernel-6.18 AMI", amiId: "ami-01edba92f9036f76e", arch: "64-bit (x86), uefi-preferred", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "al2023-kernel-6-1", label: "Amazon Linux 2023 kernel-6.1 AMI", amiId: "ami-0fd6240f599091088", arch: "64-bit (x86), uefi-preferred", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "ubuntu-24-04", label: "Ubuntu Server 24.04 LTS", amiId: "ami-0a1b2c3d4e5f60001", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "windows-2022", label: "Microsoft Windows Server 2022 Base", amiId: "ami-0a1b2c3d4e5f60002", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs" },
+  { value: "rhel-9", label: "Red Hat Enterprise Linux 9", amiId: "ami-0a1b2c3d4e5f60003", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs" },
+  { value: "suse-15", label: "SUSE Linux Enterprise Server 15 SP6", amiId: "ami-0a1b2c3d4e5f60004", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs" },
+  { value: "debian-12", label: "Debian 12 (Bookworm)", amiId: "ami-0a1b2c3d4e5f60005", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs" },
 ];
-const AMI_OPTIONS_BY_REGION: Record<string, { value: string; label: string }[]> = {};
-const getAmiOptions = (region: string) =>
+
+const NVIRGINIA_AMI_OPTIONS: AmiOption[] = [
+  { value: "al2023-kernel-6-18-nv", label: "Amazon Linux 2023 kernel-6.18 AMI", amiId: "ami-0abc111222333aaaa", arch: "64-bit (x86), uefi-preferred", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "al2-arm-nv", label: "Amazon Linux 2 (ARM64)", amiId: "ami-0abc111222333aaab", arch: "64-bit (Arm)", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "ubuntu-22-04-nv", label: "Ubuntu Server 22.04 LTS", amiId: "ami-0abc111222333aaac", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "windows-2019-nv", label: "Microsoft Windows Server 2019 Base", amiId: "ami-0abc111222333aaad", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs" },
+  { value: "rhel-8-nv", label: "Red Hat Enterprise Linux 8", amiId: "ami-0abc111222333aaae", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs" },
+  { value: "macos-sonoma-nv", label: "macOS Sonoma 14", amiId: "ami-0abc111222333aaaf", arch: "64-bit (Mac)", virtualization: "hvm", rootDevice: "ebs" },
+  { value: "debian-11-nv", label: "Debian 11 (Bullseye)", amiId: "ami-0abc111222333aab0", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs" },
+];
+
+const DEFAULT_AMI_OPTIONS: AmiOption[] = OHIO_AMI_OPTIONS;
+
+const AMI_OPTIONS_BY_REGION: Record<string, AmiOption[]> = {
+  "us-east-2": OHIO_AMI_OPTIONS,
+  "us-east-1": NVIRGINIA_AMI_OPTIONS,
+};
+const getAmiOptions = (region: string): AmiOption[] =>
   AMI_OPTIONS_BY_REGION[region] ?? DEFAULT_AMI_OPTIONS;
 
 export function VMRequestForm({ onSubmit, isSubmitting = false }: Props) {
