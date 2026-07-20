@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,7 +13,7 @@ import {
   Info,
   RotateCcw,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Dialog,
   DialogContent,
@@ -22,53 +21,125 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useDialog } from "@/components/ui/dialog-context";
+import { getClientIp } from "@/utils/getClientIP";
+import { Link } from "react-router-dom";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { useAppStore } from "@/store/appStore";
 
-const STATIC_CLUSTERS = [
-  {
-    id: "EKS-REQ-1001",
-    name: "dev-eks-cluster",
-    status: "Active",
-    version: "1.33",
-    createdDate: "2026-07-01T10:30:00",
-    justification: "Development workloads",
-  },
-  {
-    id: "EKS-REQ-1002",
-    name: "qa-eks-cluster",
-    status: "Provisioning",
-    version: "1.32",
-    createdDate: "2026-07-04T14:20:00",
-    justification: "QA testing",
-  },
-  {
-    id: "EKS-REQ-1003",
-    name: "prod-eks-cluster",
-    status: "Active",
-    version: "1.31",
-    createdDate: "2026-06-28T09:15:00",
-    justification: "Production workloads",
-  },
-];
+// const STATIC_CLUSTERS = [
+//   {
+//     id: "EKS-REQ-1001",
+//     name: "dev-eks-cluster",
+//     status: "Active",
+//     version: "1.33",
+//     createdDate: "2026-07-01T10:30:00",
+//     justification: "Development workloads",
+//   },
+//   {
+//     id: "EKS-REQ-1002",
+//     name: "qa-eks-cluster",
+//     status: "Provisioning",
+//     version: "1.32",
+//     createdDate: "2026-07-04T14:20:00",
+//     justification: "QA testing",
+//   },
+//   {
+//     id: "EKS-REQ-1003",
+//     name: "prod-eks-cluster",
+//     status: "Active",
+//     version: "1.31",
+//     createdDate: "2026-06-28T09:15:00",
+//     justification: "Production workloads",
+//   },
+// ];
+
+const API_BASE = import.meta.env.VITE_EKS_CLUSTER_SERVICE_URL;
+
+interface EksCluster {
+  id: number;
+  request_id: string;
+  cluster_name: string;
+  region: string;
+  kubernetes_version: string;
+  status: string;
+  business_justification: string;
+  created_at: string;
+  updated_at: string;
+  creator_name?: string;
+  created_by: number; 
+}
 
 export function EksList() {
   const [query, setQuery] = useState("");
-  const [clusters] = useState(STATIC_CLUSTERS);
+  const [clusters, setClusters] = useState<EksCluster[]>([]);
+  const [loading, setLoading] = useState(false);
   const [selected] = useState<string[]>([]);
   const { alert } = useDialog();
+  const currentUser = useAppStore((s) => s.currentUser);
+
+  const fetchClusters = async () => {
+    setLoading(true);
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_BASE}/eks/`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      const data = await res.json();
+      if (!res.ok || data?.status !== "SUCCESS") {
+        alert({
+          title: data?.message || "Failed to load EKS clusters",
+          severity: "error",
+        });
+        return;
+      }
+      setClusters(Array.isArray(data.data) ? data.data : []);
+    } catch (err) {
+      alert({ title: "Failed to load EKS clusters", severity: "error" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchClusters();
+  }, []);
+
+  console.log("Fetched clusters:", clusters);
+
+  const userHasCluster =
+    currentUser != null &&
+    clusters.some(
+      (c) =>
+        String(c.created_by) === String(currentUser.id) &&
+        ["PENDING", "PROVISIONING", "ACTIVE", "TERMINATING"].includes(c.status),
+    );
 
   const filtered = clusters.filter((c) =>
-    [c.id, c.name, c.status, c.version, c.justification]
+    [
+      c.request_id,
+      c.cluster_name,
+      c.status,
+      c.kubernetes_version,
+      c.business_justification,
+      c.region,
+    ]
       .join(" ")
       .toLowerCase()
       .includes(query.toLowerCase()),
   );
 
   const totalClusters = filtered.length;
-  const workerNodes = 12;
-  const latestVersion = "1.33";
-  const provisioning = filtered.filter(
-    (c) => c.status === "Provisioning",
-  ).length;
+  const latestVersion =
+    filtered
+      .map((c) => c.kubernetes_version)
+      .sort()
+      .reverse()[0] ?? "—";
+  const activeCount = filtered.filter((c) => c.status === "ACTIVE").length;
+  const provisioning = filtered.filter((c) => c.status === "PENDING").length;
 
   const [dialog, setDialog] = useState<{
     icon?: "destroy" | "retry" | "info";
@@ -77,20 +148,58 @@ export function EksList() {
     onConfirm?: () => void;
   } | null>(null);
 
-  const handleDeleteRow = (eks: any) => {
+  const handleDeleteRow = (eks: EksCluster) => {
     setDialog({
       icon: "destroy",
-      title: `Delete ${eks.name || eks.id}?`,
+      title: `Terminate ${eks.cluster_name || eks.request_id}?`,
+      description:
+        "This will initiate termination of the EKS cluster. This action cannot be undone.",
+
       onConfirm: async () => {
         try {
-          console.log("Delete", eks.name);
+          const token = localStorage.getItem("token");
+
+          const res = await fetch(`${API_BASE}/eks/${eks.request_id}`, {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+              ...(token
+                ? {
+                    Authorization: `Bearer ${token}`,
+                    "x-client-ip": (await getClientIp()) || "",
+                  }
+                : {}),
+            },
+          });
+
+          const data = await res.json();
+
+          if (!res.ok || data?.status !== "SUCCESS") {
+            throw new Error(
+              data?.message ||
+                data?.data?.message ||
+                "Failed to terminate EKS cluster",
+            );
+          }
+
           alert({
-            title: `Deleted EKS Cluster ${eks.name || eks.id}`,
+            title: data?.data?.message || "EKS cluster termination initiated",
+            description: data?.data?.requestId
+              ? `Request ID: ${data.data.requestId}`
+              : eks.request_id,
             severity: "success",
           });
+
+          // Refresh the list to get the latest TERMINATING status
+          await fetchClusters();
         } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Failed to terminate EKS cluster";
+
           alert({
-            title: `Failed to delete EKS Cluster ${eks.name || eks.id}`,
+            title: message,
             severity: "error",
           });
         }
@@ -107,6 +216,7 @@ export function EksList() {
 
   const handleRefresh = async () => {
     try {
+      await fetchClusters();
       alert({ title: "Refreshed", severity: "success" });
     } catch (error) {
       alert({ title: `Failed to Refresh`, severity: "error" });
@@ -127,7 +237,7 @@ export function EksList() {
           <StatCard
             icon={<Layers className="h-4 w-4 text-cyan-400" />}
             iconBg="bg-cyan-500/10"
-            value={workerNodes}
+            value={activeCount}
             label="Worker Nodes"
           />
           <StatCard
@@ -154,7 +264,7 @@ export function EksList() {
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by name, region, or request ID..."
+              placeholder="Search by name, request ID..."
               className="pl-9 bg-card/50 border-border/50"
             />
           </div>
@@ -167,11 +277,32 @@ export function EksList() {
           >
             <RefreshCw size={14} />
           </Button>
-          <Link to="/aws/eks/create">
-            <Button className="bg-primary hover:bg-primary/90 text-white gap-1.5 shrink-0">
-              <Plus size={14} /> Create Cluster
-            </Button>
-          </Link>
+          <Tooltip>
+  <TooltipTrigger asChild>
+    <span>
+      {userHasCluster ? (
+        <Button
+          disabled
+          className="bg-primary/50 text-white gap-1.5 shrink-0 cursor-not-allowed opacity-60"
+        >
+          <Plus size={14} /> Create Cluster
+        </Button>
+      ) : (
+        <Link to="/aws/eks/create">
+          <Button className="bg-primary hover:bg-primary/90 text-white gap-1.5 shrink-0">
+            <Plus size={14} /> Create Cluster
+          </Button>
+        </Link>
+      )}
+    </span>
+  </TooltipTrigger>
+  {userHasCluster && (
+    <TooltipContent side="top">
+      <p>Maximum 1 EKS limit reached.</p>
+    </TooltipContent>
+  )}
+</Tooltip>
+
         </div>
 
         {/* Table */}
@@ -199,7 +330,17 @@ export function EksList() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 && (
+                {loading && (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      className="px-5 py-16 text-center text-muted-foreground text-sm"
+                    >
+                      Loading clusters…
+                    </td>
+                  </tr>
+                )}
+                {!loading && filtered.length === 0 && (
                   <tr>
                     <td
                       colSpan={7}
@@ -211,50 +352,122 @@ export function EksList() {
                     </td>
                   </tr>
                 )}
-                {filtered.map((v: any) => (
-                  <tr
-                    key={v.id}
-                    data-state={
-                      selected.includes(v.id) ? "selected" : undefined
-                    }
-                    className="border-b border-border/40 last:border-0 hover:bg-accent/20 data-[state=selected]:bg-accent/30 transition-colors"
-                  >
-                    <td className="px-5 py-4 font-mono text-muted-foreground">
-                      {v.id}
-                    </td>
-                    <td className="px-5 py-4">
-                      <Link
-                        to={`/aws/eks/${v.id}`}
-                        className="font-mono text-primary hover:underline"
+                {!loading &&
+                  filtered.map((v) => {
+                    const statusStyles: Record<string, string> = {
+                      ACTIVE:
+                        "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
+                      PENDING:
+                        "bg-blue-500/20 text-blue-400 border-blue-500/30",
+                      TERMINATING:
+                        "bg-orange-500/10 text-orange-400 border-orange-500/20",
+                      TERMINATED:
+                        "bg-muted text-muted-foreground border-border/50",
+                      FAILED:
+                        "bg-destructive/10 text-destructive border-destructive/20",
+                    };
+
+                    const statusLabel: Record<string, string> = {
+                      PENDING: "Provisioning",
+                    };
+
+                    const style =
+                      statusStyles[v.status] ??
+                      "bg-muted text-muted-foreground border-border/50";
+
+                    return (
+                      <tr
+                        key={v.id}
+                        data-state={
+                          selected.includes(v.request_id)
+                            ? "selected"
+                            : undefined
+                        }
+                        className="border-b border-border/40 last:border-0 hover:bg-accent/20 data-[state=selected]:bg-accent/30 transition-colors"
                       >
-                        {v.name || v.id}
-                      </Link>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 capitalize">
-                        {v.status ?? "—"}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 font-mono text-muted-foreground">
-                      {v?.version ?? "—"}
-                    </td>
-                    <td className="px-5 py-4 text-muted-foreground">
-                      {v?.createdDate
-                        ? new Date(v.createdDate).toLocaleString()
-                        : "—"}
-                    </td>
-                    <td className="px-5 py-4">{v?.justification ?? "—"}</td>
-                    <td className="px-5 py-4 text-right">
-                      <button
-                        onClick={() => handleDeleteRow(v)}
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                        aria-label="Delete EKS"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                        <td className="px-5 py-4 font-mono text-muted-foreground">
+                          {v.request_id}
+                        </td>
+                        <td className="px-5 py-4">
+                          {v.status === "ACTIVE" ? (
+                            <Link
+                              to={`/aws/eks/${v.cluster_name}`}
+                              className="font-mono text-primary hover:underline"
+                            >
+                              {v.cluster_name}
+                            </Link>
+                          ) : (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="font-mono text-muted-foreground cursor-not-allowed">
+                                  {v.cluster_name}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="top">
+                                <p>Cluster details are available only when the cluster is ACTIVE.</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+                        </td>
+                        <td className="px-5 py-4">
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs border capitalize ${style}`}
+                          >
+                            <CheckCircle2 size={12} />
+                            {statusLabel[v.status] ??
+                              v.status?.toLowerCase() ??
+                              "—"}
+                          </span>
+                        </td>
+                        <td className="px-5 py-4 font-mono text-muted-foreground">
+                          {v.kubernetes_version ?? "—"}
+                        </td>
+                        <td className="px-5 py-4 text-muted-foreground">
+                          {v.created_at
+                            ? new Date(v.created_at).toLocaleDateString(
+                                "en-GB",
+                                {
+                                  day: "2-digit",
+                                  month: "short",
+                                  year: "numeric",
+                                },
+                              )
+                            : "—"}
+                        </td>
+                        <td className="px-5 py-4">
+                          {v.business_justification ?? "—"}
+                        </td>
+                        <td className="px-5 py-4 text-right">
+                          {(() => {
+                            const deleteDisabled = ["PENDING", "PROVISIONING"].includes(v.status);
+                            return (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    <button
+                                      onClick={() => !deleteDisabled && handleDeleteRow(v)}
+                                      disabled={deleteDisabled}
+                                      className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                                      aria-label="Delete EKS"
+                                    >
+                                      <Trash2 size={15} />
+                                    </button>
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="top">
+                                  <p>
+                                    {deleteDisabled
+                                      ? "Cluster is still provisioning"
+                                      : "Terminate cluster"}
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            );
+                          })()}
+                        </td>
+                      </tr>
+                    );
+                  })}
               </tbody>
             </table>
           </div>
@@ -346,3 +559,4 @@ function StatCard({
     </div>
   );
 }
+ 

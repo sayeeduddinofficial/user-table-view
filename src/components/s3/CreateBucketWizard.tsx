@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { AlertTriangle, FileText } from "lucide-react";
+import { AlertTriangle, FileText, GitBranch, Settings, Shield, ShieldBan, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useDialog } from "@/components/ui/dialog-context";
 import { Section, FieldRow, RadioCard, RadioRow } from "./shared";
@@ -95,12 +95,12 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
       </div> */}
 
       <div className="max-w-5xl mx-auto px-8 py-6 space-y-8">
-        <div>
+        {/* <div>
           <h1 className="text-2xl font-bold">Create Bucket</h1>
           <p className="text-sm text-muted-foreground mt-1">Buckets are containers for data stored in S3.</p>
-        </div>
+        </div> */}
         {/* General configuration */}
-        <Section title="General Configuration">
+        <Section title="General Configuration" icon={<Settings className="h-5 w-5 text-primary" />}>
           <FieldRow label="AWS Region">
             <Select value={form.region} onValueChange={(v) => set("region", v)}>
               <SelectTrigger className="w-full bg-background/50">
@@ -280,7 +280,7 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
 
 
         {/* Object Ownership */}
-        <Section title="Object Ownership">
+        <Section title="Object Ownership" icon={<ShieldCheck className="h-5 w-5 text-primary" />}>
           <p className="text-xs text-muted-foreground -mt-2 mb-3">
             Control ownership of objects written to this bucket from other AWS accounts and the use of access control lists (ACLs). Object ownership determines who can specify access to objects.
           </p>
@@ -348,7 +348,7 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
         </Section>
 
         {/* Block Public Access */}
-        <Section title="Block Public Access settings for this bucket">
+        <Section title="Block Public Access settings for this bucket" icon={<ShieldBan className="h-5 w-5 text-primary" />}>
           <p className="text-xs text-muted-foreground -mt-2 mb-3">
             {isDirectory
               ? "The settings specified here apply only to this directory bucket. These settings can't be edited. "
@@ -445,7 +445,7 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
 
         {/* Versioning — only for general purpose */}
         {!isDirectory && (
-          <Section title="Bucket Versioning">
+          <Section title="Bucket Versioning" icon={<GitBranch className="h-5 w-5 text-primary" />}>
             <p className="text-xs text-muted-foreground -mt-2 mb-3">
               Keep multiple variants of an object in the same bucket to preserve, retrieve, and restore versions.
             </p>
@@ -464,7 +464,7 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
 
 
         {/* Encryption */}
-        <Section title="Default Encryption">
+        <Section title="Default Encryption" icon={<Shield className="h-5 w-5 text-primary" />}>
           <p className="text-xs text-muted-foreground -mt-2 mb-3">
             Server-side encryption is automatically applied to new objects stored in this bucket.
           </p>

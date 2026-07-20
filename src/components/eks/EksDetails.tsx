@@ -1,16 +1,55 @@
 import { Header } from "@/components/layout/Header";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { CheckCircle2, ChevronRight, RefreshCw } from "lucide-react";
 import { useParams, Link } from "react-router-dom";
 import { useDialog } from "@/components/ui/dialog-context";
-import { CLUSTER, DetailTab } from "./eksData";
+import { DetailTab } from "./eksData";
 import { Field } from "./eksShared";
 import { OverviewTab } from "./OverviewTab";
 import { ResourcesTab } from "./ResourcesTab";
 import { ComputeTab } from "./ComputeTab";
 import { NetworkingTab } from "./NetworkingTab";
 import { TagsTab } from "./TagsTab";
+
+const API_BASE = import.meta.env.VITE_EKS_CLUSTER_SERVICE_URL;
+
+export interface EksClusterDetail {
+  id: number;
+  request_id: string;
+  cluster_name: string;
+  region: string;
+  kubernetes_version: string;
+  cluster_iam_role_arn: string | null;
+  node_iam_role_arn: string | null;
+  vpc_id: string | null;
+  vpc_name: string | null;
+  subnet_ids: string[] | null;
+  status: string;
+  cluster_arn: string | null;
+  endpoint: string | null;
+  created_at: string;
+  certificate_authority: string | null;
+  oidc_issuer: string | null;
+  platform_version: string | null;
+support_type: string | null;
+support_until: string | null;
+  cluster_ip_family: string | null;
+  cluster_security_group_id: string | null;
+  additional_security_group_ids: string[] | null;
+  egress_mode: string | null;
+service_ipv4_cidr: string | null;
+cluster_type: string | null;
+  public_access_cidrs: string[] | null;
+  node_pools: unknown[] | null;
+  node_classes: unknown[] | null;
+  cluster_health: unknown | null;
+  node_health: unknown | null;
+  upgrade_insights: unknown | null;
+  capability_issues: unknown | null;
+  node_groups: unknown[];
+  nodes: unknown[];
+}
 
 type EksDetailsProps = {
   eksId?: string;
@@ -22,8 +61,11 @@ export function EksDetails({
   embedded = false,
 }: EksDetailsProps) {
   const { eksId: routeId } = useParams<{ eksId: string }>();
-  const eksId = propId ?? routeId ?? CLUSTER.name;
+  const eksId = propId ?? routeId ?? "";
   const [tab, setTab] = useState<DetailTab>("overview");
+  const clusterName = eksId;
+  const [cluster, setCluster] = useState<EksClusterDetail | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const tabs: { key: DetailTab; label: string }[] = [
     { key: "overview", label: "Overview" },
@@ -35,19 +77,46 @@ export function EksDetails({
 
   const { alert } = useDialog();
 
-  const handleRefresh = async () => {
-    try {
-      alert({ title: "Refreshed", severity: "success" });
-    } catch (error) {
-      alert({ title: `Failed to Refresh`, severity: "error" });
+const fetchDetails = async () => {
+  if (!eksId) return;
+  setLoading(true);
+  try {
+    const token = localStorage.getItem("token");
+    const res = await fetch(`${API_BASE}/eks/${eksId}/details`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    const data = await res.json();
+    if (!res.ok || data?.status !== "SUCCESS") {
+      alert({ title: data?.message || "Failed to load cluster details", severity: "error" });
+      return;
     }
-  };
+    setCluster(data.data);
+  } catch {
+    alert({ title: "Failed to load cluster details", severity: "error" });
+  } finally {
+    setLoading(false);
+  }
+};
+
+useEffect(() => { fetchDetails(); }, [eksId]);
+
+const handleRefresh = async () => {
+  await fetchDetails();
+  alert({ title: "Refreshed", severity: "success" });
+};
+
+const clusterNames = cluster?.cluster_name ?? eksId;
+const statusColor =
+  cluster?.status === "ACTIVE" ? "text-success" :
+  cluster?.status === "PENDING" ? "text-blue-400" :
+  cluster?.status === "FAILED" ? "text-destructive" : "text-muted-foreground";
+
 
   return (
     <div className="space-y-4">
       {!embedded && (
         <Header
-          title={`EKS ${CLUSTER.name}`}
+          title={`EKS ${clusterNames}`}
           subtitle={`Details for ${eksId}`}
         />
       )}
@@ -59,13 +128,15 @@ export function EksDetails({
               EKS Clusters
             </Link>
             <ChevronRight size={14} />
-            <span>{CLUSTER.name}</span>
+            <span className={statusColor}>
+              {cluster?.status ?? "—"}
+            </span>
           </div>
         )}
 
         {/* Title + actions row */}
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-semibold">{CLUSTER.name}</h1>
+          <h1 className="text-lg font-semibold">{clusterNames}</h1>
           <Button
             variant="outline"
             size="icon"
@@ -77,6 +148,8 @@ export function EksDetails({
           </Button>
         </div>
 
+        {loading && <div className="text-sm text-muted-foreground">Loading cluster details…</div>}
+
         {/* Cluster info card */}
         <div className="bg-card border border-border rounded-lg p-5">
           <h2 className="text-sm font-semibold mb-4">Cluster info</h2>
@@ -85,26 +158,34 @@ export function EksDetails({
               label="Status"
               value={
                 <span className="inline-flex items-center gap-1.5 text-success">
-                  <CheckCircle2 size={14} /> {CLUSTER.status}
+                  <CheckCircle2 size={14} /> {cluster?.status ?? "—"}
                 </span>
               }
             />
             <Field
               label="Kubernetes version"
-              value={CLUSTER.kubernetesVersion}
+              value={cluster?.kubernetes_version ?? "—"}
             />
-            <Field
-              label="Support period"
-              value={
-                <span className="text-primary">{CLUSTER.supportPeriod}</span>
-              }
-            />
-            <Field label="Provider" value={CLUSTER.provider} />
+           <Field
+  label="Support period"
+  value={
+    <span className="text-white">
+      {cluster?.support_type
+        ? cluster.support_type.charAt(0).toUpperCase() + cluster.support_type.slice(1).toLowerCase()
+        : "—"}
+      {cluster?.support_until
+        ? ` until ${new Date(cluster.support_until).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`
+        : ""}
+    </span>
+  }
+/>
+
+            <Field label="Provider" value={"EKS"} />
             <Field
               label="Cluster health"
               value={
                 <span className="text-success text-lg font-semibold">
-                  {CLUSTER.clusterHealth}
+                  {cluster?.cluster_health != null ? String(cluster.cluster_health) : "—"}
                 </span>
               }
             />
@@ -112,7 +193,7 @@ export function EksDetails({
               label="Upgrade insights"
               value={
                 <span className="text-success text-lg font-semibold">
-                  {CLUSTER.upgradeInsights}
+                  {cluster?.upgrade_insights != null ? String(cluster.upgrade_insights) : "—"}
                 </span>
               }
             />
@@ -120,7 +201,7 @@ export function EksDetails({
               label="Node health issues"
               value={
                 <span className="text-success text-lg font-semibold">
-                  {CLUSTER.nodeHealthIssues}
+                  {cluster?.node_health != null ? String(cluster.node_health) : "—"}
                 </span>
               }
             />
@@ -128,7 +209,7 @@ export function EksDetails({
               label="Capability issues"
               value={
                 <span className="text-success text-lg font-semibold">
-                  {CLUSTER.capabilityIssues}
+                  {cluster?.capability_issues != null ? String(cluster.capability_issues) : "—"}
                 </span>
               }
             />
@@ -154,10 +235,10 @@ export function EksDetails({
           </div>
         </div>
 
-        {tab === "overview" && <OverviewTab />}
-        {tab === "resources" && <ResourcesTab />}
-        {tab === "compute" && <ComputeTab />}
-        {tab === "networking" && <NetworkingTab />}
+        {tab === "overview" && <OverviewTab cluster={cluster} />}
+        {tab === "resources" && <ResourcesTab clusterName={clusterName} />}
+        {tab === "compute" && <ComputeTab cluster={cluster} />}
+        {tab === "networking" && <NetworkingTab cluster={cluster} />}
         {tab === "tags" && <TagsTab />}
       </div>
     </div>

@@ -12,7 +12,17 @@ interface KPIData {
   };
   totalVMs: {
     today: number;
-    last7Days: Array<{ date: string; count: number }>;
+    last7Days: Array<{ 
+      date: string; 
+      ec2: number;
+      vpc: number;
+      s3: number;
+      lb: number;
+      rds: number;
+      route53: number;
+      eks: number;
+      count: number;
+    }>;
   };
   activeUsers: number;
 }

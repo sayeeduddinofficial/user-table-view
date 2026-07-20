@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { toast } from "sonner";
-import { useResources } from "@/lib/lbLocalStore";
+import { useProvisionRds } from "@/hooks/useRds";
+import { useAppStore } from "@/store/appStore";
 
 type Row = {
   config: string;
@@ -20,10 +21,10 @@ type Row = {
 
 export function RdsCreate() {
   const navigate = useNavigate();
-  const { add } = useResources("rds");
+  const setActiveRequest = useAppStore((s) => s.setActiveRequest);
+  const { provision, isSubmitting } = useProvisionRds();
 
   const [open, setOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [touched, setTouched] = useState(false);
   const [editingField, setEditingField] = useState<string | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -187,31 +188,23 @@ export function RdsCreate() {
   };
 
   const handleCreate = async () => {
-    setIsSubmitting(true);
-    add({
-      id: `${identifier.toLowerCase()}-${Date.now()}`,
-      name: identifier,
+    const payload = {
+      cluster_identifier: identifier,
+      master_username: username,
+      database_name: "postgres",
       region: "us-east-1",
-      createdAt: new Date().toISOString(),
-      status: "creating",
-      meta: {
-        dbIdentifier: identifier,
-        isCluster: true,
-        role: "Regional cluster",
-        engine: "Aurora PostgreSQL",
-        engineVersion: "17",
-        status: "Creating",
-        region: "us-east-1",
-        size: "0 Instances",
-        upgradeRollout: "SECOND",
-        created: new Date().toLocaleDateString(),
-      },
-    });
-    await new Promise((r) => setTimeout(r, 400));
-    toast.success("DB Cluster creation initiated", { description: identifier });
-    setIsSubmitting(false);
+      min_acu: Number(minCapacity),
+      max_acu: Number(maxCapacity),
+      auto_pause_seconds: Number(pauseAfter),
+      justification: justifications.trim(),
+    };
+
+    const requestId = await provision(payload);
+    if (!requestId) return;
+
+    setActiveRequest(requestId, "rds-service", "create");
     setIsDialogOpen(false);
-    navigate("/aws/rds");
+    navigate(`/console?request=${encodeURIComponent(requestId)}&service=rds-service`);
   };
 
   return (
@@ -228,7 +221,7 @@ export function RdsCreate() {
         <span className="text-foreground">Create DB Cluster</span>
       </div>
 
-      <div className="max-w-4xl mx-auto pb-10 px-6 space-y-6">
+      <div className="max-w-5xl mx-auto pb-10 px-6 space-y-6">
 
         {/* Page header */}
         <section className="glass-panel rounded-xl p-6">

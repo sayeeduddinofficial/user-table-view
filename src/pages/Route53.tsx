@@ -17,7 +17,7 @@ type HostedZone = {
 
 const data: HostedZone[] = [
   { id: "Z27YR27SJSDXLT", name: "prusplunk.com", type: "Public", createdBy: "Route 53", records: 28, description: "Hosted zone created by Route53 Registrar" },
-  { id: "Z00619881JSGUIVHB25XT", name: "galt.net", type: "Public", createdBy: "Route 53", records: 3, description: "-" },
+  // { id: "Z00619881JSGUIVHB25XT", name: "galt.net", type: "Public", createdBy: "Route 53", records: 3, description: "-" },
 ];
 
 export default function Route53() {
@@ -121,9 +121,9 @@ export default function Route53() {
               Hosted Zone ID
             </th>
 
-            <th className="px-5 py-3 text-right font-medium">
+            {/* <th className="px-5 py-3 text-right font-medium">
               Actions
-            </th>
+            </th> */}
           </tr>
         </thead>
 
@@ -162,11 +162,11 @@ export default function Route53() {
               Z27YR27SJSDXLT
             </td>
 
-            <td className="px-5 py-4 text-right">
+            {/* <td className="px-5 py-4 text-right">
               <button className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
                 <Trash2 size={15} />
               </button>
-            </td>
+            </td> */}
           </tr>
 
           <tr className="border-b border-border/40 hover:bg-accent/20 transition-colors">
@@ -174,16 +174,16 @@ export default function Route53() {
               <Checkbox />
             </td> */}
 
-            <td className="px-5 py-4">
+            {/* <td className="px-5 py-4">
               <Link
               to="/aws/hostedzonedetails"
                 className="font-medium text-primary hover:underline"
               >
                 galt.net
               </Link>
-            </td>
+            </td> */}
 
-            <td className="px-5 py-4">
+            {/* <td className="px-5 py-4">
               Public
             </td>
 
@@ -207,7 +207,7 @@ export default function Route53() {
               <button className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
                 <Trash2 size={15} />
               </button>
-            </td>
+            </td> */}
           </tr>
         </tbody>
       </table>

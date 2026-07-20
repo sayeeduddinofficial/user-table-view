@@ -344,6 +344,8 @@ export function LoadBalancerCreate({ kind }: Props) {
     setListeners((prev) => prev.map((listener) => (listener.id === id ? { ...listener, ...changes } : listener)));
   };
 
+  const remainingListeners = Math.max(0, 50 - listeners.length);
+
   const addListener = () => {
     const nextId = listenerSeq + 1;
     setListenerSeq(nextId);
@@ -763,11 +765,6 @@ export function LoadBalancerCreate({ kind }: Props) {
                   </SelectContent>
                 </Select>
               </div>
-
-            
-              <Link to="/aws/vpcs" className="px-3 py-2 border border-border rounded-md text-xs text-primary hover:bg-primary/10">
-                Create VPC ↗
-              </Link>
             </div>
             {vpcError && (
               <p className="mt-1 flex items-center gap-1 text-xs text-red-500">
@@ -944,7 +941,7 @@ export function LoadBalancerCreate({ kind }: Props) {
                                 <input type="checkbox" checked={detail.ipv4 === "Assigned by AWS"} onChange={(e) => updateAzSubnet(k, { ipv4: e.target.checked ? "Assigned by AWS" : "" })} className="mt-1 accent-primary" />
                                 <div><div className="text-sm">Assigned by AWS</div><div className="text-xs text-muted-foreground">A public IPv4 address auto-assigned by AWS.</div></div>
                               </label>
-                              <label className="flex items-start gap-2 cursor-pointer text-sm">
+                              {/* <label className="flex items-start gap-2 cursor-pointer text-sm">
                                 <input type="checkbox" checked={detail.ipv4 === "Use an Elastic IP"} onChange={() => updateAzSubnet(k, { ipv4: "Use an Elastic IP", eip: detail.eip ?? "" })} className="mt-1 accent-primary" />
                                 <div><div className="text-sm">Use an Elastic IP address</div><div className="text-xs text-muted-foreground">Choose an existing Elastic IP allocation in this zone.</div></div>
                               </label>
@@ -957,7 +954,7 @@ export function LoadBalancerCreate({ kind }: Props) {
                                     {eipOptions.map((e) => <option key={e.allocationId} value={e.allocationId}>{e.allocationId} ({e.publicIp})</option>)}
                                   </select>
                                 </div>
-                              )}
+                              )} */}
                             </div>
                           </div>
 
@@ -1366,7 +1363,7 @@ export function LoadBalancerCreate({ kind }: Props) {
           <button type="button" onClick={addListener} className="inline-flex items-center gap-1 text-xs px-4 py-1.5 border border-primary/60 text-primary rounded-full hover:bg-primary/10 font-medium">
             Add listener
           </button>
-          <p className="text-[11px] text-muted-foreground">You can add up to 49 more listeners.</p>
+          <p className="text-[11px] text-muted-foreground"> You can add up to {remainingListeners} more listeners.</p>
         </Section>
 
         {/* Tags */}
@@ -1376,9 +1373,6 @@ export function LoadBalancerCreate({ kind }: Props) {
             {/* <button type="button" onClick={() => setLoadBalancerTags((prev) => [...prev, createTagRow()])} className="inline-flex items-center gap-1 text-xs px-4 py-1.5 border border-primary/60 text-primary rounded-full hover:bg-primary/10 font-medium">
               Add new tag
             </button> */}
-            <p className="text-xs text-muted-foreground mt-2">
-              You can add up to 50 tags.
-            </p>
           {/* </Collapsible> */} 
         {/* </Section> */}
 

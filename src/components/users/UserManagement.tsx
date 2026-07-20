@@ -116,11 +116,6 @@ export function UserManagement() {
   //   });
   // }
 
-  // ── Render ────────────────────────────────────────────────────────────────
-  if (isLoading) {
-    return <div className="text-center py-8">Loading users...</div>;
-  }
-
   // ── Filtering ────────────────────────────────────────────────────────────
   const roleCounts = useMemo(() => ({
     all: users.length,
@@ -147,6 +142,11 @@ export function UserManagement() {
     { key: "SplunkOps.Admin" as const, label: "Admins", value: roleCounts["SplunkOps.Admin"], icon: ShieldCheck, color: "text-blue-400", bg: "bg-blue-500/10" },
     { key: "SplunkOps.User" as const, label: "Users", value: roleCounts["SplunkOps.User"], icon: UserIcon, color: "text-emerald-400", bg: "bg-emerald-500/10" },
   ];
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  if (isLoading) {
+    return <div className="text-center py-8">Loading users...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -191,6 +191,13 @@ export function UserManagement() {
         })}
       </div>
 
+        {/* {admin && (
+          <Button onClick={() => setIsAddDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add User
+          </Button>
+        )} */}
+
       {/* Search + role filter */}
       <div className="flex items-center gap-3">
         <div className="relative flex-1">
@@ -232,11 +239,14 @@ export function UserManagement() {
               key={user.id}
               user={user}
               onEdit={() => setEditingUser(user)}
+            // onDelete={() => handleDelete(user)}
+            // onReinvite={() => handleReinvite(user)}
+            // onDeactivate={() => handleToggleActive(user, "deactivate")}
+            // onReactivate={() => handleToggleActive(user, "reactivate")}
             />
           ))
         )}
       </div>
-
 
       {/* Add dialog */}
       {/* <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>

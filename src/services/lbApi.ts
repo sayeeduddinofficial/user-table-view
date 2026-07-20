@@ -53,8 +53,8 @@ export const lbApi = {
     apiClient.delete<{ message: string }>(BASE, `/load-balancers/${id}/sdk`),
   deleteByRequest: (requestId: string) =>
     apiClient.delete<{ message: string }>(BASE, `/load-balancers/by-request/${requestId}`),
-  list: (userId?: number) =>
-    apiClient.get<{ data: LbItem[] }>(BASE, '/load-balancers', userId ? { user_id: String(userId) } : {}),
+  list: () =>
+    apiClient.get<{ data: LbItem[] }>(BASE, '/load-balancers', {}),
   getById: (id: string) =>
     apiClient.get<{ data: LbItem }>(BASE, `/load-balancers/${id}`),
   liveLogsUrl: (requestId: string) =>
@@ -76,7 +76,7 @@ export const lbApi = {
 };
 
 export type LbItem = {
-  id: string; request_id: string; name: string; type: string; scheme: string;
+  id: string; request_id: string; user_id: number; name: string; type: string; scheme: string;
   ip_address_type: string; vpc_id: string; region: string;
   security_group_ids: string[]; status: string; justification: string | null;
   created_at: string; updated_at: string;

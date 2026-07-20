@@ -9,6 +9,9 @@ type DataPoint = {
   vpc?: number;
   s3?: number;
   lb?: number;
+  rds?: number;
+  route53?: number;
+  eks?: number;
 };
 
 type Props = {
@@ -20,6 +23,26 @@ type Props = {
   variant: 'bar' | 'area';
   color: string;
   prefix?: string;
+};
+
+const serviceLabels: Record<string, string> = {
+  ec2: "EC2",
+  vpc: "VPC",
+  s3: "S3",
+  lb: "Load Balancer",
+  rds: "RDS",
+  route53: "Route 53",
+  eks: "EKS",
+};
+
+const SERVICE_COLORS: Record<string, string> = {
+  ec2: "#4E79A7",
+  vpc: "#59A14F",
+  s3: "#F28E2B",
+  lb: "#E15759",
+  rds: "#9C6ADE",
+  route53: "#76B7B2",
+  eks: "#EDC948",
 };
 
 export function KpiDetailDialog({ open, onOpenChange, title, subtitle, data, variant, color, prefix = '' }: Props) {
@@ -43,12 +66,7 @@ export function KpiDetailDialog({ open, onOpenChange, title, subtitle, data, var
             />
 
             <span className="text-[11px] text-muted-foreground">
-              {{
-                ec2: "EC2",
-                vpc: "VPC",
-                s3: "S3",
-                lb: "Load Balancer",
-              }[entry.dataKey]}
+              {serviceLabels[entry.dataKey] || entry.dataKey}
             </span>
 
             <span className="font-mono text-[11px] font-bold text-foreground ml-auto">
@@ -101,23 +119,38 @@ export function KpiDetailDialog({ open, onOpenChange, title, subtitle, data, var
               <AreaChart data={data} margin={{ top: 20, right: 20, left: -10, bottom: 20 }}>
                 <defs>
                   <linearGradient id="gEC2" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#6F86D6" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="#6F86D6" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#4E79A7" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="#4E79A7" stopOpacity={0} />
                   </linearGradient>
 
                   <linearGradient id="gVPC" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#49A79A" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="#49A79A" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#59A14F" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="#59A14F" stopOpacity={0} />
                   </linearGradient>
 
                   <linearGradient id="gS3" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#D8A93D" stopOpacity={0.30} />
-                    <stop offset="100%" stopColor="#D8A93D" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#F28E2B" stopOpacity={0.30} />
+                    <stop offset="100%" stopColor="#F28E2B" stopOpacity={0} />
                   </linearGradient>
 
                   <linearGradient id="gLB" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#C04474" stopOpacity={0.30} />
-                    <stop offset="100%" stopColor="#C04474" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#E15759" stopOpacity={0.30} />
+                    <stop offset="100%" stopColor="#E15759" stopOpacity={0} />
+                  </linearGradient>
+
+                  <linearGradient id="gRDS" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#9C6ADE" stopOpacity={0.30} />
+                    <stop offset="100%" stopColor="#9C6ADE" stopOpacity={0} />
+                  </linearGradient>
+
+                  <linearGradient id="gRoute53" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#76B7B2" stopOpacity={0.30} />
+                    <stop offset="100%" stopColor="#76B7B2" stopOpacity={0} />
+                  </linearGradient>
+
+                  <linearGradient id="gEKS" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#EDC948" stopOpacity={0.30} />
+                    <stop offset="100%" stopColor="#EDC948" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border) / 0.2)" vertical={false} />
@@ -135,12 +168,12 @@ export function KpiDetailDialog({ open, onOpenChange, title, subtitle, data, var
                   dx={-10}
                 />
                 <Tooltip
-    content={<CustomTooltip />}
-    cursor={{
-        stroke: "hsl(var(--border))",
-        strokeDasharray: "3 3",
-    }}
-/>
+                  content={<CustomTooltip />}
+                  cursor={{
+                    stroke: "hsl(var(--border))",
+                    strokeDasharray: "3 3",
+                  }}
+                />
                 <Legend
                   verticalAlign="bottom"
                   align="center"
@@ -152,12 +185,7 @@ export function KpiDetailDialog({ open, onOpenChange, title, subtitle, data, var
                   }}
                   formatter={(value) => (
                     <span className="text-[11px] text-muted-foreground">
-                      {{
-                        ec2: "EC2",
-                        vpc: "VPC",
-                        s3: "S3",
-                        lb: "Load Balancer",
-                      }[value as string] || value}
+                      {serviceLabels[value as string] || value}
                     </span>
                   )}
                 />
@@ -166,7 +194,7 @@ export function KpiDetailDialog({ open, onOpenChange, title, subtitle, data, var
                     <Area
                       type="monotone"
                       dataKey="ec2"
-                      stroke="#6F86D6"
+                      stroke="#4E79A7"
                       strokeWidth={2.5}
                       fill="url(#gEC2)"
                     />
@@ -174,7 +202,7 @@ export function KpiDetailDialog({ open, onOpenChange, title, subtitle, data, var
                     <Area
                       type="monotone"
                       dataKey="vpc"
-                      stroke="#49A79A"
+                      stroke="#59A14F"
                       strokeWidth={2.5}
                       fill="url(#gVPC)"
                     />
@@ -182,7 +210,7 @@ export function KpiDetailDialog({ open, onOpenChange, title, subtitle, data, var
                     <Area
                       type="monotone"
                       dataKey="s3"
-                      stroke="#D8A93D"
+                      stroke="#F28E2B"
                       strokeWidth={2.5}
                       fill="url(#gS3)"
                     />
@@ -190,9 +218,33 @@ export function KpiDetailDialog({ open, onOpenChange, title, subtitle, data, var
                     <Area
                       type="monotone"
                       dataKey="lb"
-                      stroke="#C04474"
+                      stroke="#E15759"
                       strokeWidth={2.5}
                       fill="url(#gLB)"
+                    />
+
+                    <Area
+                      type="monotone"
+                      dataKey="rds"
+                      stroke="#9C6ADE"
+                      strokeWidth={2.5}
+                      fill="url(#gRDS)"
+                    />
+
+                    <Area
+                      type="monotone"
+                      dataKey="route53"
+                      stroke="#76B7B2"
+                      strokeWidth={2.5}
+                      fill="url(#gRoute53)"
+                    />
+
+                    <Area
+                      type="monotone"
+                      dataKey="eks"
+                      stroke="#EDC948"
+                      strokeWidth={2.5}
+                      fill="url(#gEKS)"
                     />
                   </>
                 ) : (

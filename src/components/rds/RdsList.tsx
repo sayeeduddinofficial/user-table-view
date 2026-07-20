@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Search, Plus, RefreshCw, Trash2, Database, Server,
@@ -9,8 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/Header";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { useResources } from "@/lib/lbLocalStore";
 import { useDialog } from "@/components/ui/dialog-context";
+import { useRdsClusters ,useDeleteRdsCluster} from "@/hooks/useRds";
+import { deleteRdsCluster, type RdsClusterApi } from "@/services/rdsService";
+import { useAppStore } from "@/store/appStore";
+
 
 export type RdsEngine = "Aurora MySQL" | "Aurora PostgreSQL" | "MySQL" | "PostgreSQL" | "MariaDB" | "Oracle" | "SQL Server";
 export type RdsRole = "Regional cluster" | "Writer instance" | "Reader instance" | "Standalone";
@@ -39,66 +42,63 @@ const formatDate = (date: Date) => {
   return `${day} ${month} ${year}`;
 };
 
-const SEED: RdsRow[] = [
-  {
-    id: "cluster-1",
-    requestId: "req-rds-001",
-    dbIdentifier: "splunkops-aurora-cluster",
-    status: "Available",
+function normaliseEngine(engine: string): RdsEngine {
+  const e = engine.toLowerCase();
+  if (e.includes("aurora") && e.includes("mysql")) return "Aurora MySQL";
+  if (e.includes("aurora") && e.includes("postgres")) return "Aurora PostgreSQL";
+  if (e.includes("mysql")) return "MySQL";
+  if (e.includes("postgres")) return "PostgreSQL";
+  if (e.includes("mariadb")) return "MariaDB";
+  if (e.includes("oracle")) return "Oracle";
+  if (e.includes("sqlserver") || e.includes("sql server")) return "SQL Server";
+  return "PostgreSQL";
+}
+
+function normaliseStatus(status: string): RdsStatus {
+  const s = status.toLowerCase();
+  if (s === "available") return "Available";
+  if (s === "creating" || s === "provisioning") return "Creating";
+  if (s === "deleting" || s === "destroying") return "Deleting";
+  if (s === "stopped") return "Stopped";
+  if (s === "modifying") return "Modifying";
+  if (s === "deleted" || s === "destroyed" || s === "failed") return "Deleting";
+  return "Available";
+}
+
+function clusterToRows(cluster: RdsClusterApi): RdsRow[] {
+  const clusterRow: RdsRow = {
+    id: cluster.request_id,
+    requestId: cluster.request_id,
+    dbIdentifier: cluster.cluster_identifier,
+    status: normaliseStatus(cluster.cluster_status),
     role: "Regional cluster",
-    engine: "Aurora PostgreSQL",
-    engineVersion: "15.4",
-    upgradeRollout: "SECOND",
-    region: "us-east-2",
-    size: "2 Instances",
-    created: formatDate(new Date(Date.now() - 1000 * 60 * 60 * 24 * 10)),
+    engine: normaliseEngine(cluster.engine),
+    engineVersion: cluster.engine_version,
+    upgradeRollout: cluster.upgrade_rollout_order ?? "—",
+    region: cluster.region,
+    size: `${cluster.instances.length} ${cluster.instances.length === 1 ? "Instance" : "Instances"}`,
+    created: cluster.cluster_created_at ? formatDate(new Date(cluster.cluster_created_at)) : "—",
     isCluster: true,
-  },
-  {
-    id: "instance-1",
-    requestId: "",
-    dbIdentifier: "splunkops-aurora-cluster-instance-1",
-    status: "Available",
-    role: "Writer instance",
-    engine: "Aurora PostgreSQL",
-    engineVersion: "15.4",
-    upgradeRollout: "SECOND",
-    region: "us-east-2a",
-    size: "db.r6g.large",
-    created: formatDate(new Date(Date.now() - 1000 * 60 * 60 * 24 * 10)),
+  };
+
+  const instanceRows: RdsRow[] = cluster.instances.map((inst) => ({
+    id: `${cluster.request_id}__${inst.instance_identifier}`,
+    requestId: cluster.request_id,
+    dbIdentifier: inst.instance_identifier,
+    status: normaliseStatus(inst.status),
+    role: inst.instance_role === "WRITER" ? "Writer instance" : "Reader instance",
+    engine: normaliseEngine(cluster.engine),
+    engineVersion: inst.engine_version ?? cluster.engine_version,
+    upgradeRollout: inst.upgrade_rollout_order ?? "—",
+    region: inst.availability_zone ?? cluster.region,
+    size: inst.instance_class,
+    created: inst.created_at ? formatDate(new Date(inst.created_at)) : "—",
     isCluster: false,
-    clusterId: "cluster-1",
-  },
-  {
-    id: "instance-2",
-    requestId: "",
-    dbIdentifier: "splunkops-aurora-cluster-instance-2",
-    status: "Available",
-    role: "Reader instance",
-    engine: "Aurora PostgreSQL",
-    engineVersion: "15.4",
-    upgradeRollout: "SECOND",
-    region: "us-east-2b",
-    size: "db.r6g.large",
-    created: formatDate(new Date(Date.now() - 1000 * 60 * 60 * 24 * 9)),
-    isCluster: false,
-    clusterId: "cluster-1",
-  },
-  {
-    id: "standalone-1",
-    requestId: "req-rds-004",
-    dbIdentifier: "splunkops-mysql-db",
-    status: "Available",
-    role: "Standalone",
-    engine: "MySQL",
-    engineVersion: "8.0.35",
-    upgradeRollout: "—",
-    region: "us-east-1",
-    size: "db.t3.medium",
-    created: formatDate(new Date(Date.now() - 1000 * 60 * 60 * 24 * 5)),
-    isCluster: false,
-  },
-];
+    clusterId: cluster.request_id,
+  }));
+
+  return [clusterRow, ...instanceRows];
+}
 
 function StatusBadge({ status }: { status: RdsStatus }) {
   const map: Record<RdsStatus, { cls: string; icon: ReactNode }> = {
@@ -144,21 +144,16 @@ function StatCard({ icon, iconBg, value, label }: { icon: ReactNode; iconBg: str
 
 export function RdsList() {
   const nav = useNavigate();
-  const { resources, add, remove } = useResources("rds");
   const { confirm, alert } = useDialog();
+  const { clusters: apiClusters, loading, refresh } = useRdsClusters();
 
-  useEffect(() => {
-    if (resources.length === 0) {
-      SEED.forEach((r) =>
-        add({ id: r.id, name: r.dbIdentifier, region: r.region, createdAt: new Date().toISOString(), status: r.status.toLowerCase(), meta: r })
-      );
-    }
-  }, [resources.length, add]);
-
-  const rows: RdsRow[] = useMemo(() => resources.map((r) => r.meta as RdsRow), [resources]);
+  const rows: RdsRow[] = useMemo(
+    () => apiClusters.flatMap(clusterToRows),
+    [apiClusters]
+  );
 
   const [query, setQuery] = useState("");
-  const [expanded, setExpanded] = useState<Set<string>>(new Set(["cluster-1"]));
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const clusters = rows.filter((r) => r.isCluster);
   const standalones = rows.filter((r) => !r.isCluster && !r.clusterId);
@@ -171,24 +166,39 @@ export function RdsList() {
   const filteredClusters = useMemo(() => clusters.filter(matchRow), [clusters, q]);
   const filteredStandalones = useMemo(() => standalones.filter(matchRow), [standalones, q]);
 
+  const { setActiveRequest } = useAppStore();
+
+  const { remove: removeCluster, isDeleting: isDeletingCluster } = useDeleteRdsCluster();
+
   const toggleExpand = (id: string) =>
     setExpanded((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
+
   const handleDelete = async (row: RdsRow) => {
-    if (row.isCluster && instancesOf(row.id).length > 0) {
-      alert({
-        title: `"${row.dbIdentifier}" still has instances. Delete all instances first before deleting the cluster.`,
-        severity: "warning",
-      });
-      return;
+  const ok = await confirm({
+    icon: "destroy",
+    title: `Delete ${row.isCluster ? "cluster" : "instance"}?`,
+    description: `"${row.dbIdentifier}" will be permanently deleted. This action cannot be undone.`,
+  });
+  if (!ok) return;
+
+  try {
+    if (row.isCluster) {
+      await removeCluster(row.requestId);
+
+    } else {
+      // instance id is "${requestId}__${instanceIdentifier}" — extract instanceIdentifier
+      // const instanceIdentifier = row.dbIdentifier;
+      // await removeInstance(row.requestId, instanceIdentifier);
     }
-    const ok = await confirm({
-      icon: "destroy",
-      title: `Delete ${row.isCluster ? "cluster" : "instance"}?`,
-      description: `"${row.dbIdentifier}" will be permanently deleted. This action cannot be undone.`,
-    });
-    if (ok) { remove(row.id); toast.success(`${row.dbIdentifier} deleted`); }
-  };
+    setActiveRequest(row.requestId, 'rds-service');
+    nav('/console');
+    toast.success(`${row.dbIdentifier} deletion initiated`);
+    await refresh();
+  } catch {
+    toast.error(`Failed to delete ${row.dbIdentifier}`);
+  }
+};
 
   const COLS = ["Request ID", "DB Identifier", "Status", "Role", "Engine", "Upgrade Rollout", "Region", "Size", "Created", "Actions"];
 
@@ -208,11 +218,9 @@ export function RdsList() {
 
           <td className="px-5 py-3.5 text-sm text-muted-foreground">{row.requestId}</td>
           <td className="px-5 py-3.5 relative">
-            {/* Parent rail stub — from toggle center down to row bottom, only when expanded */}
             {row.isCluster && isOpen && instances.length > 0 && (
               <div className="absolute left-[27px] top-[calc(50%+8px)] bottom-0 w-[1.5px] bg-slate-500" />
             )}
-            {/* Instance rail — absolute on the td so it spans full row height incl. padding */}
             {isInstance && (
               <>
                 <div
@@ -241,11 +249,11 @@ export function RdsList() {
                   <div className="flex items-center justify-center w-6 h-6 rounded-md bg-primary/10">
                     <Database size={14} className="text-primary" />
                   </div>
-                  <button
-                    onClick={() => nav(`/aws/rds/${row.id}`)}
-                    className="font-medium text-sm hover:underline cursor-pointer text-primary"
-                  >
-                    {row.dbIdentifier}
+                 <button
+                 onClick={() => nav(`/aws/rds/${row.requestId}/instances/${row.dbIdentifier}`)}
+                className="font-medium text-sm hover:underline cursor-pointer text-primary"
+                   >
+                   {row.dbIdentifier}
                   </button>
                   {row.isCluster && instances.length > 0 && !isOpen && (
                     <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted/40 text-muted-foreground border border-border/40">
@@ -260,7 +268,7 @@ export function RdsList() {
                     <Database size={14} className="text-primary" />
                   </div>
                   <button
-                    onClick={() => nav(`/aws/rds/${row.id}`)}
+                    onClick={() => nav(`/aws/rds/${row.clusterId}/instances/${row.dbIdentifier}`)}
                     className="font-medium text-sm hover:underline cursor-pointer text-primary"
                   >
                     {row.dbIdentifier}
@@ -281,14 +289,16 @@ export function RdsList() {
           <td className="px-5 py-3.5 text-sm text-muted-foreground">{row.created}</td>
 
           <td className="px-5 py-3.5 text-right">
-            <button
-              onClick={() => handleDelete(row)}
-              className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-              title={row.isCluster && instances.length > 0 ? "Delete all instances first" : "Delete"}
-            >
-              <Trash2 size={15} />
-            </button>
-          </td>
+      {!isInstance && (
+       <button
+      onClick={() => handleDelete(row)}
+      disabled={isDeletingCluster}
+      className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+      <Trash2 size={15} />
+    </button>
+  )}
+</td>
         </tr>
 
         {row.isCluster && isOpen && instances.map((inst, idx) =>
@@ -298,7 +308,7 @@ export function RdsList() {
     );
   };
 
-  const dbClusters = rows.filter((r) => r.isCluster).length;
+  const dbClusters = clusters.length;
   const dbInstances = rows.filter((r) => !r.isCluster).length;
   const snapshots = 3;
   const recentEvents = 7;
@@ -329,8 +339,8 @@ export function RdsList() {
               className="pl-9 bg-card/50 border-border/50"
             />
           </div>
-          <Button variant="outline" size="icon" className="rounded-full shrink-0" onClick={() => toast.info("Refreshing RDS resources...")}>
-            <RefreshCw size={14} />
+          <Button variant="outline" size="icon" className="rounded-full shrink-0" onClick={refresh} disabled={loading}>
+            <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           </Button>
           <Button className="bg-primary hover:bg-primary/90 text-white gap-1.5 shrink-0" onClick={() => nav("/aws/rds/create")}>
             <Plus size={14} /> Create RDS
@@ -350,15 +360,24 @@ export function RdsList() {
                 </tr>
               </thead>
               <tbody>
-                {filteredClusters.length === 0 && filteredStandalones.length === 0 && (
+                {loading ? (
                   <tr>
-                    <td colSpan={9} className="px-5 py-16 text-center text-muted-foreground">
+                    <td colSpan={10} className="px-5 py-16 text-center text-muted-foreground">
+                      Loading RDS resources...
+                    </td>
+                  </tr>
+                ) : filteredClusters.length === 0 && filteredStandalones.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="px-5 py-16 text-center text-muted-foreground">
                       No RDS resources found.
                     </td>
                   </tr>
+                ) : (
+                  <>
+                    {filteredClusters.map((c) => renderRow(c, 0))}
+                    {filteredStandalones.map((s) => renderRow(s, 0))}
+                  </>
                 )}
-                {filteredClusters.map((c) => renderRow(c, 0))}
-                {filteredStandalones.map((s) => renderRow(s, 0))}
               </tbody>
             </table>
           </div>

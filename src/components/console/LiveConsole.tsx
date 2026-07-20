@@ -21,8 +21,8 @@ const statusLabelMap: Record<string, string> = {
   terminated: "Terminated",
   terminating: "Terminating",
   retrying_terminate: "Retrying Terminate",
-  destroying: "Destroying",
-  destroyed: "Destroyed",
+  destroying: "Terminating",
+  destroyed: "Terminated",
 };
 
 const statusColorMap: Record<string, string> = {
@@ -69,6 +69,7 @@ export function LiveConsole() {
   const [searchParams] = useSearchParams();
   const requestIdFromUrl = searchParams.get("request");
   const serviceFromUrl = searchParams.get("service");
+  const operationFromUrl = searchParams.get("operation");
   const { activeRequestId, activeService, activeOperation, setActiveRequest } = useAppStore();
   const [isPaused, setIsPaused] = useState(false);
   const [displayedLogs, setDisplayedLogs] = useState<TerraformLog[]>([]);
@@ -106,8 +107,16 @@ useEffect(() => {
 }, [activeService]);
 
 useEffect(() => {
-  activeOperationRef.current = activeOperation ?? null;
-}, [activeOperation]);
+  const metadataOperation = activeService === "route53-service" &&
+    (requestMeta?.action === "delete" || requestMeta?.last_operation === "delete" ||
+      requestMeta?.last_operation === "destroy" ||
+      ["terminated", "destroyed", "terminating", "destroying"].includes(requestMeta?.status ?? ""))
+    ? "delete"
+    : requestMeta?.action === "create"
+      ? "create"
+      : null;
+  activeOperationRef.current = activeOperation ?? metadataOperation;
+}, [activeOperation, activeService, requestMeta?.action, requestMeta?.last_operation, requestMeta?.status]);
 
 
   useEffect(() => {
@@ -122,10 +131,10 @@ useEffect(() => {
     if (requestIdFromUrl) {
       const resolvedService = serviceFromUrl ?? activeService ?? null;
       console.log("Setting active request from URL:", requestIdFromUrl, "service:", resolvedService);
-      setActiveRequest(requestIdFromUrl,  resolvedService, activeOperation);
+      setActiveRequest(requestIdFromUrl, resolvedService, operationFromUrl ?? activeOperation);
       navigate(`/console`, { replace: true });
     }
-  }, [requestIdFromUrl, serviceFromUrl, setActiveRequest, navigate, activeService, activeOperation]);
+  }, [requestIdFromUrl, serviceFromUrl, operationFromUrl, setActiveRequest, navigate, activeService, activeOperation]);
 
   const effectiveRequestId = activeRequestId;
 
@@ -239,7 +248,9 @@ useEffect(() => {
         // (create.log / delete.log) instead of a single combined log with
         // "CREATE LOGS" / "DESTROY LOGS" section markers, so the marker
         // checks below only apply to services that use the combined format.
-        const usesCombinedLogFile = activeServiceRef.current !== "s3-service";
+        const usesCombinedLogFile = !["s3-service", "route53-service"].includes(
+          activeServiceRef.current ?? "",
+        );
         if (
           usesCombinedLogFile &&
           (targetStatus === "terminated" || targetStatus === "destroyed") &&

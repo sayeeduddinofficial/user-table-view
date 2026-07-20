@@ -3,8 +3,9 @@ import { useAppStore } from "@/store/appStore";
 import { useDialog } from "@/components/ui/dialog-context";
 import { Button } from "@/components/ui/button";
 import { useNavigate, Link } from "react-router-dom";
-import { ChevronRight, FileText, ChevronDown } from "lucide-react";
+import { ChevronRight, FileText, ChevronDown, Settings, ServerCog } from "lucide-react";
 import { fetchVpcListApi, fetchVpcDetailsApi } from "@/services/vpcService";
+import { getClientIp } from "@/utils/getClientIP";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -57,6 +58,8 @@ const REGION_VPC_DEFAULTS: Record<
   },
 };
 
+const API_BASE = import.meta.env.VITE_EKS_CLUSTER_SERVICE_URL;
+
 export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
   const navigate = useNavigate();
   const close = () => (onClose ? onClose() : navigate("/aws/eks"));
@@ -65,6 +68,7 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
 
   const vpcs = useAppStore((s) => s.vpcs);
   const setVpcs = useAppStore((s) => s.setVpcs);
+  const setActiveRequest = useAppStore((s) => s.setActiveRequest);
 
   const [region, setRegion] = useState("us-east-2");
   const regionCode = REGION_CODE[region] ?? region;
@@ -87,6 +91,7 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
   const [justificationError, setJustificationError] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [nameError, setNameError] = useState("");
 
   // Load VPCs if not already loaded
   useEffect(() => {
@@ -181,7 +186,12 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
   const create = async () => {
     if (isSubmitting) return;
     if (!name.trim()) {
+      setNameError("Cluster name is required");
       alert({ title: "Cluster name is required", severity: "error" });
+      return;
+    }
+    if (nameError) {
+      alert({ title: nameError, severity: "error" });
       return;
     }
     if (!vpc) {
@@ -201,13 +211,62 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
 
     try {
       setIsSubmitting(true);
-      // TODO: wire actual EKS provisioning API here
+
+      const token = localStorage.getItem("token");
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        ...(token
+          ? {
+              Authorization: `Bearer ${token}`,
+              "x-client-ip": (await getClientIp()) || "",
+            }
+          : {}),
+      };
+
+      const body = {
+        cluster_name: name,
+        region: regionCode,
+        kubernetes_version: kubernetesVersion,
+        business_justification: businessJustification.trim(),
+      };
+
+      const res = await fetch(`${API_BASE}/eks/`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || data?.status !== "SUCCESS") {
+        alert({
+          title: data?.message || "Failed to create EKS cluster",
+          severity: "error",
+        });
+        return;
+      }
+
       alert({
-        title: "EKS request submitted successfully",
-        description: name,
+        title: data?.data?.message || "EKS request submitted successfully",
+        description: data?.data?.requestId
+          ? `Request ID: ${data.data.requestId}`
+          : name,
         severity: "success",
       });
-      close();
+
+      setShowConfirm(false);
+      const requestId = data?.data?.requestId;
+
+      if (requestId) {
+        setActiveRequest(requestId, "eks-cluster-service");
+        const consoleSearch = new URLSearchParams({
+          request: requestId,
+          service: "eks-cluster-service",
+        }).toString();
+        navigate(`/console?${consoleSearch}`, { replace: true });
+      } else {
+        close();
+      }
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to create EKS";
@@ -257,9 +316,12 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
       )}
 
       <div className="max-w-5xl mx-auto">
-        <section className="bg-card border border-border rounded-lg p-6 mb-6">
+        <section className="glass-panel rounded-xl p-6 mb-6">
           <div className="flex items-center justify-between mb-2">
+            <span className="flex items-center gap-2 mb-4">
+              <Settings className="w-5 h-5 text-blue-600" />
             <h2 className="text-lg font-semibold">Configuration options</h2>
+            </span>
           </div>
 
           <Field label="">
@@ -284,11 +346,14 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
           </Field>
         </section>
 
-        <section className="bg-card border border-border rounded-lg p-6 mb-6">
+        <section className="glass-panel rounded-xl p-6">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-semibold mb-5">
+            <span className="flex items-center gap-2 mb-4">
+            <ServerCog className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold">
               Cluster configuration
             </h2>
+            </span>
           </div>
 
           <Field label="AWS Region">
@@ -306,20 +371,39 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
             </Select>
           </Field>
 
-          <Field
-            label="Name"
-            hint="Use the auto-generated name or enter a unique name for this cluster. This property cannot be changed after the cluster is created."
-          >
-            <input
-              value={name}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (/^[A-Za-z0-9-]*$/.test(value)) setName(value);
-              }}
-              placeholder="curious-folk-potato"
-              className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
-            />
-          </Field>
+     <Field
+  label="Name"
+  hint="Use the auto-generated name or enter a unique name for this cluster. This property cannot be changed after the cluster is created."
+>
+  <input
+    value={name}
+    onChange={(e) => {
+      const value = e.target.value;
+      setName(value);
+      if (!value.trim()) {
+        setNameError("Cluster name is required");
+      } else if (value.length < 3) {
+        setNameError("Cluster name must be at least 3 characters");
+      } else if (value.length > 150) {
+        setNameError("Cluster name cannot exceed 150 characters");
+      } else if (!/^[a-zA-Z][a-zA-Z0-9\-_]*$/.test(value)) {
+        setNameError(
+          "Must start with a letter and contain only letters, numbers, hyphens and underscores",
+        );
+      } else {
+        setNameError("");
+      }
+    }}
+    placeholder="my-eks-cluster"
+    className={`w-full bg-input/40 border rounded-md px-3 py-2 text-sm ${
+      nameError ? "border-destructive" : "border-border"
+    }`}
+  />
+  {nameError && (
+    <p className="mt-1 text-xs text-destructive">{nameError}</p>
+  )}
+</Field>
+
 
           <Field
             label="Kubernetes version"
@@ -394,7 +478,7 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
           </Field>
         </section>
 
-        <div className="mt-8 rounded-xl border border-slate-800 bg-slate-900/40 p-6 mb-6">
+        <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/40 p-6 mb-6">
           <div className="flex items-center gap-2 mb-4">
             <FileText className="h-5 w-5 text-blue-500" />
             <h3 className="text-lg font-semibold text-white">
@@ -446,7 +530,7 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
               if (!name.trim() || !vpc || subnetIds.length === 0 || businessJustification.trim().length < 20) return;
               setShowConfirm(true);
             }}
-            disabled={!name.trim() || !vpc || subnetIds.length === 0 || businessJustification.trim().length < 20}
+            disabled={!name.trim() || !!nameError || !vpc || subnetIds.length === 0 || businessJustification.trim().length < 20}
           >
             Create
           </Button>
@@ -484,13 +568,7 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
               Go Back & Edit
             </Button>
 
-            <Button
-              onClick={async () => {
-                setShowConfirm(false);
-                await create();
-              }}
-              disabled={isSubmitting}
-            >
+            <Button onClick={create} disabled={isSubmitting}>
               {isSubmitting ? "Submitting..." : "Confirm & Submit"}
             </Button>
           </DialogFooter>

@@ -6,6 +6,7 @@ import { useNavigate, Link } from "react-router-dom";
 import { Info, X, ChevronRight, ChevronDown, FileText, Loader2, Layers, XCircle } from "lucide-react";
 import { ConnectorOverlay, type Connection } from "./ConnectorOverlay";
 import { provisionVpcApi, ApiError, type CreateVpcPayload } from "@/services/vpcService";
+import { setPendingVpc } from "@/components/vpc/pendingVpc";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -126,6 +127,7 @@ export function CreateVpc({ onClose }: { onClose?: () => void } = {}) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false); 
   const [hasActiveVpc, setHasActiveVpc] = useState(false);
+  const [existingVpcs, setExistingVpcs] = useState<Array<{ name: string; region: string }>>([]);
   const currentUser = useAppStore((s) => s.currentUser);
 
 useEffect(() => {
@@ -134,6 +136,7 @@ useEffect(() => {
     .then((list) => {
       const mine = list.filter((v) => Number(v.userId) === Number(currentUser.id));
       setHasActiveVpc(mine.length > 0);
+      setExistingVpcs(list.map((v: any) => ({ name: String(v.name ?? "").trim(), region: String(v.region ?? "").trim() })));
     })
     .catch(() => {});
 }, [currentUser]);
@@ -346,19 +349,25 @@ useEffect(() => {
 
   const validateBeforeConfirm = (): boolean => {
     let valid = true;
-    // Name validation
-    const currentName =
-  mode === "vpc-only"
-    ? name
-    : autoName;
+    const currentName = mode === "vpc-only" ? name : autoName;
+    const nameValidation = validateName(currentName);
+    setNameError(nameValidation);
+    if (nameValidation) {
+      valid = false;
+    }
 
-const nameValidation = validateName(currentName);
-
-setNameError(nameValidation);
-
-if (nameValidation) {
-  valid = false;
-}
+    // Uniqueness: VPC name must be unique within the same region (across both modes).
+    if (valid && !nameValidation) {
+      const proposedName = (mode === "vpc-only" ? name : `${autoName}-vpc`).trim().toLowerCase();
+      const regionCode = (REGION_CODE[region] ?? region).toLowerCase();
+      const dup = existingVpcs.some(
+        (v) => v.name.toLowerCase() === proposedName && v.region.toLowerCase() === regionCode
+      );
+      if (dup) {
+        setNameError(`A VPC with name "${proposedName}" already exists in ${region}. Names must be unique per region.`);
+        valid = false;
+      }
+    }
 
     // Business Justification validation
     const justificationValidation =
@@ -412,6 +421,7 @@ const create = async () => {
     });
 
     if (requestId) {
+      if (currentUser?.id) setPendingVpc(currentUser.id, requestId);
       setActiveRequest(requestId, "vpc-service");
       const consoleSearch = new URLSearchParams({
         request: requestId,
@@ -609,16 +619,11 @@ const create = async () => {
                       id="auto-generate"
                       checked={autoGen}
                       onCheckedChange={(checked) => {
-  const enabled = checked === true;
-
-  setAutoGen(enabled);
-
-  // Clear the field whenever the mode changes
-  setAutoName("");
-
-  // Clear any existing validation message
-  setNameError("");
-}}
+                      const enabled = checked === true;
+                      setAutoGen(enabled);
+                      setAutoName("");
+                      setNameError("");
+                    }}
                     />
                     <Label
                       htmlFor="auto-generate"
@@ -629,23 +634,22 @@ const create = async () => {
                   </div>
 
                   <Input
-  id="auto-name"
-  placeholder="Enter Name tag"
-  value={autoName}
-  onChange={(e) => {
-    const value = e.target.value;
-
-    setAutoName(value);
-
-    if (nameError) {
-      setNameError(validateName(value));
-    }
-  }}
-  onBlur={() => setNameError(validateName(autoName))}
-  className={`bg-muted/50 ${
-    nameError ? "border-red-500" : ""
-  }`}
-/>
+                    id="auto-name"
+                    placeholder="Enter Name tag"
+                    value={autoName}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setAutoName(value);
+                      if (nameError) {
+                        setNameError(validateName(value));
+                      }
+                    }}
+                    onBlur={() => setNameError(validateName(autoName))}
+                    className={`bg-muted/50 ${
+                      nameError ? "border-red-500" : ""
+                    }`}
+                    maxLength={80}
+                  />
 
                   {nameError ? (
                     <p className="text-xs text-red-500">
@@ -1297,7 +1301,12 @@ const create = async () => {
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 pb-8 mt-4">
-          <button onClick={close} className="text-sm text-primary hover:underline px-3 py-2">Cancel</button>
+          <Button
+          variant="outline"
+          onClick={close}
+        >
+          Cancel
+        </Button>
            <Button
             onClick={() => { if (validateBeforeConfirm()) setShowConfirm(true); }}
             disabled={

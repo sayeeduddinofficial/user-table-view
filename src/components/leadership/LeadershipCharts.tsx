@@ -207,7 +207,7 @@ interface UnifiedData {
   costByRegion: Array<{ region: string; total_cost: number }>;
   costByInstanceType: Array<{ instance_type: string; total_cost: number }>;
 
-  costByService: Array<{ date: string; ec2: number; vpc: number; s3: number; lb: number; total: number;}>;
+  costByService: Array<{ date: string; ec2: number; vpc: number; s3: number; lb: number; rds: number; route53: number; eks: number; total: number;}>;
 }
 
 interface Props {
@@ -303,7 +303,7 @@ export const LeadershipCharts = forwardRef<HTMLDivElement, Props>(function Leade
         <CardHeader
           icon={LineIcon}
           title="Usage trend"
-          subtitle="VMs created, terminated and active (system-wide from snapshots)"
+          subtitle="Resources created, terminated and active (system-wide from snapshots)"
           iconColor="#6b8caf"
           right={
             <div className="text-[10px] font-mono text-muted-foreground border border-border/50 rounded-md px-2 py-1">

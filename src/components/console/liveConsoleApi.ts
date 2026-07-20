@@ -10,6 +10,7 @@ export interface ActiveRequest {
   request_id: string;
   user_name: string;
   action: string;
+  last_operation?: string | null;
   region: string;
   environment: string;
   total_vms: number;
@@ -32,6 +33,7 @@ export interface RequestDetails {
   service?: string;
   user_name?: string;
   action?: string;
+  last_operation?: string | null;
   region?: string;
   environment?: string;
   total_vms?: number;
@@ -119,6 +121,27 @@ const SERVICE_ENDPOINTS: Record<string, ServiceEndpoints> = {
     logs: (id) => `/load-balancers/by-request/${id}/logs`,
     live: (id) => `/load-balancers/by-request/${id}/logs/live`,
   },
+  "eks-cluster-service": {
+    base: env.eksClusterService,
+   //details: (name) => `/eks/${name}`,
+    logs: (id) => `/eks/${id}/logs`,
+    live: (id) => `/eks/${id}/logs/live`,  
+  },
+  "rds-service": {
+    base: env.rds,
+    details: (id) => `/clusters/${id}/status`,
+    live: (id) => `/clusters/${id}/logs/live`,
+    logs: (id) => `/clusters/${id}/logs/`,
+  },
+   "route53-service": {
+    base: env.route53Service,
+    // matches router.get("/logs/:requestId/:operation/:fileName", ...)
+    // and uploadDNSLogsToS3(requestId, operation, logs, `${operation}.log`)
+    logs: (id, operation = "create") => `/logs/${id}/${operation}/${operation}.log`,
+    logsFormat: "text",
+    // matches router.get("/records/:requestId/live-logs", getDNSLiveLogs)
+    live: (id) => `/records/${id}/live-logs`,
+  },
 };
 
 const DEFAULT_ENDPOINTS: Required<Pick<ServiceEndpoints, "details" | "logs" | "live">> & { base: string } = {
@@ -139,8 +162,10 @@ export async function fetchRequestDetailsApi(requestId: string, service?: string
     );
     const d = response.data;
     return {
-      requestId: d.request_id,
+      requestId: d.request_id ?? requestId,
       status: normalizeStatus(d.status ?? "pending"),
+      action: d.action,
+      last_operation: d.last_operation,
       region: d.region,
       created_at: d.created_at,
     };

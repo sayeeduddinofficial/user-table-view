@@ -17,6 +17,7 @@ interface Request {
   request_id: string;
   user_name: string;
   action: string;
+  last_operation?: string | null;
   region: string;
   project?: string;
   environment: string;
@@ -117,6 +118,12 @@ function getRequestSubtitle(request: Request): string {
       return `S3 Bucket • ${request.region}`;
     case "lb-service":
       return `load balancer ${request.region}`;
+    case "eks-cluster-service":
+      return `EKS Cluster • ${request.region}`;
+    case "rds-service":
+      return `RDS • ${request.region}`;
+    case "route53-service":
+      return `Route53`;
     default:{
       if (!request.total_vms) return request.region;
       return `${request.total_vms} VM${request.total_vms !== 1 ? "s" : ""} • ${request.region}`;
@@ -168,7 +175,17 @@ export function RequestSelector() {
                 isAwsDisconnected={isAwsDisconnected}
                 onClick={() => {
                   if (!isAwsDisconnected) {
-                    setActiveRequest(request.request_id, request.service ?? null);
+                    setActiveRequest(
+                      request.request_id,
+                      request.service ?? null,
+                      request.service === "route53-service"
+                        ? ((request.last_operation || request.action || "").toLowerCase() === "delete" ||
+                          (request.last_operation || request.action || "").toLowerCase() === "destroy" ||
+                          request.status === "destroyed" || request.status === "destroying"
+                            ? "delete"
+                            : "create")
+                        : undefined,
+                    );
                   }
                 }}
               />

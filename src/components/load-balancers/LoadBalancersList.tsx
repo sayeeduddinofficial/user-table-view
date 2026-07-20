@@ -75,7 +75,7 @@ export function LoadBalancersList() {
     }
 
     try {
-      const res = await lbApi.list(user.id);
+      const res = await lbApi.list();
       setUserOwnedLbs((res as any).data ?? []);
     } catch {
       setUserOwnedLbs([]);
@@ -237,7 +237,7 @@ export function LoadBalancersList() {
   // }
 
   const sorted = filtered;
-  const hasUserCreatedBalancer = !!user?.id && userOwnedLbs.length > 0;
+  const hasUserCreatedBalancer = !!user?.id && userOwnedLbs.some(lb => lb.user_id === user.id);
   const createDisabledReason = provisioningLb
     ? `"${provisioningLb.name}" is still provisioning. Wait for it to finish before creating another.`
     : hasUserCreatedBalancer

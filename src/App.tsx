@@ -203,7 +203,13 @@ function AppRoutes() {
         />
         <Route path="/aws/rds" element={<Rds />} />
         <Route path="/aws/rds/create" element={<CreateRds />} />
-        <Route path="/aws/rds/:id" element={<RdsDetailPage />} />
+        {/* <Route path="/aws/rds/:id" element={<RdsDetailPage />} /> */}
+        <Route path="/aws/rds/:requestId" element={<RdsDetailPage />} />
+        <Route path="/aws/rds/:requestId/instances/:instanceIdentifier" element={<RdsDetailPage />} />
+        <Route path="/aws/rds/:id" element={<RdsDetailPage />} /> 
+
+
+
         <Route
           path="aws/security-groups/create"
           element={

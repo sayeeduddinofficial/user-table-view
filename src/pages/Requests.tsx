@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useAppStore } from "@/store/appStore";
 import { formatDistanceToNow } from "date-fns";
+import { deleteRoute53Record } from "@/services/route53Api";
 import { parseBackendTimestamp } from "@/utils/date";
 import {
   Select,
@@ -27,12 +28,12 @@ import { useAwsConfig } from "@/hooks/useAwsConfig";
 import {
   fetchVMRequestsApi,
   fetchVMRequestApi,
-  fetchVpcRequestApi,  
+  fetchVpcRequestApi,
   retryVMRequestApi,
   retryTerminateVMRequestApi,
   deleteVMRequestApi,
-   deleteVpcRequestApi, 
-   deleteLbRequestApi,
+  deleteVpcRequestApi,
+  deleteLbRequestApi,
   SERVICE_LABELS,
   SERVICE_OPTIONS,
   type VMRequest as Request,
@@ -41,6 +42,8 @@ import { DataTable, type Column } from "@/components/common/DataTable";
 import ChooseServices from "@/components/dialogs/ChooseServices";
 import { fetchVpcListApi } from "@/services/vpcService";
 import { deleteBucketApi } from "@/services/bucketService";
+import {  deleteEksClusterService } from "@/services/eksClusterService";
+
 
 const statusConfig: Record<string, { color: string; label: string }> = {
   pending: {
@@ -161,7 +164,7 @@ export default function VMRequests() {
         const mine = list.filter((v: any) => Number(v.userId) === Number(currentUser.id));
         setHasActiveVpc(mine.length > 0);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Debounce search — skip on initial mount to avoid double fetch
@@ -177,7 +180,7 @@ export default function VMRequests() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  const watchRequest = (requestId: string,service?: string) => {
+  const watchRequest = (requestId: string, service?: string) => {
     if (watchers.current[requestId]) return;
 
     watcherAttempts.current[requestId] = 0;
@@ -189,9 +192,9 @@ export default function VMRequests() {
       }
 
       try {
-      const data = service === "vpc-service"
-        ? await fetchVpcRequestApi(requestId)
-        : await fetchVMRequestApi(requestId);
+        const data = service === "vpc-service"
+          ? await fetchVpcRequestApi(requestId)
+          : await fetchVMRequestApi(requestId);
         const normalized = data.status; // already normalized by the api layer
         if (data.status) {
           setRequests((prev) =>
@@ -373,41 +376,11 @@ export default function VMRequests() {
     });
 
     try {
-       if (service === "vpc-service") {
-      await deleteVpcRequestApi(requestId);
-    }
-     else if (service === "lb-service") {
-      await deleteLbRequestApi(requestId);          // ← add this
-      setRequests((prev) =>
-        prev.map((r) =>
-          r.request_id === requestId
-            ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
-            : r,
-        ),
-      );
-      watchRequest(requestId, service);
-      setActiveRequest(requestId, service);
-      navigate("/console");
-    } 
-    else if (service === "s3-service") {
-      await deleteBucketApi(requestId);
-      setRequests((prev) =>
-        prev.map((r) =>
-          r.request_id === requestId
-            ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
-            : r,
-        ),
-      );
-      watchRequest(requestId, service);
-      setActiveRequest(requestId, service);
-      navigate("/console");
-    }
-
-    else {
-      const deleteResult = await deleteVMRequestApi(requestId);
-      console.log("Delete request result:", deleteResult);
-
-      if (deleteResult?.status === "SUCCESS") {
+      if (service === "vpc-service") {
+        await deleteVpcRequestApi(requestId);
+      }
+      else if (service === "lb-service") {
+        await deleteLbRequestApi(requestId);          // ← add this
         setRequests((prev) =>
           prev.map((r) =>
             r.request_id === requestId
@@ -415,9 +388,64 @@ export default function VMRequests() {
               : r,
           ),
         );
-        watchRequest(requestId);
+        watchRequest(requestId, service);
+        setActiveRequest(requestId, service);
+        navigate("/console");
       }
+      else if (service === "s3-service") {
+        await deleteBucketApi(requestId);
+        setRequests((prev) =>
+          prev.map((r) =>
+            r.request_id === requestId
+              ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
+              : r,
+          ),
+        );
+        watchRequest(requestId, service);
+        setActiveRequest(requestId, service);
+        navigate("/console");
+      } else if (service === "route53-service") {
+        await deleteRoute53Record(requestId); // now resolves via request_id
+        setRequests((prev) =>
+          prev.map((r) =>
+            r.request_id === requestId
+              ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
+              : r,
+          ),
+        );
+        watchRequest(requestId, service);
+        setActiveRequest(requestId, service, "delete"); // 3rd arg sets operation → fixes the create.log fallback bug
+        navigate("/console");
+      }
+     else if (service === "eks-cluster-service") {
+      await deleteEksClusterService(requestId);
+      setRequests((prev) =>
+        prev.map((r) =>
+          r.request_id === requestId
+            ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
+            : r,
+        ),
+      );
+      watchRequest(requestId, service);
+      setActiveRequest(requestId, service);
+      navigate("/console");
     }
+
+      else {
+        const deleteResult = await deleteVMRequestApi(requestId);
+        console.log("Delete request result:", deleteResult);
+
+        if (deleteResult?.status === "SUCCESS") {
+          setRequests((prev) =>
+            prev.map((r) =>
+              r.request_id === requestId
+                ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
+                : r,
+            ),
+          );
+          watchRequest(requestId);
+        }
+      }
     } catch (error) {
       console.error("Failed to terminate request:", error);
       alert({
@@ -523,15 +551,21 @@ export default function VMRequests() {
             <Button
               variant="ghost"
               size="icon"
-              className={`h-8 w-8 transition-colors ${
-                logsCleared || isAwsDisconnected
+              className={`h-8 w-8 transition-colors ${logsCleared || isAwsDisconnected
                   ? "text-muted-foreground/30 cursor-not-allowed"
                   : "text-muted-foreground hover:text-primary"
-              }`}
+                }`}
               disabled={logsCleared || isAwsDisconnected}
               onClick={() => {
                 if (logsCleared) return;
-                setActiveRequest(req.request_id, req.service);
+                const operation = req.service === "route53-service"
+                  ? ((req.action || req.last_operation || "").toLowerCase() === "delete" ||
+                    (req.action || req.last_operation || "").toLowerCase() === "destroy" ||
+                    req.status === "destroyed" || req.status === "destroying"
+                      ? "delete"
+                      : "create")
+                  : undefined;
+                setActiveRequest(req.request_id, req.service, operation);
                 navigate("/console");
               }}
               tooltip={
@@ -548,13 +582,12 @@ export default function VMRequests() {
               variant="ghost"
               size="icon"
               disabled={!canRetry || isAwsDisconnected}
-              className={`h-8 w-8 transition-colors ${
-                canRetry && !isAwsDisconnected
+              className={`h-8 w-8 transition-colors ${canRetry && !isAwsDisconnected
                   ? isTerminateFailed
                     ? "text-orange-500 hover:text-orange-400 hover:bg-orange-500/10"
                     : "text-blue-500 hover:text-blue-400 hover:bg-blue-500/10"
                   : "text-muted-foreground/30 cursor-not-allowed"
-              }`}
+                }`}
               onClick={() => {
                 if (!canRetry) return;
                 isTerminateFailed
@@ -577,11 +610,10 @@ export default function VMRequests() {
               variant="ghost"
               size="icon"
               disabled={!canDestroy || isAwsDisconnected}
-              className={`h-8 w-8 transition-colors ${
-                canDestroy && !isAwsDisconnected
+              className={`h-8 w-8 transition-colors ${canDestroy && !isAwsDisconnected
                   ? "text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                   : "text-muted-foreground/30 cursor-not-allowed"
-              }`}
+                }`}
               onClick={() =>
                 canDestroy && deleteRequest(req.request_id, req.service)
               }
@@ -615,7 +647,7 @@ export default function VMRequests() {
         <div className="p-5 space-y-5">
           {/* Filters */}
           <Card
-          className="sticky top-16 z-30 
+            className="sticky top-16 z-30 
           bg-card/80 backdrop-blur 
           border-border/50 p-0"
           >
@@ -672,14 +704,14 @@ export default function VMRequests() {
                           // </Link>
                           <div>
                             <Button onClick={() => setOpen(true)}>
-                            <Plus className="h-4 w-4" />New Request
-                          </Button>
+                              <Plus className="h-4 w-4" />New Request
+                            </Button>
 
-                          <ChooseServices
-                            open={open}
-                            onClose={() => setOpen(false)}
-                            hasActiveVpc={hasActiveVpc}
-                          />
+                            <ChooseServices
+                              open={open}
+                              onClose={() => setOpen(false)}
+                              hasActiveVpc={hasActiveVpc}
+                            />
                           </div>
                         )}
                       </span>
@@ -691,15 +723,15 @@ export default function VMRequests() {
             </CardContent>
           </Card>
 
-            <DataTable
-              columns={columns}
-              data={requests}
-              isLoading={loading}
-              emptyMessage="No requests found"
-              pagination={pagination}
-              onPageChange={(p) => setPage(p)}
-              rowKey={(req) => req.request_id}
-            />
+          <DataTable
+            columns={columns}
+            data={requests}
+            isLoading={loading}
+            emptyMessage="No requests found"
+            pagination={pagination}
+            onPageChange={(p) => setPage(p)}
+            rowKey={(req) => req.request_id}
+          />
         </div>
       </div>
     </TooltipProvider>

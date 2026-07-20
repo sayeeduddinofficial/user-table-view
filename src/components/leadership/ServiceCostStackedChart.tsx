@@ -17,6 +17,9 @@ type ServiceCostRow = {
     vpc: number;
     s3: number;
     lb: number;
+    rds: number;
+    route53: number;
+    eks: number;
     total?: number;
 };
 
@@ -30,10 +33,13 @@ interface Props {
 }
 
 const SERVICE_COLORS: Record<string, string> = {
-    "EC2-Instances": "#6F86D6",
-    "S3": "#D9A441",
-    "VPC": "#49A79A",
-    "Elastic Load Balancing": "#C04474",
+  "EC2-Instances": "#4E79A7",            // Blue
+  "S3": "#F28E2B",                       // Orange
+  "VPC": "#59A14F",                      // Green
+  "Elastic Load Balancing": "#E15759",   // Red
+  "RDS": "#9C6ADE",                      // Purple
+  "Route 53": "#76B7B2",                 // Cyan
+  "EKS": "#EDC948",                      // Yellow
 };
 
 const SERVICE_ORDER = [
@@ -41,6 +47,9 @@ const SERVICE_ORDER = [
     "VPC",
     "Elastic Load Balancing",
     "S3",
+    "RDS",
+    "Route 53",
+    "EKS",
 ];
 
 function buildChartData(rows: ServiceCostRow[]) {
@@ -56,6 +65,9 @@ function buildChartData(rows: ServiceCostRow[]) {
                 VPC: row.vpc,
                 S3: row.s3,
                 "Elastic Load Balancing": row.lb,
+                RDS: row.rds,
+                "Route 53": row.route53,
+                EKS: row.eks,
             };
         });
 }

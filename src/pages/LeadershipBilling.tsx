@@ -123,6 +123,18 @@ export default function Leadership() {
 
   // Calculate KPIs from new API endpoint
   const kpis = useMemo(() => {
+    if (!kpiDataFromAPI || !kpiDataFromAPI.totalVMs) {
+      return {
+        running: 0,
+        launchedToday: 0,
+        launchedYesterday: 0,
+        launchTrend: { value: 0, display: '0%', tooltip: '0%', showTooltip: false },
+        mtdCost: 0,
+        activeUsers: 0,
+        totalResources: 0
+      };
+    }
+
     // Running VMs today
     const running = kpiDataFromAPI.runningVMs.today;
     
@@ -242,6 +254,10 @@ export default function Leadership() {
   const kpiSeries = useMemo(() => {
     const labels = last7Days.map((d) => format(new Date(d), 'EEE'));
 
+    if (!kpiDataFromAPI || !kpiDataFromAPI.totalVMs || !kpiDataFromAPI.runningVMs || !kpiDataFromAPI.launchedVMs) {
+      return { running: [], launches: [], spend: [], totals: [] };
+    }
+
     // Use last 7 days from KPI API (excluding today)
     const running = kpiDataFromAPI.runningVMs.last7Days.map((d) => ({
       label: format(new Date(d.date), 'EEE'),
@@ -260,11 +276,13 @@ export default function Leadership() {
 
     const totals = kpiDataFromAPI.totalVMs.last7Days.map((d) => ({
       label: format(new Date(d.date), 'EEE'),
-
-      ec2: d.ec2,
-      vpc: d.vpc,
-      s3: d.s3,
-      lb: d.lb,
+      ec2: d.ec2 || 0,
+      vpc: d.vpc || 0,
+      s3: d.s3 || 0,
+      lb: d.lb || 0,
+      rds: d.rds || 0,
+      route53: d.route53 || 0,
+      eks: d.eks || 0,
     }));
 
     return { running, launches, spend, totals };
@@ -276,7 +294,7 @@ export default function Leadership() {
       label: 'VMs running', value: kpis.running.toLocaleString(),
       sub: `${kpis.activeUsers} active users`, icon: Server, color: 'text-emerald-400',
       trend: undefined,
-      series: kpiSeries.running, chartColor: '#4a9d7c', variant: 'bar',
+      series: kpiSeries?.running || [], chartColor: '#4a9d7c', variant: 'bar',
     },
     {
       key: 'launches' as const,
@@ -284,21 +302,21 @@ export default function Leadership() {
       sub: `vs ${kpis.launchedYesterday} yesterday`,
       icon: Cpu, color: 'text-sky-400',
       trend: kpis.launchTrend,
-      series: kpiSeries.launches, chartColor: '#6b8caf', variant: 'bar' as const,
+      series: kpiSeries?.launches || [], chartColor: '#6b8caf', variant: 'bar' as const,
     },
     {
       key: 'spend' as const,
       label: 'MTD spend', value: `$${kpis.mtdCost.toFixed(2)}`,
       sub: 'Month to date', icon: DollarSign, color: 'text-amber-400',
       trend: undefined,
-      series: kpiSeries.spend, chartColor: '#b89968', variant: 'bar' as const, prefix: '$',
+      series: kpiSeries?.spend || [], chartColor: '#b89968', variant: 'bar' as const, prefix: '$',
     },
     {
       key: 'totals' as const,
       label: 'Total Resources (window)', value: kpis.totalResources.toLocaleString(),
       sub: '', icon: Activity, color: 'text-violet-400',
       trend: undefined,
-      series: kpiSeries.totals, chartColor: '#8a7bb0', variant: 'area' as const,
+      series: kpiSeries?.totals || [], chartColor: '#8a7bb0', variant: 'area' as const,
     },
   ];
 

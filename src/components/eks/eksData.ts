@@ -1,4 +1,4 @@
-export type DetailTab =
+﻿export type DetailTab =
   | "overview"
   | "resources"
   | "compute"
@@ -220,62 +220,3 @@ export const RESOURCE_GROUPS = [
     ],
   },
 ];
-
-export const RESOURCE_DATA = {
-  deployments: {
-    columns: ["Name", "Namespace", "Type", "Created", "Pod count", "Status"],
-    rows: [
-      [
-        "metrics-server",
-        "kube-system",
-        "deployments",
-        "4 hours ago",
-        2,
-        "Active",
-      ],
-    ],
-  },
-
-  pods: {
-    columns: ["Name", "Created", "Status"],
-    rows: [
-      ["metrics-server-69cc5f87cc-59wwn", "4 hours ago", "Running"],
-      ["metrics-server-69cc5f87cc-l8tft", "4 hours ago", "Running"],
-    ],
-  },
-
-  nodes: {
-    columns: [
-      "Node Name",
-      "Instance type",
-      "Compute",
-      "Managed by",
-      "Created",
-      "Status",
-      "CPU usage",
-      "Memory usage",
-      "Ephemeral storage usage",
-    ],
-    rows: [
-      [
-        "ip-10-0-1-12",
-        "Ready",
-        "worker",
-        "v1.36.0",
-        "23m",
-        "Ready",
-        "10%",
-        "20%",
-        "30%",
-      ],
-    ],
-  },
-
-  services: {
-    columns: ["Name", "Created"],
-    rows: [
-      ["kubernetes", "4 hours ago"],
-      ["kube-dns", "4 hours ago"],
-    ],
-  },
-};

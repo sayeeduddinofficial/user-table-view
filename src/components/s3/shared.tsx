@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Copy, Info, LucideIcon } from "lucide-react";
+import { Check, Copy, Info, LucideIcon, Settings } from "lucide-react";
 import { useDialog } from "@/components/ui/dialog-context";
 import { Button } from "@/components/ui/button";
 
@@ -41,10 +41,11 @@ export function CopyIconButton({
   );
 }
 
-export function Section({ title, info, children }: { title: string; info?: boolean; children: React.ReactNode }) {
+export function Section({ title, info, children, icon }: { title: string; info?: boolean; children: React.ReactNode; icon?: React.ReactNode }) {
   return (
-    <section className="bg-card border border-border rounded-lg p-5">
+    <section className="glass-panel rounded-xl p-6">
       <div className="flex items-center gap-2 mb-4">
+        <span>{icon}</span>
         <h3 className="text-base font-semibold">{title}</h3>
         {info && <Info size={14} className="text-primary" />}
       </div>
@@ -55,7 +56,7 @@ export function Section({ title, info, children }: { title: string; info?: boole
 
 export function FieldRow({ label, info, children }: { label: string; info?: boolean; children: React.ReactNode }) {
   return (
-    <div>
+    <div className="mt-3">
       <label className="text-sm font-medium block mb-1.5">
         {label}
         {info && <Info size={14} className="inline text-primary ml-1 align-text-top" />}

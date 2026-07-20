@@ -41,7 +41,7 @@ export default function S3() {
       <div>
         <Header
           title="Create Bucket"
-          subtitle="Object storage buckets provisioned via Terraform"
+          subtitle="Buckets are containers for data stored in S3."
           showSearch={false}
         />
         <CreateBucketWizard

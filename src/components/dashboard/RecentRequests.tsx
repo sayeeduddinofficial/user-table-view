@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/tooltip";
 import { env } from "@/lib/env";
 import axios from "axios";
+import { SERVICE_LABELS } from "@/components/requests/vmRequestsApi";
 
 interface Request {
   request_id: string;
@@ -38,6 +39,7 @@ interface Request {
   updated_at?: string;
   vm_count: number;
   logs_cleared_at: string | null;
+  service?: string;           
 }
 
 interface RequestsResponse {
@@ -237,7 +239,9 @@ function RequestRow({ request }: { request: Request }) {
   const navigate = useNavigate();
   const status = statusConfig[request?.status] ?? defaultStatusConfig;
   const StatusIcon = status?.icon;
-  const totalVMs = request?.total_vms;
+
+   const serviceLabel =
+    SERVICE_LABELS[request.service ?? ""] ?? request.service ?? "Request";
 
   const rowContent = (
     <div
@@ -264,7 +268,7 @@ function RequestRow({ request }: { request: Request }) {
             {statusConfig[request.status]?.label ?? (request.status
               ? request.status.charAt(0).toUpperCase() + request.status.slice(1)
               : "Unknown")}{" "}
-            {totalVMs} VMs
+             {serviceLabel}
           </p>
           <p className="text-xs text-muted-foreground">
             {request.user_name} • {request.region}

@@ -255,6 +255,9 @@ export const AWS_SERVICES = [
   { value: "s3", label: "S3" },
   { value: "vpc", label: "VPC" },
   { value: "lb", label: "Load Balancer" },
+  { value: "route53", label: "Route 53" },
+  { value: "rds", label: "RDS" },
+  { value: "eks", label: "EKS" },
 ];
 
 export const SPLUNK_VERSIONS = [
@@ -539,6 +542,18 @@ export const ACTION_DISPLAY_LABELS: Record<string, string> = {
   OBJECT_DELETED: "Deleted Object from S3 Bucket",
   LOAD_BALANCER_CREATED: "Created Load Balancer",
   LOAD_BALANCER_DELETED: "Deleted Load Balancer",
+  EKS_CLUSTER_DESTROYED: "EKS Cluster Terminated",
+  EKS_CLUSTER_DESTROY_FAILED: "EKS Cluster Termination Failed",
+  EKS_CLUSTER_CREATED: "EKS Cluster Created",
+  EKS_CLUSTER_REQUEST_SUBMITTED: "Submitted EKS Cluster Request",
+  EKS_CLUSTER_DESTROY_REQUESTED: "Requested EKS Cluster Termination",
+  EKS_CLUSTER_CREATION_FAILED: "EKS Cluster Creation Failed",
+  RDS_DESTROY_COMPLETED: "RDS Cluster Terminated",
+  RDS_DESTROY_REQUESTED: "Requested RDS Cluster Termination",
+  RDS_PROVISION_COMPLETED: "RDS Cluster Provisioned",
+  RDS_REQUEST_SUBMITTED: "RDS Request Submitted",
+  RDS_PROVISION_FAILED: "RDS Provisioning Failed",
+  RDS_DESTROY_FAILED: "RDS Cluster Termination Failed",
 };
 
 export const ROLE_NAMES = [

@@ -1,11 +1,8 @@
-import { useState } from "react";
-import {
-  ChevronDown,
-  ChevronUp,
-  Info,
-  Plus,
-} from "lucide-react";
-
+import { useEffect, useMemo, useState } from "react";
+import { Info } from "lucide-react";
+import { toast } from "sonner";
+import { useNavigate, useLocation } from "react-router-dom";
+import { useDialog } from "../ui/dialog-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -24,658 +21,697 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Textarea } from "../ui/textarea";
-import { Header } from "../layout/Header";
-import { Link } from "react-router-dom";
+import { Textarea } from "@/components/ui/textarea";
+import { Header } from "@/components/layout/Header";
+import {
+  createRoute53Record,
+  fetchRoute53LoadBalancers,
+  Route53LoadBalancerItem,
+} from "@/services/route53Api";
+import { ApiError } from "@/lib/api";
+
+const DEFAULT_HOSTED_ZONE_NAME = "prusplunk.com";
+const DEFAULT_HOSTED_ZONE_ID = "e028d1bc-abef-44b4-91ae-efa139e4d2af";
+
+const RECORD_NAME_PATTERN =
+  /^[A-Za-z0-9*]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*$/;
+
+function isValidRecordName(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed || trimmed === "@") return true;
+  return RECORD_NAME_PATTERN.test(trimmed);
+}
+
+const TTL_MAX = 600;
+
+const ENDPOINT_OPTIONS = [
+  {
+    value: "Alias to Application and Classic Load Balancer",
+    label: "Alias to Application and Classic Load Balancer",
+  },
+  {
+    value: "Alias to Network Load Balancer",
+    label: "Alias to Network Load Balancer",
+  },
+];
+
+const REGION_OPTIONS = [
+  { value: "us-east-2", label: "US East (Ohio)" },
+  { value: "us-east-1", label: "US East (N. Virginia)" },
+];
+
+type HostedZoneState = {
+  hostedZoneId?: string;
+  hostedZoneName?: string;
+};
+
+function parseValueEntries(raw: string): string[] {
+  return raw
+    .split(/[\r\n,]+/)
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+
+
+function findDuplicates(values: string[]): string[] {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const v of values) {
+    const key = v.toLowerCase();
+    if (seen.has(key)) duplicates.add(v);
+    seen.add(key);
+  }
+  return Array.from(duplicates);
+}
+
+
 
 export default function CreateRecord() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const routeState = (location.state || {}) as HostedZoneState;
+  const { alert } = useDialog()
+  const hostedZoneName = routeState.hostedZoneName || DEFAULT_HOSTED_ZONE_NAME;
+  const hostedZoneId = routeState.hostedZoneId || DEFAULT_HOSTED_ZONE_ID;
 
-  const [routeTrafficTo, setRouteTrafficTo] = useState("");
+  const [recordName, setRecordName] = useState("");
+  const [recordType, setRecordType] = useState("A");
+  const [routingPolicy, setRoutingPolicy] = useState("Simple");
+  const [alias, setAlias] = useState(false);
+  const [endpointType, setEndpointType] = useState("");
   const [region, setRegion] = useState("");
-  const showAliasOptions = routeTrafficTo !== "" && region !== "";
+  const [selectedLoadBalancerId, setSelectedLoadBalancerId] = useState("");
+  const [value, setValue] = useState("");
+  const [ttl, setTtl] = useState("300");
+  const [evaluateTargetHealth, setEvaluateTargetHealth] = useState(false);
+  const [justification, setJustification] = useState("");
+
+  const [loadBalancers, setLoadBalancers] = useState<Route53LoadBalancerItem[]>([]);
+  const [loadingLoadBalancers, setLoadingLoadBalancers] = useState(false);
+  const [loadBalancerError, setLoadBalancerError] = useState("");
+
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [alias, setAlias] = useState(false);
-  const [expanded, setExpanded] = useState(true);
+
+  const selectedLoadBalancer = useMemo(
+    () => loadBalancers.find((lb) => lb.id === selectedLoadBalancerId) || null,
+    [loadBalancers, selectedLoadBalancerId]
+  );
+
+  useEffect(() => {
+    const shouldLoad = alias && endpointType && region;
+    if (!shouldLoad) {
+      setLoadBalancers([]);
+      setSelectedLoadBalancerId("");
+      setLoadBalancerError("");
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingLoadBalancers(true);
+    setLoadBalancerError("");
+
+    fetchRoute53LoadBalancers(region, endpointType)
+      .then((items) => {
+        if (cancelled) return;
+        setLoadBalancers(items);
+        setSelectedLoadBalancerId((current) => {
+          if (current && items.some((item) => item.id === current)) {
+            return current;
+          }
+          return items[0]?.id || "";
+        });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        const message =
+          error instanceof Error ? error.message : "Failed to load load balancers";
+        setLoadBalancerError(message);
+        setLoadBalancers([]);
+        setSelectedLoadBalancerId("");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingLoadBalancers(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [alias, endpointType, region]);
+
+  useEffect(() => {
+    if (!alias) {
+      setEndpointType("");
+      setRegion("");
+      setSelectedLoadBalancerId("");
+      setLoadBalancers([]);
+      setLoadBalancerError("");
+      setEvaluateTargetHealth(false);
+    }
+  }, [alias]);
+
+
+  const ttlError = useMemo(() => {
+    if (alias) return ""; // TTL isn't used for alias records
+    const trimmed = ttl.trim();
+    if (trimmed === "") return "TTL is required.";
+    if (!/^\d+$/.test(trimmed)) return "TTL must be a non-negative integer.";
+     if (Number(trimmed) > TTL_MAX) return `TTL cannot exceed ${TTL_MAX} seconds.`;
+    return "";
+  }, [ttl, alias]);
+
+
+
+  const recordDisplayName = recordName.trim() ? `${recordName.trim()}.${hostedZoneName}` : hostedZoneName;
+  const ttlValue = Number(ttl);
+  const valueLines = parseValueEntries(value);
+
+
+  const MIN_JUSTIFICATION_LENGTH = 20;
+
+
+  const handleTtlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    // allow clearing the field, or any non-negative integer — reject minus signs, decimals, etc.
+    if (raw === "" || /^\d+$/.test(raw)) {
+      setTtl(raw);
+    }
+  };
+
+  const isFormValid = useMemo(() => {
+    const trimmedRecordName = recordName.trim();
+    if (trimmedRecordName && !isValidRecordName(trimmedRecordName)) return false;
+
+    if (justification.trim().length < MIN_JUSTIFICATION_LENGTH) return false;
+
+    if (alias) {
+      if (!endpointType || !region || !selectedLoadBalancerId) return false;
+    } else {
+      if (valueLines.length === 0) return false;
+      if (findDuplicates(valueLines).length > 0) return false;
+      if (ttlError !== "") return false;
+      if (!Number.isInteger(Number(ttl)) || Number(ttl) < 0 || ttl.trim() === "") return false;
+    }
+
+    return true;
+  }, [recordName, justification, alias, endpointType, region, selectedLoadBalancerId, valueLines, ttl]);
+
+  const handleSubmit = async () => {
+
+    const trimmedRecordName = recordName.trim();
+    if (trimmedRecordName && !isValidRecordName(trimmedRecordName)) {
+      alert({
+        title: "Invalid record name",
+        description:
+          "Record name can only contain letters, numbers, hyphens, and periods between labels — spaces and other special characters aren't allowed.",
+        severity: "error",
+      });
+      return;
+    }
+
+    if (!alias) {
+      const duplicates = findDuplicates(valueLines);
+      if (duplicates.length > 0) {
+        alert({
+          title: "Duplicate values",
+          description: `Each value must be unique. Duplicate found: ${duplicates.join(", ")}`,
+          severity: "error",
+        });
+        return;
+      }
+    }
+    try {
+      setIsSubmitting(true);
+
+      if (alias && !selectedLoadBalancer) {
+        alert({
+          title: "Load balancer required",
+          description: "Please choose a load balancer before creating the alias record.",
+          severity: "warning",
+        });
+        return;
+      }
+      const trimmedJustification = justification.trim();
+
+      const payload = alias
+        ? {
+          hostedZoneId,
+          recordName: recordName.trim() || "@",
+          recordType,
+          routingPolicy,
+          isAlias: true,
+          aliasDnsName: selectedLoadBalancer?.dns_name,
+          aliasHostedZoneId: selectedLoadBalancer?.canonical_hosted_zone_id,
+          aliasEndpointType: endpointType,
+          aliasRegion: region,
+          evaluateTargetHealth,
+          justification: trimmedJustification,
+        }
+        : {
+          hostedZoneId,
+          recordName: recordName.trim() || "@",
+          recordType,
+          routingPolicy,
+          ttl: ttlValue,
+          value: valueLines[0] || value,
+          values: valueLines.length > 1 ? valueLines : undefined,
+          justification: trimmedJustification,
+        };
+
+      const result = await createRoute53Record(payload);
+      alert({ title: "DNS record created", description: "The record was created successfully.", severity: "success" });
+      setIsConfirmOpen(false);
+      const requestId = result.data?.requestId;
+      if (requestId) {
+        const consoleSearch = new URLSearchParams({
+          request: requestId,
+          service: "route53-service",
+          operation: "create",
+        }).toString();
+        navigate(`/console?${consoleSearch}`, { replace: true });
+      } else {
+        navigate("/aws/hostedzonedetails");
+      }
+    } catch (error) {
+      const requestId =
+        error instanceof ApiError && typeof error.details?.requestId === "string"
+          ? error.details.requestId
+          : undefined;
+      if (requestId) {
+        const consoleSearch = new URLSearchParams({
+          request: requestId,
+          service: "route53-service",
+          operation: "create",
+        }).toString();
+        navigate(`/console?${consoleSearch}`, { replace: true });
+        return;
+      }
+      const message = error instanceof Error ? error.message : "Failed to create DNS record";
+      alert({ title: "Failed to create record", description: message, severity: "error" });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="space-y-4">
-      <Header
-        title="prusplunk.com"
-        subtitle="Info"
-        showSearch={false}
-      />
+      <Header title={hostedZoneName} subtitle="Info" showSearch={false} />
+
       <div className="max-w-6xl mx-auto space-y-8">
         <section className="glass-panel rounded-xl p-6">
           <div className="space-y-8 p-6">
-
-            {/* Row */}
-
             <div className="grid gap-8 lg:grid-cols-2">
-
-              {/* Record Name */}
-
               <div>
-
                 <div className="mb-2 flex items-center gap-2">
-
-                  <label className="font-medium">
-                    Record name
-                  </label>
-
+                  <label className="font-medium">Record name</label>
                   <Info className="h-4 w-4 text-primary" />
-
                 </div>
 
                 <div className="flex items-center gap-3">
-
                   <Input
+                    value={recordName}
+                    onChange={(e) => setRecordName(e.target.value.replace(/\s/g, ""))}
                     placeholder="subdomain"
                     className="bg-card"
                   />
-
                   <span className="text-muted-foreground whitespace-nowrap">
-                    prusplunk.com
+                    {hostedZoneName}
                   </span>
-
                 </div>
 
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Keep blank to create a record for the root domain.
+                  Leave this blank to create a record at the root of the hosted zone.
                 </p>
-
               </div>
-
-              {/* Record Type */}
 
               <div>
-
                 <div className="mb-2 flex items-center gap-2">
-
-                  <label className="font-medium">
-                    Record type
-                  </label>
-
+                  <label className="font-medium">Record type</label>
                   <Info className="h-4 w-4 text-primary" />
-
                 </div>
 
-                <Select defaultValue="A">
-
+                <Select value={recordType} onValueChange={setRecordType}>
                   <SelectTrigger className="bg-card">
-
                     <SelectValue />
-
                   </SelectTrigger>
-
                   <SelectContent>
-
-                    <SelectItem value="A">
-                      A - Routes traffic to an IPv4 address
-                    </SelectItem>
-
-                    <SelectItem value="AAAA">
-                      AAAA
-                    </SelectItem>
-
-                    <SelectItem value="CNAME">
-                      CNAME
-                    </SelectItem>
-
-                    <SelectItem value="TXT">
-                      TXT
-                    </SelectItem>
-
-                    <SelectItem value="MX">
-                      MX
-                    </SelectItem>
-
+                    <SelectItem value="A">A - Routes traffic to an IPv4 address</SelectItem>
+                    {/* S */}
                   </SelectContent>
-
                 </Select>
-
               </div>
-
             </div>
-
-            {/* Alias */}
 
             <div className="flex items-center gap-3">
-
-              <Switch
-                checked={alias}
-                onCheckedChange={setAlias}
-              />
-
-              <label className="font-medium">
-                Alias
-              </label>
-
+              <Switch checked={alias} onCheckedChange={setAlias} />
+              <label className="font-medium">Alias</label>
             </div>
-
-            {/* Dynamic Section */}
 
             {alias ? (
               <div className="space-y-6 rounded-lg border border-border bg-background/40 p-6">
-
-                {/* Route Traffic To */}
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <label className="font-medium">Route traffic to</label>
                     <Info className="h-4 w-4 text-primary" />
                   </div>
 
-                  <Select value={routeTrafficTo} onValueChange={setRouteTrafficTo}>
+                  <Select value={endpointType} onValueChange={setEndpointType}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select target" />
+                      <SelectValue placeholder="Select endpoint type" />
                     </SelectTrigger>
-
                     <SelectContent>
-                      <SelectItem value="alb">
-                        Alias to Application and Classic Load Balancer
-                      </SelectItem>
-                      <SelectItem value="nlb">
-                        Alias to Network Load Balancer
-                      </SelectItem>
-                      <SelectItem value="cloudfront">
-                        Alias to CloudFront Distribution
-                      </SelectItem>
-                      <SelectItem value="api">
-                        Alias to API Gateway
-                      </SelectItem>
-                      <SelectItem value="s3">
-                        Alias to S3 Website Endpoint
-                      </SelectItem>
+                      {ENDPOINT_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
 
-                {/* Region */}
                 <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <label className="font-medium">Region</label>
+                    <Info className="h-4 w-4 text-primary" />
+                  </div>
+
                   <Select value={region} onValueChange={setRegion}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select AWS Region" />
                     </SelectTrigger>
-
                     <SelectContent>
-                      <SelectItem value="virginia">
-                        US East (N. Virginia)
-                      </SelectItem>
-                      <SelectItem value="ohio">
-                        US East (Ohio)
-                      </SelectItem>
-                      <SelectItem value="oregon">
-                        US West (Oregon)
-                      </SelectItem>
-                      <SelectItem value="mumbai">
-                        Asia Pacific (Mumbai)
-                      </SelectItem>
+                      {REGION_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
 
-                {/* Choose Load Balancer */}
-                {routeTrafficTo && region && (
-                  <div className="space-y-2">
-                    <Input
-                      placeholder="Choose load balancer"
-                      className="bg-card"
-                    />
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <label className="font-medium">Load balancer</label>
+                    <Info className="h-4 w-4 text-primary" />
                   </div>
-                )}
 
-                {/* Routing Policy & Evaluate Target Health */}
+                  <Select
+                    value={selectedLoadBalancerId}
+                    onValueChange={setSelectedLoadBalancerId}
+                    disabled={!endpointType || !region || loadingLoadBalancers || loadBalancers.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue
+                        placeholder={
+                          loadingLoadBalancers
+                            ? "Loading load balancers..."
+                            : "Select load balancer"
+                        }
+                      />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {loadBalancers.map((lb) => (
+                        <SelectItem key={lb.id} value={lb.id}>
+                          {lb.name} - {lb.region} - {lb.type}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  {loadBalancerError ? (
+                    <p className="text-sm text-destructive">{loadBalancerError}</p>
+                  ) : null}
+
+                  {!loadingLoadBalancers && endpointType && region && loadBalancers.length === 0 && !loadBalancerError ? (
+                    <p className="text-sm text-muted-foreground">
+                      No active load balancers were found for the selected endpoint and region.
+                    </p>
+                  ) : null}
+                </div>
+
                 <div className="grid gap-6 lg:grid-cols-2">
-
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <label className="font-medium">Routing policy</label>
                       <Info className="h-4 w-4 text-primary" />
                     </div>
 
-                    <Select defaultValue="simple">
+                    <Select value={routingPolicy} onValueChange={setRoutingPolicy}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
-
                       <SelectContent>
-                        <SelectItem value="simple">
-                          Simple routing
-                        </SelectItem>
-
-                        <SelectItem value="weighted">
-                          Weighted routing
-                        </SelectItem>
-
-                        <SelectItem value="latency">
-                          Latency routing
-                        </SelectItem>
-
-                        <SelectItem value="failover">
-                          Failover routing
-                        </SelectItem>
-
-                        <SelectItem value="geolocation">
-                          Geolocation routing
-                        </SelectItem>
+                        <SelectItem value="Simple">Simple routing</SelectItem>
+                        {/* <SelectItem value="Weighted">Weighted routing</SelectItem>
+                        <SelectItem value="Latency">Latency routing</SelectItem>
+                        <SelectItem value="Failover">Failover routing</SelectItem>
+                        <SelectItem value="Geolocation">Geolocation routing</SelectItem> */}
                       </SelectContent>
                     </Select>
                   </div>
 
-                  {showAliasOptions && (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <label className="font-medium">
-                          Evaluate target health
-                        </label>
-                        <Info className="h-4 w-4 text-primary" />
-                      </div>
-
-                      <div className="flex h-10 items-center rounded-md border border-border px-3">
-                        <Switch defaultChecked />
-                        <span className="ml-3 text-sm">Yes</span>
-                      </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <label className="font-medium">Evaluate target health</label>
+                      <Info className="h-4 w-4 text-primary" />
                     </div>
-                  )}
 
+                    <div className="flex h-10 items-center rounded-md border border-border px-3">
+                      <Switch checked={evaluateTargetHealth} onCheckedChange={setEvaluateTargetHealth} />
+                      <span className="ml-3 text-sm">
+                        {evaluateTargetHealth ? "Yes" : "No"}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-
               </div>
             ) : (
               <div className="space-y-8 rounded-lg border border-border bg-background/40 p-6">
-
-                {/* Value */}
-
                 <div className="space-y-2">
-
                   <div className="flex items-center gap-2">
-
-                    <label className="font-medium">
-                      Value
-                    </label>
-
+                    <label className="font-medium">Value</label>
                     <Info className="h-4 w-4 text-primary" />
-
                   </div>
 
                   <Textarea
                     rows={5}
-                    placeholder="192.168.1.10
-
-                        192.168.1.11
-
-                        Multiple values are supported."
+                    value={value}
+                    onChange={(e) => setValue(e.target.value)}
+                    placeholder={`3.17.183.49\n\n3.17.183.50`}
                     className="resize-none"
                   />
 
                   <p className="text-sm text-muted-foreground">
-                    Enter one value per line. The required format depends on the selected
-                    record type.
+                    Enter one value per line. For alias records, use the toggle above.
                   </p>
-
                 </div>
 
-                {/* TTL */}
-
                 <div className="grid gap-6 lg:grid-cols-2">
-
                   <div className="space-y-2">
-
                     <div className="flex items-center gap-2">
-
-                      <label className="font-medium">
-                        TTL (seconds)
-                      </label>
-
+                      <label className="font-medium">TTL (seconds)</label>
                       <Info className="h-4 w-4 text-primary" />
-
                     </div>
 
                     <Input
                       type="number"
-                      defaultValue="300"
+                      min={0}
+                      max={TTL_MAX}
+                      value={ttl}
+                      onChange={handleTtlChange}
                     />
 
-                    <p className="text-sm text-muted-foreground">
-                      Time to live determines how long DNS resolvers cache this record.
-                    </p>
-
+                    {ttlError ? (
+                      <p className="text-sm text-destructive">{ttlError}</p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Time to live determines how long DNS resolvers cache this record.
+                      </p>
+                    )}
                   </div>
-
                 </div>
-
-
-
-
-
-                {/* Information */}
 
                 <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4">
-
                   <p className="text-sm text-amber-500">
-
-                    Lower TTL values allow DNS changes to propagate faster but increase
-                    the number of DNS queries.
-
+                    Lower TTL values propagate faster but increase DNS query volume.
                   </p>
-
                 </div>
-                {/* Routing Policy */}
 
-                <div className="max-w-xl">
-
+                <div className="space-y-2">
                   <div className="mb-2 flex items-center gap-2">
-
-                    <label className="font-medium">
-                      Routing policy
-                    </label>
-
+                    <label className="font-medium">Routing policy</label>
                     <Info className="h-4 w-4 text-primary" />
-
                   </div>
 
-                  <Select defaultValue="simple">
-
+                  <Select value={routingPolicy} onValueChange={setRoutingPolicy}>
                     <SelectTrigger className="bg-card">
-
                       <SelectValue />
-
                     </SelectTrigger>
-
                     <SelectContent>
-
-                      <SelectItem value="simple">
-                        Simple routing
-                      </SelectItem>
-
-                      <SelectItem value="weighted">
-                        Weighted
-                      </SelectItem>
-
-                      <SelectItem value="latency">
-                        Latency
-                      </SelectItem>
-
-                      <SelectItem value="failover">
-                        Failover
-                      </SelectItem>
-
+                      <SelectItem value="Simple">Simple routing</SelectItem>
+                      {/* <SelectItem value="Weighted">Weighted</SelectItem>
+                      <SelectItem value="Latency">Latency</SelectItem>
+                      <SelectItem value="Failover">Failover</SelectItem> */}
                     </SelectContent>
-
                   </Select>
-
-
                 </div>
-
               </div>
             )}
 
+            <div className="space-y-2 rounded-lg border border-border bg-background/40 p-6">
+              <div className="flex items-center gap-2">
+                <label className="font-medium">Justification</label>
+                <Info className="h-4 w-4 text-primary" />
+              </div>
 
-
+              <Textarea
+                rows={3}
+                value={justification}
+                onChange={(e) => setJustification(e.target.value)}
+                placeholder="Optional note for this DNS record"
+                className="resize-none"
+              />
+            </div>
           </div>
-
-
         </section>
+
         <div className="flex flex-col space-y-2">
-          <div className="flex items-center justify-end mb-4">
+          <div className="mb-4 flex items-center justify-end">
             <Button
-              className="border border-border bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground me-4"
+              variant="outline"
+              onClick={() => navigate("/aws/hostedzonedetails")}
+              className="me-4 border border-border bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground"
             >
               Cancel
             </Button>
             <Button
               onClick={() => setIsConfirmOpen(true)}
-              className="bg-primary hover:bg-primary/90 text-white"
+              disabled={!isFormValid}
+              className="bg-primary text-white hover:bg-primary/90"
             >
               Create Record
             </Button>
           </div>
         </div>
       </div>
+
       <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
-          {/* Header */}
           <div className="border-b pb-4">
             <DialogHeader className="items-center text-center">
               <DialogTitle className="text-xl font-semibold">
                 Confirm Record Creation
               </DialogTitle>
-
               <DialogDescription className="mt-2">
                 Review the DNS record details before creating the record.
               </DialogDescription>
             </DialogHeader>
           </div>
 
-          {/* Body */}
-          {/* Body */}
           <div className="flex-1 overflow-y-auto model-scroll-hide px-1 py-4 space-y-5">
-
-            {/* Record Information */}
             <div>
-              <h3 className="text-sm font-semibold mb-3">
-                Record Information
-              </h3>
-
+              <h3 className="mb-3 text-sm font-semibold">Record Information</h3>
               <div className="grid gap-4 md:grid-cols-2">
-
                 <div className="rounded-lg border bg-muted/40 p-4">
-                  <p className="text-xs text-muted-foreground">
-                    Record Name
-                  </p>
-                  <p className="mt-1 font-medium">
-                    app.prusplunk.com
-                  </p>
+                  <p className="text-xs text-muted-foreground">Record Name</p>
+                  <p className="mt-1 font-medium">{recordDisplayName}</p>
                 </div>
-
                 <div className="rounded-lg border bg-muted/40 p-4">
-                  <p className="text-xs text-muted-foreground">
-                    Record Type
-                  </p>
-                  <p className="mt-1 font-medium">
-                    A (IPv4 Address)
-                  </p>
+                  <p className="text-xs text-muted-foreground">Record Type</p>
+                  <p className="mt-1 font-medium">{recordType}</p>
                 </div>
-
                 <div className="rounded-lg border bg-muted/40 p-4">
-                  <p className="text-xs text-muted-foreground">
-                    Hosted Zone
-                  </p>
-                  <p className="mt-1 font-medium">
-                    prusplunk.com
-                  </p>
+                  <p className="text-xs text-muted-foreground">Hosted Zone</p>
+                  <p className="mt-1 font-medium">{hostedZoneName}</p>
                 </div>
-
                 <div className="rounded-lg border bg-muted/40 p-4">
-                  <p className="text-xs text-muted-foreground">
-                    Alias Record
-                  </p>
-                  <p className="mt-1 font-medium">
-                    Enabled
-                  </p>
+                  <p className="text-xs text-muted-foreground">Alias Record</p>
+                  <p className="mt-1 font-medium">{alias ? "Enabled" : "Disabled"}</p>
                 </div>
-
               </div>
             </div>
 
-            {/* Alias Target */}
-            <div>
-              <h3 className="text-sm font-semibold mb-3">
-                Alias Target
-              </h3>
-
-              <div className="rounded-lg border bg-muted/40 p-4 space-y-4">
-
-                <div className="grid md:grid-cols-2 gap-4">
-
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Route Traffic To
-                    </p>
-
-                    <p className="mt-1 font-medium">
-                      Application & Classic Load Balancer
-                    </p>
+            {alias ? (
+              <div>
+                <h3 className="mb-3 text-sm font-semibold">Alias Target</h3>
+                <div className="rounded-lg border bg-muted/40 p-4 space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Route Traffic To</p>
+                      <p className="mt-1 font-medium">{endpointType || "-"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">AWS Region</p>
+                      <p className="mt-1 font-medium">
+                        {REGION_OPTIONS.find((item) => item.value === region)?.label || "-"}
+                      </p>
+                    </div>
                   </div>
 
                   <div>
-                    <p className="text-xs text-muted-foreground">
-                      AWS Region
-                    </p>
-
-                    <p className="mt-1 font-medium">
-                      US East (N. Virginia)
+                    <p className="text-xs text-muted-foreground">Selected Load Balancer</p>
+                    <p className="mt-1 break-all font-medium">
+                      {selectedLoadBalancer?.dns_name || "-"}
                     </p>
                   </div>
 
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <p className="text-xs text-muted-foreground">Routing Policy</p>
+                      <p className="mt-1 font-medium">{routingPolicy}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Evaluate Target Health</p>
+                      <p className="mt-1 font-medium">
+                        {evaluateTargetHealth ? "Enabled" : "Disabled"}
+                      </p>
+                    </div>
+                  </div>
                 </div>
-
-                <div>
-                  <p className="text-xs text-muted-foreground">
-                    Selected Load Balancer
-                  </p>
-
-                  <p className="mt-1 font-medium break-all">
-                    dualstack.my-app-alb-123456.us-east-1.elb.amazonaws.com
-                  </p>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-4">
-
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Routing Policy
-                    </p>
-
-                    <p className="mt-1 font-medium">
-                      Simple Routing
-                    </p>
-                  </div>
-
-                  <div>
-                    <p className="text-xs text-muted-foreground">
-                      Evaluate Target Health
-                    </p>
-
-                    <p className="mt-1 font-medium">
-                      Enabled
-                    </p>
-                  </div>
-
-                </div>
-
               </div>
-            </div>
-
-            {/* DNS Preview */}
-            <div>
-              <h3 className="text-sm font-semibold mb-3">
-                DNS Record Preview
-              </h3>
-
-              <div className="rounded-lg border bg-card">
-
-                <table className="w-full text-sm">
-
-                  <tbody>
-
-                    <tr className="border-b">
-                      <td className="px-4 py-3 text-muted-foreground">
-                        Name
-                      </td>
-
-                      <td className="px-4 py-3 font-medium">
-                        app.prusplunk.com
-                      </td>
-                    </tr>
-
-                    <tr className="border-b">
-                      <td className="px-4 py-3 text-muted-foreground">
-                        Type
-                      </td>
-
-                      <td className="px-4 py-3">
-                        A
-                      </td>
-                    </tr>
-
-                    <tr className="border-b">
-                      <td className="px-4 py-3 text-muted-foreground">
-                        Alias
-                      </td>
-
-                      <td className="px-4 py-3">
-                        Yes
-                      </td>
-                    </tr>
-
-                    <tr className="border-b">
-                      <td className="px-4 py-3 text-muted-foreground">
-                        Target
-                      </td>
-
-                      <td className="px-4 py-3 break-all">
-                        dualstack.my-app-alb-123456.us-east-1.elb.amazonaws.com
-                      </td>
-                    </tr>
-
-                    <tr>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        Routing Policy
-                      </td>
-
-                      <td className="px-4 py-3">
-                        Simple
-                      </td>
-                    </tr>
-
-                  </tbody>
-
-                </table>
-
+            ) : (
+              <div>
+                <h3 className="mb-3 text-sm font-semibold">Record Value</h3>
+                <div className="rounded-lg border bg-muted/40 p-4 space-y-2">
+                  <p className="text-xs text-muted-foreground">Values</p>
+                  <p className="whitespace-pre-line break-all font-medium">
+                    {valueLines.join("\n") || "-"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">TTL: {ttlValue}</p>
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* Notice */}
+            {justification ? (
+              <div>
+                <h3 className="mb-3 text-sm font-semibold">Comment</h3>
+                <div className="rounded-lg border bg-muted/40 p-4">
+                  <p className="text-sm">{justification}</p>
+                </div>
+              </div>
+            ) : null}
+
             <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
-
               <p className="text-sm text-muted-foreground">
-                This Route 53 DNS record will be created in the hosted zone
-                <span className="font-semibold text-foreground">
-                  {" "}prusplunk.com
-                </span>.
-                Verify the target endpoint before submitting.
+                This Route 53 DNS record will be created in the hosted zone{" "}
+                <span className="font-semibold text-foreground">{hostedZoneName}</span>.
               </p>
-
             </div>
-
           </div>
 
-          {/* Footer */}
           <DialogFooter className="border-t pt-4 mt-4">
-            <Button
-              variant="outline"
-              onClick={() => setIsConfirmOpen(false)}
-            >
+            <Button variant="outline" onClick={() => setIsConfirmOpen(false)}>
               Go Back
             </Button>
-
-            <Button
-              disabled={isSubmitting}
-              onClick={() => {
-                setIsSubmitting(true);
-
-                setTimeout(() => {
-                  setIsSubmitting(false);
-                  setIsConfirmOpen(false);
-                }, 1500);
-              }}
-            >
+            <Button disabled={isSubmitting} onClick={handleSubmit}>
               {isSubmitting ? "Creating..." : "Confirm & Create Record"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
-
-  )
+  );
 }

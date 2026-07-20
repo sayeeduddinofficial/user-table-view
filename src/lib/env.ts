@@ -9,11 +9,14 @@ const requiredEnvVars = [
   'VITE_FEEDBACK_SERVICE_URL',
   'VITE_BUCKET_SERVICE_URL',
   'VITE_LB_SERVICE_URL',
+  'VITE_ROUTE53_SERVICE_URL',
   'VITE_SOCKET_URL',
   'VITE_ENTRA_CLIENT_ID',
   'VITE_ENTRA_TENANT_ID',
   'VITE_ENTRA_REDIRECT_URI',
-  'VITE_VPC_SERVICE_URL'
+  'VITE_VPC_SERVICE_URL',
+  'VITE_EKS_CLUSTER_SERVICE_URL',
+  'VITE_RDS_SERVICE_URL',
 ] as const;
 
 function validateEnv() {
@@ -43,11 +46,13 @@ export const env = {
   feedback: import.meta.env.VITE_FEEDBACK_SERVICE_URL,
   runtime: import.meta.env.VITE_RUNTIME_SERVICE_URL,
   lbService: import.meta.env.VITE_LB_SERVICE_URL,
+  route53Service: import.meta.env.VITE_ROUTE53_SERVICE_URL,
   socket: import.meta.env.VITE_SOCKET_URL,
   entraClientId: import.meta.env.VITE_ENTRA_CLIENT_ID,
   entraTenantId: import.meta.env.VITE_ENTRA_TENANT_ID,
   entraRedirectUri: import.meta.env.VITE_ENTRA_REDIRECT_URI,
   vpcService: import.meta.env.VITE_VPC_SERVICE_URL,
   bucketService: import.meta.env.VITE_BUCKET_SERVICE_URL,
-  // loadBalancer: import.meta.env.VITE_LB_SERVICE_URL,
+  rds: import.meta.env.VITE_RDS_SERVICE_URL,
+  eksClusterService: import.meta.env.VITE_EKS_CLUSTER_SERVICE_URL
 } as const;

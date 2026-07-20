@@ -1,4 +1,4 @@
-import { CLUSTER } from "./eksData";
+import type { EksClusterDetail } from "./EksDetails";
 
 function InfoLabel({ children }: { children: React.ReactNode }) {
   return (
@@ -10,7 +10,13 @@ function InfoLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function NetworkingTab() {
+export function NetworkingTab({ cluster }: { cluster: EksClusterDetail | null }) {
+  const subnets = cluster?.subnet_ids ?? [];
+const securityGroups = cluster?.cluster_security_group_id ? [cluster.cluster_security_group_id] : [];
+const additionalSGs = cluster?.additional_security_group_ids ?? [];
+const publicCidrs = cluster?.public_access_cidrs ?? [];
+
+
   return (
     <div className="bg-card border border-border rounded-lg p-5">
       <div className="flex items-center justify-between mb-5">
@@ -22,21 +28,15 @@ export function NetworkingTab() {
         <div className="space-y-5">
           <div>
             <InfoLabel>VPC</InfoLabel>
-            <a
-              href={`/aws/vpcs/${CLUSTER.vpcId}`}
-              className="inline-flex items-center gap-1 text-primary hover:underline break-all"
-            >
-              <span>{CLUSTER.vpcId}</span>
-              {/* <ExternalLink size={11} className="shrink-0" /> */}
-            </a>
+            <div>{cluster?.vpc_id ?? "—"}</div>
           </div>
           <div>
             <InfoLabel>Cluster IP address family</InfoLabel>
-            <div>{CLUSTER.clusterIpAddressFamily}</div>
+            <div>{cluster?.cluster_ip_family ?? "—"}</div>
           </div>
           <div>
             <InfoLabel>Service IPv4 range</InfoLabel>
-            <div>{CLUSTER.serviceIpv4Cidr}</div>
+            <div>{cluster?.service_ipv4_cidr ?? "—"}</div>
           </div>
         </div>
 
@@ -44,9 +44,7 @@ export function NetworkingTab() {
         <div>
           <InfoLabel>Subnets</InfoLabel>
           <ul className="space-y-1">
-            {CLUSTER.subnets.map((s) => (
-              <li key={s.id}>{s.id}</li>
-            ))}
+            {subnets.length > 0 ? subnets.map((s) => <li key={s}>{s}</li>) : "—"}
           </ul>
         </div>
 
@@ -55,21 +53,13 @@ export function NetworkingTab() {
           <div>
             <InfoLabel>Cluster security group</InfoLabel>
             <ul className="space-y-1">
-              {CLUSTER.securityGroups.map((sg) => (
-                <li key={sg}>
-                  <span>{sg}</span>
-                </li>
-              ))}
+              {securityGroups.length > 0 ? securityGroups.map((sg) => <li key={sg}>{sg}</li>) : "—"}
             </ul>
           </div>
           <div>
             <InfoLabel>Additional security groups</InfoLabel>
             <ul className="space-y-1">
-              {CLUSTER.additionalSecurityGroups.map((sg) => (
-                <li key={sg}>
-                  <span>{sg}</span>
-                </li>
-              ))}
+              {additionalSGs.length > 0 ? additionalSGs.map((sg) => <li key={sg}>{sg}</li>) : "—"}
             </ul>
           </div>
         </div>
@@ -78,16 +68,16 @@ export function NetworkingTab() {
         <div className="space-y-5">
           <div>
             <InfoLabel>API server endpoint access</InfoLabel>
-            <div>{CLUSTER.clusterEndpointAccess}</div>
+            <div>Public and private</div>
           </div>
           <div>
             <InfoLabel>Egress mode</InfoLabel>
-            <div>{CLUSTER.egressMode}</div>
+            <div>{cluster?.egress_mode ?? "—"}</div>
           </div>
           <div>
             <InfoLabel>Public access source allowlist</InfoLabel>
             <div>
-              {CLUSTER.publicAccessSourceAllowList.join(", ")}{" "}
+              {publicCidrs.length > 0 ? publicCidrs.join(", ") : "—"}
               <span className="text-muted-foreground">
                 (open to all traffic)
               </span>
