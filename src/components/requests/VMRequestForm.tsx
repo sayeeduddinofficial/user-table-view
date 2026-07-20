@@ -62,19 +62,45 @@ type Props = {
   isSubmitting?: boolean;
 };
 
-// AMI options per region (Quick Start images as shown in the AWS console).
-// Each region falls back to the default 7-option list unless overridden.
-const DEFAULT_AMI_OPTIONS = [
-  { value: "amazon-linux", label: "Amazon Linux" },
-  { value: "macos", label: "macOS" },
-  { value: "ubuntu", label: "Ubuntu" },
-  { value: "windows", label: "Windows" },
-  { value: "red-hat", label: "Red Hat" },
-  { value: "suse-linux", label: "SUSE Linux" },
-  { value: "debian", label: "Debian" },
+// AMI options per region (Quick Start-style entries, similar to the AWS console).
+// NOTE: These are sample/placeholder entries; text will be finalized later.
+type AmiOption = {
+  value: string;
+  label: string;
+  amiId: string;
+  arch: string;
+  virtualization: string;
+  rootDevice: string;
+  freeTier?: boolean;
+};
+
+const OHIO_AMI_OPTIONS: AmiOption[] = [
+  { value: "al2023-kernel-6-18", label: "Amazon Linux 2023 kernel-6.18 AMI", amiId: "ami-01edba92f9036f76e", arch: "64-bit (x86), uefi-preferred", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "al2023-kernel-6-1", label: "Amazon Linux 2023 kernel-6.1 AMI", amiId: "ami-0fd6240f599091088", arch: "64-bit (x86), uefi-preferred", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "ubuntu-24-04", label: "Ubuntu Server 24.04 LTS", amiId: "ami-0a1b2c3d4e5f60001", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "windows-2022", label: "Microsoft Windows Server 2022 Base", amiId: "ami-0a1b2c3d4e5f60002", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs" },
+  { value: "rhel-9", label: "Red Hat Enterprise Linux 9", amiId: "ami-0a1b2c3d4e5f60003", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs" },
+  { value: "suse-15", label: "SUSE Linux Enterprise Server 15 SP6", amiId: "ami-0a1b2c3d4e5f60004", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs" },
+  { value: "debian-12", label: "Debian 12 (Bookworm)", amiId: "ami-0a1b2c3d4e5f60005", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs" },
 ];
-const AMI_OPTIONS_BY_REGION: Record<string, { value: string; label: string }[]> = {};
-const getAmiOptions = (region: string) =>
+
+const NVIRGINIA_AMI_OPTIONS: AmiOption[] = [
+  { value: "al2023-kernel-6-18-nv", label: "Amazon Linux 2023 kernel-6.18 AMI", amiId: "ami-0abc111222333aaaa", arch: "64-bit (x86), uefi-preferred", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "al2-arm-nv", label: "Amazon Linux 2 (ARM64)", amiId: "ami-0abc111222333aaab", arch: "64-bit (Arm)", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "ubuntu-22-04-nv", label: "Ubuntu Server 22.04 LTS", amiId: "ami-0abc111222333aaac", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "windows-2019-nv", label: "Microsoft Windows Server 2019 Base", amiId: "ami-0abc111222333aaad", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs" },
+  { value: "rhel-8-nv", label: "Red Hat Enterprise Linux 8", amiId: "ami-0abc111222333aaae", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs" },
+  { value: "macos-sonoma-nv", label: "macOS Sonoma 14", amiId: "ami-0abc111222333aaaf", arch: "64-bit (Mac)", virtualization: "hvm", rootDevice: "ebs" },
+  { value: "debian-11-nv", label: "Debian 11 (Bullseye)", amiId: "ami-0abc111222333aab0", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs" },
+];
+
+const DEFAULT_AMI_OPTIONS: AmiOption[] = OHIO_AMI_OPTIONS;
+
+const AMI_OPTIONS_BY_REGION: Record<string, AmiOption[]> = {
+  "us-east-2": OHIO_AMI_OPTIONS,
+  "us-east-1": NVIRGINIA_AMI_OPTIONS,
+};
+const getAmiOptions = (region: string): AmiOption[] =>
   AMI_OPTIONS_BY_REGION[region] ?? DEFAULT_AMI_OPTIONS;
 
 export function VMRequestForm({ onSubmit, isSubmitting = false }: Props) {
@@ -114,7 +140,15 @@ export function VMRequestForm({ onSubmit, isSubmitting = false }: Props) {
     Record<string, { count: number; instanceType: string }>
   >({});
   const [category, setCategory] = useState<CategoryType | null>(null);
-  const [ami, setAmi] = useState<string>("amazon-linux");
+  const [ami, setAmi] = useState<string>(() => getAmiOptions(getDefaultRegion())[0]?.value ?? "");
+
+  // Reset AMI when the region's option list changes and current value is no longer valid
+  useEffect(() => {
+    const opts = getAmiOptions(region);
+    if (!opts.some((o) => o.value === ami)) {
+      setAmi(opts[0]?.value ?? "");
+    }
+  }, [region]); // eslint-disable-line react-hooks/exhaustive-deps
   const [allInOneInstanceType, setAllInOneInstanceType] = useState("");
   const [cat5InstanceTypes, setCat5InstanceTypes] = useState<
     Record<string, string>
@@ -893,13 +927,41 @@ const onOpenDialog = () => {
                 AMI (Amazon Machine Image)
               </Label>
               <Select value={ami} onValueChange={setAmi}>
-                <SelectTrigger className="bg-muted/50">
-                  <SelectValue placeholder="Select AMI..." />
+                <SelectTrigger className="bg-muted/50 h-auto py-2">
+                  <SelectValue placeholder="Select AMI...">
+                    {(() => {
+                      const sel = getAmiOptions(region).find((o) => o.value === ami);
+                      if (!sel) return "Select AMI...";
+                      return (
+                        <div className="flex flex-col items-start text-left">
+                          <span className="font-medium">{sel.label}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {sel.amiId} ({sel.arch})
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </SelectValue>
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="max-h-96">
                   {getAmiOptions(region).map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
+                    <SelectItem key={opt.value} value={opt.value} className="py-2">
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-medium">{opt.label}</span>
+                          {opt.freeTier && (
+                            <span className="text-[10px] text-emerald-500 font-medium">
+                              Free tier eligible
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {opt.amiId} ({opt.arch})
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          Virtualization: {opt.virtualization} · Root device: {opt.rootDevice}
+                        </span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1368,14 +1430,20 @@ const onOpenDialog = () => {
                   </div>
                 )}
 
-                {category === 1 && (
-                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                    <p className="text-xs text-muted-foreground mb-1">AMI</p>
-                    <p className="font-medium text-foreground">
-                      {getAmiOptions(region).find(o => o.value === ami)?.label ?? ami}
-                    </p>
-                  </div>
-                )}
+                {category === 1 && (() => {
+                  const sel = getAmiOptions(region).find(o => o.value === ami);
+                  return (
+                    <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                      <p className="text-xs text-muted-foreground mb-1">AMI</p>
+                      <p className="font-medium text-foreground">{sel?.label ?? ami}</p>
+                      {sel && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {sel.amiId} · {sel.arch} · Virt: {sel.virtualization} · Root: {sel.rootDevice}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
