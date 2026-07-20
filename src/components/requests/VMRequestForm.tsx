@@ -543,6 +543,7 @@ const onOpenDialog = () => {
       environmentTag,
       projectIdentifier,
       ...(category !== 1 && { splunkVersion }),
+      ...(category === 1 && { ami }),
       deploymentMode,
       region,
       regions: deploymentMode === "multi-region" ? selectedRegions : [region],
