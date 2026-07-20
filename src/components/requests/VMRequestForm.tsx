@@ -62,6 +62,21 @@ type Props = {
   isSubmitting?: boolean;
 };
 
+// AMI options per region (Quick Start images as shown in the AWS console).
+// Each region falls back to the default 7-option list unless overridden.
+const DEFAULT_AMI_OPTIONS = [
+  { value: "amazon-linux", label: "Amazon Linux" },
+  { value: "macos", label: "macOS" },
+  { value: "ubuntu", label: "Ubuntu" },
+  { value: "windows", label: "Windows" },
+  { value: "red-hat", label: "Red Hat" },
+  { value: "suse-linux", label: "SUSE Linux" },
+  { value: "debian", label: "Debian" },
+];
+const AMI_OPTIONS_BY_REGION: Record<string, { value: string; label: string }[]> = {};
+const getAmiOptions = (region: string) =>
+  AMI_OPTIONS_BY_REGION[region] ?? DEFAULT_AMI_OPTIONS;
+
 export function VMRequestForm({ onSubmit, isSubmitting = false }: Props) {
   const { alert } = useDialog();
   const navigate = useNavigate();
