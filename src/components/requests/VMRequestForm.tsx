@@ -877,6 +877,30 @@ const onOpenDialog = () => {
               </>
             )}
           </div>
+
+          {category === 1 && (
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2">
+                <Layers className="h-4 w-4" />
+                AMI (Amazon Machine Image)
+              </Label>
+              <Select value={ami} onValueChange={setAmi}>
+                <SelectTrigger className="bg-muted/50">
+                  <SelectValue placeholder="Select AMI..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {getAmiOptions(region).map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Options are based on the selected region
+              </p>
+            </div>
+          )}
         </div>
       </section>
 
