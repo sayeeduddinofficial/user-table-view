@@ -1051,13 +1051,13 @@ const onOpenDialog = () => {
         </section>
       )}
 
-      {/* VM Role Configuration */}
+      {/* VM Role Configuration (Category 1) */}
       {category === 1 && (
         <section className="glass-panel rounded-xl p-6">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
               <Server className="h-5 w-5 text-primary" />
-              VM Role Configuration
+              {vmMode === "general" ? "Custom VM Configuration" : "VM Role Configuration"}
             </h2>
             <div className="flex items-center gap-3">
               <span className="text-sm text-muted-foreground">Total VMs:</span>
@@ -1073,29 +1073,212 @@ const onOpenDialog = () => {
             </div>
           </div>
 
-          <div className="space-y-4">
-            {VM_ROLES.map((role) => {
-              const roleState = roles[role.id] ?? {
-                count: 0,
-                instanceType: defaultType,
-              };
-              return (
-                <RoleRow
-                  key={role.id}
-                  role={role}
-                  count={roleState.count || 0}
-                  instanceType={roleState.instanceType}
-                  allowedTypes={currentUser?.allowedInstanceTypes || []}
-                  onUpdateCount={(count) => updateRole(role.id, "count", count)}
-                  onUpdateType={(type) =>
-                    updateRole(role.id, "instanceType", type)
-                  }
-                />
-              );
-            })}
+          {/* Mode toggle */}
+          <div className="mb-6 inline-flex rounded-lg border border-border bg-muted/30 p-1">
+            <button
+              type="button"
+              onClick={() => setVmMode("splunk")}
+              className={cn(
+                "px-4 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-2",
+                vmMode === "splunk"
+                  ? "bg-primary text-primary-foreground shadow"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Boxes className="h-4 w-4" />
+              Splunk Deployment
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setVmMode("general");
+                if (generalGroups.length === 0) {
+                  setGeneralGroups([
+                    {
+                      id: makeGroupId(),
+                      name: "",
+                      instanceType: defaultType,
+                      count: 1,
+                    },
+                  ]);
+                }
+              }}
+              className={cn(
+                "px-4 py-1.5 text-sm font-medium rounded-md transition-colors flex items-center gap-2",
+                vmMode === "general"
+                  ? "bg-primary text-primary-foreground shadow"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Monitor className="h-4 w-4" />
+              General Purpose
+            </button>
           </div>
+
+          {vmMode === "splunk" ? (
+            <div className="space-y-4">
+              {VM_ROLES.map((role) => {
+                const roleState = roles[role.id] ?? {
+                  count: 0,
+                  instanceType: defaultType,
+                };
+                return (
+                  <RoleRow
+                    key={role.id}
+                    role={role}
+                    count={roleState.count || 0}
+                    instanceType={roleState.instanceType}
+                    allowedTypes={currentUser?.allowedInstanceTypes || []}
+                    onUpdateCount={(count) => updateRole(role.id, "count", count)}
+                    onUpdateType={(type) =>
+                      updateRole(role.id, "instanceType", type)
+                    }
+                  />
+                );
+              })}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {generalGroups.map((group, idx) => {
+                const allowedTypes = currentUser?.allowedInstanceTypes || [];
+                const typeOptions = INSTANCE_TYPES.filter((t) =>
+                  allowedTypes.includes(t.value),
+                );
+                const updateGroup = (patch: Partial<GeneralVmGroup>) => {
+                  setGeneralGroups((prev) => {
+                    const next = prev.map((g) => (g.id === group.id ? { ...g, ...patch } : g));
+                    // Enforce quota when count changes
+                    if (patch.count !== undefined) {
+                      const total = next.reduce((s, g) => s + (g.count || 0), 0);
+                      if (total > remainingQuota) return prev;
+                    }
+                    return next;
+                  });
+                };
+                return (
+                  <div
+                    key={group.id}
+                    className="grid grid-cols-1 md:grid-cols-[1fr_220px_160px_auto] gap-3 items-center p-4 rounded-lg border border-border bg-muted/20"
+                  >
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">
+                        Name Tag <span className="text-destructive">*</span>
+                      </label>
+                      <Input
+                        placeholder="e.g. app-server-1"
+                        value={group.name}
+                        onChange={(e) => updateGroup({ name: e.target.value })}
+                        maxLength={64}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">
+                        Instance Type
+                      </label>
+                      <Select
+                        value={group.instanceType}
+                        onValueChange={(v) => updateGroup({ instanceType: v })}
+                      >
+                        <SelectTrigger className="bg-muted/50">
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {typeOptions.map((t) => (
+                            <SelectItem key={t.value} value={t.value}>
+                              <span className="font-mono">{t.label}</span>
+                              <span className="text-xs text-muted-foreground ml-2">
+                                {t.vcpu}vCPU / {t.memory}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">
+                        Count
+                      </label>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9"
+                          onClick={() => updateGroup({ count: Math.max(1, (group.count || 1) - 1) })}
+                          disabled={(group.count || 1) <= 1}
+                        >
+                          <Minus className="h-4 w-4" />
+                        </Button>
+                        <div className="w-10 text-center font-mono font-semibold">
+                          {group.count}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-9 w-9"
+                          onClick={() => updateGroup({ count: (group.count || 0) + 1 })}
+                          disabled={newVMs >= remainingQuota}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="flex justify-end md:pt-5">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() =>
+                          setGeneralGroups((prev) =>
+                            prev.length > 1 ? prev.filter((g) => g.id !== group.id) : prev,
+                          )
+                        }
+                        disabled={generalGroups.length <= 1}
+                        aria-label={`Delete VM group ${idx + 1}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              <div className="flex items-center justify-between pt-2">
+                <p className="text-xs text-muted-foreground">
+                  {generalGroups.length} / {MAX_GENERAL_GROUPS} VM groups
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setGeneralGroups((prev) =>
+                      prev.length >= MAX_GENERAL_GROUPS
+                        ? prev
+                        : [
+                            ...prev,
+                            {
+                              id: makeGroupId(),
+                              name: "",
+                              instanceType: defaultType,
+                              count: 1,
+                            },
+                          ],
+                    )
+                  }
+                  disabled={generalGroups.length >= MAX_GENERAL_GROUPS}
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  Add VM Group
+                </Button>
+              </div>
+            </div>
+          )}
         </section>
       )}
+
 
       {/* ============================
       All In One Configuration (Category 2)
