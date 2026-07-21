@@ -335,7 +335,9 @@ export function VMRequestForm({ onSubmit, isSubmitting = false }: Props) {
   const provisioningVMs = currentUser?.provisioningVMs || 0;
 
   const usedVMs = activeVMs + provisioningVMs;
-  const newVMs = Object.values(roles).reduce((sum, r) => sum + r.count, 0); //3//5
+  const splunkNewVMs = Object.values(roles).reduce((sum, r) => sum + r.count, 0);
+  const generalNewVMs = generalGroups.reduce((sum, g) => sum + (g.count || 0), 0);
+  const newVMs = category === 1 && vmMode === "general" ? generalNewVMs : splunkNewVMs;
   const remainingQuota = MAX_VM_LIMIT - usedVMs; //13-5=8
   const CATEGORY_3_TOTAL_VMS = CATEGORY_3_INFRA.reduce(
     (sum, r) => sum + r.count,
