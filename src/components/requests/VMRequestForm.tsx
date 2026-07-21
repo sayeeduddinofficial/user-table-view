@@ -129,6 +129,15 @@ export function VMRequestForm({ onSubmit, isSubmitting = false }: Props) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [runtimeDuration, setRuntimeDuration] = useState<number>(8);
 
+  // ── Category 1 deployment mode toggle (Splunk vs General Purpose) ────────
+  type VmMode = "splunk" | "general";
+  type GeneralVmGroup = { id: string; name: string; instanceType: string; count: number };
+  const [vmMode, setVmMode] = useState<VmMode>("splunk");
+  const MAX_GENERAL_GROUPS = 10;
+  const makeGroupId = () => `grp-${Math.random().toString(36).slice(2, 9)}`;
+  const [generalGroups, setGeneralGroups] = useState<GeneralVmGroup[]>([]);
+
+
   const { data: awsConfig } = useAwsConfig();
   const [roleConfigs, setRoleConfigs] = useState<VMRoleConfig[]>([]);
   const [splunkVersion, setSplunkVersion] = useState("10.2.3");
