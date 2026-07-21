@@ -529,18 +529,43 @@ const onOpenDialog = () => {
     }));
   }
   else {
-    // Category 1 → Manual role selection
-    rolesData = Object.entries(roles)
-      .filter(([_, config]) => config.count > 0)
-      .map(([roleId, config]) => {
-        const role = VM_ROLES.find((r) => r.id === roleId)!;
-        return {
-          roleId,
-          roleName: role.name,
-          count: config.count,
-          instanceType: config.instanceType,
-        };
-      });
+    // Category 1 → Splunk Deployment OR General Purpose (Custom)
+    if (vmMode === "general") {
+      const trimmedGroups = generalGroups.filter((g) => (g.count || 0) > 0);
+      if (trimmedGroups.length === 0) {
+        alert({ title: "Add at least one VM group", severity: "error" });
+        return;
+      }
+      const invalid = trimmedGroups.find((g) => !g.name.trim() || !g.instanceType);
+      if (invalid) {
+        alert({ title: "Each VM group needs a name and instance type", severity: "error" });
+        return;
+      }
+      const names = trimmedGroups.map((g) => g.name.trim().toLowerCase());
+      if (new Set(names).size !== names.length) {
+        alert({ title: "VM group names must be unique", severity: "error" });
+        return;
+      }
+      rolesData = trimmedGroups.map((g) => ({
+        roleId: g.id,
+        roleName: g.name.trim(),
+        count: g.count,
+        instanceType: g.instanceType,
+      }));
+    } else {
+      // Splunk Deployment (manual role selection)
+      rolesData = Object.entries(roles)
+        .filter(([_, config]) => config.count > 0)
+        .map(([roleId, config]) => {
+          const role = VM_ROLES.find((r) => r.id === roleId)!;
+          return {
+            roleId,
+            roleName: role.name,
+            count: config.count,
+            instanceType: config.instanceType,
+          };
+        });
+    }
   }
 
   if (category === 3 && CATEGORY_3_TOTAL_VMS > remainingQuota) {
