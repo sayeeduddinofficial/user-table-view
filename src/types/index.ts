@@ -588,3 +588,33 @@ export const KUBERNETES_VERSIONS = [
   { value: "1.34", label: "1.34" },
   { value: "1.33", label: "1.33" },
 ];
+
+export type AmiOption = {
+  value: string;
+  label: string;
+  amiId: string;
+  arch: string;
+  virtualization: string;
+  rootDevice: string;
+  freeTier?: boolean;
+};
+
+export const OHIO_AMI_OPTIONS: AmiOption[] = [
+  { value: "al2023-kernel-6-18", label: "Amazon Linux 2023 kernel-6.18 AMI", amiId: "ami-078fe7ff43e10f8c", arch: "64-bit (x86), uefi-preferred", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "macos-tahoe", label: "macOS Tahoe", amiId: "ami-0a6d61745de5f5ac", arch: "64-bit (Mac-Arm)", virtualization: "hvm", rootDevice: "ebs" },
+  { value: "ubuntu-26-04", label: "Ubuntu Server 26.04 LTS(HVM), SSD Volume Type", amiId: "ami-0e5497ef21b5ac", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "windows-2025-base", label: "Microsoft Windows Server 2025 Base", amiId: "ami-0daff962b1c050d36", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "rhel-10-nv", label: "Red Hat Enterprise Linux 10(HVM), SSD Volume Type", amiId: "ami-008f67e1a087a449", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs", freeTier: true  },
+  { value: "suse-16", label: "SUSE Linux Enterprise Server 16(HVM), SSD Volume Type", amiId: "ami-00fd5e6c61615bcd0", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "debian-13", label: "Debian 13(HVM), SSD Volume Type", amiId: "ami-0e68dc81dc3670a1", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+];
+
+export const NVIRGINIA_AMI_OPTIONS: AmiOption[] = [
+  { value: "al2023-kernel-6-18-nv", label: "Amazon Linux 2023 kernel-6.18 AMI", amiId: "ami-0b826bb6d2afe4", arch: "64-bit (x86), uefi-preferred", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "macos-tahoe", label: "macOS Tahoe", amiId: "ami-01c313e617f4f53dd", arch: "64-bit (Mac-Arm)", virtualization: "hvm", rootDevice: "ebs" },
+  { value: "ubuntu-26-04", label: "Ubuntu Server 26.04 LTS(HVM), SSD Volume Type", amiId: "ami-0b6d9d3d33ba7d99", arch: "64-bit (Arm)", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "windows-2025-base", label: "Microsoft Windows Server 2025 Base", amiId: "ami-013acec81a2c8ff79", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "rhel-10-nv", label: "Red Hat Enterprise Linux 10(HVM), SSD Volume Type", amiId: "ami-00adafae70b8029d8", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "suse-16", label: "SUSE Linux Enterprise Server 16(HVM), SSD Volume Type", amiId: "ami-0b12a8613a04fc6", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+  { value: "debian-13", label: "Debian 13(HVM), SSD Volume Type", amiId: "ami-0b75f821522bcff85", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs", freeTier: true },
+];

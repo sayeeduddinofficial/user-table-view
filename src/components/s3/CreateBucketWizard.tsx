@@ -529,7 +529,7 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
           <Button
             size="sm"
             disabled={
-              (isDirectory && !nameValid) ||
+              !nameValid ||
               form.justification.trim().length < 20
             }
             onClick={() => {

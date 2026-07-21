@@ -164,7 +164,7 @@ const Index = () => {
             value={processingRequestsCount}
             subtitle="Terraform in progress"
             icon={Activity}
-            variant={processingRequestsCount > 0 ? "warning" : "default"}
+            variant="warning"
           />
           <StatCard
             title="Active Users"

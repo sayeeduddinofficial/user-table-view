@@ -1,4 +1,5 @@
 @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&display=swap");
 
 @tailwind base;
 @tailwind components;
@@ -9,7 +10,7 @@
     --background: 220 25% 7%;
     --foreground: 210 40% 98%;
 
-    --card: 220 25% 9%;
+    --card: 233 13% 14%;       /* #1E1F27 */
     --card-foreground: 210 40% 98%;
 
     --popover: 220 25% 11%;
@@ -88,15 +89,35 @@
     --terminal-yellow: 25 90% 55%;
     --terminal-red: 0 72% 51%;
     --terminal-blue: 215 75% 55%;
+
+    /* StatCard Bg*/
+
+    --body-bg-rgb: 245, 246, 250;
+    --primary-rgb: 135, 124, 255;
+    --secondary-rgb: 255, 98, 63;
+    --warning-rgb: 255, 187, 51;
+    --info-rgb: 51, 182, 229;
+    --success-rgb: 0, 200, 80;
+    --danger-rgb: 255, 68, 68;
+    --light-rgb: 247, 249, 252;
+    --dark-rgb: 10, 10, 10;
+    --orange-rgb: 254, 124, 88;
+    --pink-rgb: 254, 84, 155;
+    --teal-rgb: 0, 216, 216;
+    --purple-rgb: 174, 102, 251;
+    --green-rgb: 1, 239, 140;
   }
 
-  .dark {
-    --background: 220 25% 7%;
-    --foreground: 210 40% 98%;
-  }
-  .light {
-     --background: 220 20% 97%;
-     --foreground: 220 25% 10%;
+.dark {
+  --background: 225 11% 10%;
+  --foreground: 210 40% 98%;
+  --surface: 233 12% 14%; /* #202129 */
+}
+
+.light {
+  --background: 220 20% 97%; /* #F7F8FA */
+  --foreground: 220 25% 10%;
+  --surface: 0 0% 100%;         /* Header & Sidebar */
  
      --card: 0 0% 100%;
      --card-foreground: 220 25% 10%;
@@ -153,6 +174,7 @@
      --terminal-red: 0 72% 45%;
      --terminal-blue: 215 75% 45%;
   }
+  
 }
 
 @layer base {
@@ -518,4 +540,71 @@ input:-moz-autofill {
   .hero-title {
     font-size: 2rem !important;
   }
+}
+
+/* Css Grid */
+/* Start:: Sales Dashboard */
+.card-bg1, .card-bg2, .card-bg3, .card-bg4 {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+}
+.card-bg1:before, .card-bg2:before, .card-bg3:before, .card-bg4:before {
+  content: "";
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  inset-inline-start: 0;
+  inset-inline-end: 0;
+  top: 0;
+  bottom: 0;
+  z-index: -1;
+  opacity: 1;
+  border-radius: 0.3rem;
+}
+.card-bg1:after, .card-bg2:after, .card-bg3:after, .card-bg4:after {
+  content: "";
+  position: absolute;
+  width: 100px;
+  height: 100px;
+  inset-inline-end: -15%;
+  bottom: -15%;
+  z-index: 1;
+  border-radius: 50%;
+}
+.card-bg1:before {
+  background: linear-gradient(to bottom right, rgba(var(--primary-rgb), 0.01), rgba(var(--primary-rgb), 0.05));
+}
+.card-bg1:after {
+  background: linear-gradient(45deg, rgba(var(--primary-rgb), 0.1), transparent);
+}
+.card-bg2:before {
+  background: linear-gradient(to bottom right, rgba(var(--success-rgb), 0.01), rgba(var(--success-rgb), 0.05));
+}
+.card-bg2:after {
+  background: linear-gradient(45deg, rgba(var(--success-rgb), 0.1), transparent);
+}
+.card-bg3:before {
+  background: linear-gradient(to bottom right, rgba(var(--warning-rgb), 0.01), rgba(var(--warning-rgb), 0.05));
+}
+.card-bg3:after {
+  background: linear-gradient(45deg, rgba(var(--warning-rgb), 0.1), transparent);
+}
+.card-bg4:before {
+  background: linear-gradient(to bottom right, rgba(var(--secondary-rgb), 0.01), rgba(var(--secondary-rgb), 0.05));
+}
+.card-bg4:after {
+  background: linear-gradient(45deg, rgba(var(--secondary-rgb), 0.1), transparent);
+}
+[dir=rtl] .card-bg1:after {
+  background: linear-gradient(45deg, transparent, rgba(var(--primary-rgb), 0.1));
+}
+[dir=rtl] .card-bg2:after {
+  background: linear-gradient(45deg, transparent, rgba(var(--success-rgb), 0.1));
+}
+[dir=rtl] .card-bg3:after {
+  background: linear-gradient(45deg, transparent, rgba(var(--warning-rgb), 0.1));
+}
+[dir=rtl] .card-bg4:after {
+  background: linear-gradient(45deg, transparent, rgba(var(--secondary-rgb), 0.1));
 }

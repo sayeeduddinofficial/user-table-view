@@ -35,7 +35,7 @@ const formatDate = (value?: string) => {
   if (!value) return undefined;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return undefined;
-  return `${date.toLocaleString("en-US", { month: "long", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" })} (UTC)`;
+  return date.toLocaleString("sv-SE").replace("T", " ");
 };
 
 const fileTypeFromName = (name: string) => {
@@ -431,7 +431,7 @@ export function BucketDetail({ bucket, onBack }: { bucket: S3Bucket; onBack: () 
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
-                      placeholder="Find objects by prefix"
+                      placeholder="Find objects by name"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
                       className="pl-9 bg-background/50"

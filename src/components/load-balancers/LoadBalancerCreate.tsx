@@ -597,7 +597,7 @@ export function LoadBalancerCreate({ kind }: Props) {
       });
 
       if (requestId) {
-        setActiveRequest(requestId,'lb-service');
+        setActiveRequest(requestId, 'lb-service');
         navigate(`/console?request=${requestId}`);
       } else {
         // fallback if backend didn't return an id
@@ -937,10 +937,10 @@ export function LoadBalancerCreate({ kind }: Props) {
                             <div className="text-sm">IPv4 Address</div>
                             <div className="text-xs text-muted-foreground mb-2">The front-end IPv4 address of the load balancer in the selected Availability Zone.</div>
                             <div className="space-y-2">
-                              <label className="flex items-start gap-2 cursor-pointer text-sm">
+                              {/* <label className="flex items-start gap-2 cursor-pointer text-sm">
                                 <input type="checkbox" checked={detail.ipv4 === "Assigned by AWS"} onChange={(e) => updateAzSubnet(k, { ipv4: e.target.checked ? "Assigned by AWS" : "" })} className="mt-1 accent-primary" />
                                 <div><div className="text-sm">Assigned by AWS</div><div className="text-xs text-muted-foreground">A public IPv4 address auto-assigned by AWS.</div></div>
-                              </label>
+                              </label> */}
                               {/* <label className="flex items-start gap-2 cursor-pointer text-sm">
                                 <input type="checkbox" checked={detail.ipv4 === "Use an Elastic IP"} onChange={() => updateAzSubnet(k, { ipv4: "Use an Elastic IP", eip: detail.eip ?? "" })} className="mt-1 accent-primary" />
                                 <div><div className="text-sm">Use an Elastic IP address</div><div className="text-xs text-muted-foreground">Choose an existing Elastic IP allocation in this zone.</div></div>
@@ -1113,38 +1113,46 @@ export function LoadBalancerCreate({ kind }: Props) {
                             {listener.targetGroups.map((tg) => {
                               const totalWeight = listener.targetGroups.reduce((s: number, t: TargetGroupRow) => s + (Number(t.weight) || 0), 0);
                               const pct = totalWeight > 0 ? Math.round(((Number(tg.weight) || 0) / totalWeight) * 100) : 0;
+                              const selectedElsewhere = new Set(
+                                listener.targetGroups
+                                  .filter((other) => other.id !== tg.id && other.group)
+                                  .map((other) => other.group)
+                              );
                               return (
                                 <div key={tg.id} className="grid grid-cols-[1fr_auto_110px_70px_auto] gap-2 items-end">
                                   <div>
                                     <Select
-                                        value={tg.group}
-                                        onValueChange={(value) =>
-                                          updateTargetGroup(listener.id, tg.id, { group: value })
-                                        }
-                                      >
-                                        <SelectTrigger className="w-full">
-                                          <SelectValue placeholder="Select a target group" />
-                                        </SelectTrigger>
+                                      value={tg.group}
+                                      onValueChange={(value) =>
+                                        updateTargetGroup(listener.id, tg.id, { group: value })
+                                      }
+                                    >
+                                      <SelectTrigger className="w-full">
+                                        <SelectValue placeholder="Select a target group" />
+                                      </SelectTrigger>
 
-                                        <SelectContent>
-                                          {filteredTgOptions.map((opt) => {
-                                            const isAssociated = (opt.loadBalancerArns ?? []).length > 0;
-
-                                            return (
-                                              <SelectItem
-                                                key={opt.arn}
-                                                value={opt.arn}
-                                                disabled={isAssociated}
-                                              >
-                                                {opt.name} ({opt.protocol}:{opt.port})
-                                                {isAssociated ? " — already in use" : ""}
-                                              </SelectItem>
-                                            );
-                                          })}
-                                        </SelectContent>
-                                      </Select>
+                                      <SelectContent>
+                                        {filteredTgOptions.map((opt) => {
+                                          const isAssociated = (opt.loadBalancerArns ?? []).length > 0;
+                                          const isUsedElsewhere = selectedElsewhere.has(opt.arn);
+                                          const isDisabled = isAssociated || isUsedElsewhere;
+                                          return (
+                                            <SelectItem
+                                              key={opt.arn}
+                                              value={opt.arn}
+                                              disabled={isDisabled}
+                                            >
+                                              {opt.name} ({opt.protocol}:{opt.port})
+                                              {isAssociated ? " — already in use" : isUsedElsewhere
+                                                ? " — already selected"
+                                                : ""}
+                                            </SelectItem>
+                                          );
+                                        })}
+                                      </SelectContent>
+                                    </Select>
                                   </div>
-                                
+
                                   <div>
                                     <div className="text-[11px] text-muted-foreground mb-1">Weight</div>
                                     <input
@@ -1368,12 +1376,12 @@ export function LoadBalancerCreate({ kind }: Props) {
 
         {/* Tags */}
         {/* <Section id="load-balancer-tags"> */}
-          {/* <Collapsible title="Load balancer tags - optional" defaultOpen>
+        {/* <Collapsible title="Load balancer tags - optional" defaultOpen>
             <TagEditor tags={loadBalancerTags} onChange={updateLoadBalancerTag} onRemove={(tagId) => setLoadBalancerTags((prev) => prev.filter((tag) => tag.id !== tagId))} />
             {/* <button type="button" onClick={() => setLoadBalancerTags((prev) => [...prev, createTagRow()])} className="inline-flex items-center gap-1 text-xs px-4 py-1.5 border border-primary/60 text-primary rounded-full hover:bg-primary/10 font-medium">
               Add new tag
             </button> */}
-          {/* </Collapsible> */} 
+        {/* </Collapsible> */}
         {/* </Section> */}
 
         {/* Summary */}
@@ -1390,20 +1398,19 @@ export function LoadBalancerCreate({ kind }: Props) {
             </p>
             <div className="grid grid-cols-4 gap-4 text-xs">
               <SumCol title="Basic configuration" editable onEdit={() => scrollToSection("basic-configuration", true)}>
-                <div>Name: <span className="text-foreground">{name || "—"}</span></div>
+                <div>Name: <a className="text-primary">{name || "—"}</a></div>
                 <div>Scheme: {scheme}</div>
                 <div>IP address type: {ipType}</div>
               </SumCol>
               <SumCol title="Network mapping" editable onEdit={() => scrollToSection("network-mapping")}>
-                <div>VPC: <a className="text-primary hover:underline">{vpc.split(" ")[0]}</a></div>
+                <div>VPC: <span className="text-primary">{vpc.split(" ")[0]}</span></div>
                 <div>Public IPv4 IPAM pool: -</div>
                 <div>Availability Zones and subnets: {azs.length ? azs.join(", ") : "-"}</div>
               </SumCol>
               <SumCol title="Security groups" editable onEdit={() => scrollToSection("security-groups")}>
                 {sgs.map((g) => (
                   <div key={g}>
-                    <div>{g.split(" ")[0]}</div>
-                    <a className="text-primary hover:underline">{g.match(/sg-[a-z0-9]+/)?.[0] ?? "sg-xxxxx"}</a>
+                    <a className="text-primary">{g.match(/sg-[a-z0-9]+/)?.[0] ?? "sg-xxxxx"}</a>
                   </div>
                 ))}
               </SumCol>
@@ -1415,7 +1422,7 @@ export function LoadBalancerCreate({ kind }: Props) {
 
 
 
-            <div className="mt-4 pt-4 border-t border-border grid grid-cols-2 gap-4 text-xs">
+            {/* <div className="mt-4 pt-4 border-t border-border grid grid-cols-2 gap-4 text-xs">
               <SumCol title="Service integrations" editable onEdit={() => scrollToSection("service-integrations")}>
                 {isAlb && <div>Amazon CloudFront + AWS Web Application Firewall (WAF): -</div>}
                 {isAlb && <div>AWS <a className="text-primary hover:underline">WAF</a>: -</div>}
@@ -1424,9 +1431,9 @@ export function LoadBalancerCreate({ kind }: Props) {
               <SumCol title="Tags" editable onEdit={() => scrollToSection("load-balancer-tags")}>
                 <div>{loadBalancerTags.length ? `${loadBalancerTags.length} tag${loadBalancerTags.length > 1 ? "s" : ""}` : "-"}</div>
               </SumCol>
-            </div>
+            </div> */}
           </div>
-          
+
         </Section>
         <section className="glass-panel rounded-xl p-6">
           <div className="flex items-center gap-2 mb-4">
