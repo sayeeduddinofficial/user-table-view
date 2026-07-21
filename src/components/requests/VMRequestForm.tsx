@@ -1681,9 +1681,16 @@ const onOpenDialog = () => {
               </div>
 
               <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                <p className="text-xs text-muted-foreground mb-2">
-                  VM Roles ({effectiveVMs} total)
-                </p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs text-muted-foreground">
+                    {category === 1 && vmMode === "general" ? "Custom VM Groups" : "VM Roles"} ({effectiveVMs} total)
+                  </p>
+                  {category === 1 && (
+                    <Badge variant="secondary" className="text-xs">
+                      {vmMode === "general" ? "General Purpose" : "Splunk Deployment"}
+                    </Badge>
+                  )}
+                </div>
 
                 <div className="space-y-1">
                   {roleConfigs.map((role) => (
