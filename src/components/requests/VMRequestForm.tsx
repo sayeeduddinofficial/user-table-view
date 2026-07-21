@@ -449,6 +449,13 @@ const onOpenDialog = () => {
     });
     return;
   }
+  if (category === 1 && !ami) {
+    alert({
+      title: "Please select an AMI",
+      severity: "error",
+    });
+    return;
+  }
   const trimmedJustification = justification.trim();
 
   if (!trimmedJustification) {
@@ -547,6 +554,7 @@ const onOpenDialog = () => {
       environmentTag,
       projectIdentifier,
       ...(category !== 1 && { splunkVersion }),
+      ...(category === 1 && { ami }),
       ...(category === 1 && { ami }),
       deploymentMode,
       region,
@@ -958,6 +966,58 @@ const onOpenDialog = () => {
               </>
             )}
           </div>
+
+          {category === 1 && (
+            <div className="space-y-3">
+              <Label className="flex items-center gap-2">
+                <Layers className="h-4 w-4" />
+                AMI (Amazon Machine Image)
+              </Label>
+              <Select value={ami} onValueChange={setAmi}>
+                <SelectTrigger className="bg-muted/50 h-auto py-2">
+                  <SelectValue placeholder="Select AMI...">
+                    {(() => {
+                      const sel = getAmiOptions(region).find((o) => o.value === ami);
+                      if (!sel) return "Select AMI...";
+                      return (
+                        <div className="flex flex-col items-start text-left">
+                          <span className="font-medium">{sel.label}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {sel.amiId} ({sel.arch})
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent className="max-h-96">
+                  {getAmiOptions(region).map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value} className="py-2">
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-medium">{opt.label}</span>
+                          {opt.freeTier && (
+                            <span className="text-[10px] text-emerald-500 font-medium">
+                              Free tier eligible
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {opt.amiId} ({opt.arch})
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          Virtualization: {opt.virtualization} · Root device: {opt.rootDevice}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Options are based on the selected region
+              </p>
+            </div>
+          )}
         </div>
       </section>
 
@@ -1403,6 +1463,7 @@ const onOpenDialog = () => {
               </div>
 
               <div className="grid gap-3 grid-cols-2">
+              <div className="grid gap-3 grid-cols-2">
                 <div className="p-3 rounded-lg bg-muted/50 border border-border">
                   <p className="text-xs text-muted-foreground mb-1">Project</p>
                   <p className="font-medium text-foreground">{projectIdentifier}</p>
@@ -1416,6 +1477,21 @@ const onOpenDialog = () => {
                     </p>
                   </div>
                 )}
+
+                {category === 1 && (() => {
+                  const sel = getAmiOptions(region).find(o => o.value === ami);
+                  return (
+                    <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                      <p className="text-xs text-muted-foreground mb-1">AMI</p>
+                      <p className="font-medium text-foreground">{sel?.label ?? ami}</p>
+                      {sel && (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {sel.amiId} · {sel.arch} · Virt: {sel.virtualization} · Root: {sel.rootDevice}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {category === 1 && (() => {
                   const sel = getAmiOptions(region).find(o => o.value === ami);
