@@ -91,6 +91,7 @@ export default function VMRequests() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [serviceFilter, setServiceFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [pagination, setPagination] = useState({
     total: 0, page: 1, limit: 10, totalPages: 1, hasNext: false, hasPrev: false,
   });
@@ -363,6 +364,8 @@ export default function VMRequests() {
   };
 
   const deleteRequest = async (requestId: string, service?: string) => {
+    if (deletingIds.has(requestId)) return;
+
     const confirmed = await confirm({
       title: `Are you sure you want to terminate all resources for ${requestId}?`,
       icon: "destroy",
@@ -373,6 +376,12 @@ export default function VMRequests() {
     alert({
       title: "Terminating in progress",
       severity: "loading",
+    });
+
+    setDeletingIds((prev) => {
+      const next = new Set(prev);
+      next.add(requestId);
+      return next;
     });
 
     try {
@@ -452,8 +461,15 @@ export default function VMRequests() {
         title: `Failed to terminate request ${requestId}`,
         severity: "error",
       });
+    } finally {
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(requestId);
+        return next;
+      });
     }
   };
+
 
   const isAwsDisconnected = awsConfig?.status !== "CONNECTED";
 
@@ -609,26 +625,31 @@ export default function VMRequests() {
             <Button
               variant="ghost"
               size="icon"
-              disabled={!canDestroy || isAwsDisconnected}
-              className={`h-8 w-8 transition-colors ${canDestroy && !isAwsDisconnected
+              disabled={!canDestroy || isAwsDisconnected || deletingIds.has(req.request_id)}
+              className={`h-8 w-8 transition-colors ${canDestroy && !isAwsDisconnected && !deletingIds.has(req.request_id)
                   ? "text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                   : "text-muted-foreground/30 cursor-not-allowed"
                 }`}
               onClick={() =>
-                canDestroy && deleteRequest(req.request_id, req.service)
+                canDestroy && !deletingIds.has(req.request_id) && deleteRequest(req.request_id, req.service)
               }
               tooltip={
                 isAwsDisconnected
                   ? "AWS Disconnected"
-                  : isTerminateFailed
-                    ? "Use 'Retry Terminate' to retry the failed termination"
-                    : canDestroy
-                      ? "Terminate Resources"
-                      : "Terminate is only available for completed or failed requests"
+                  : deletingIds.has(req.request_id)
+                    ? "Terminating..."
+                    : isTerminateFailed
+                      ? "Use 'Retry Terminate' to retry the failed termination"
+                      : canDestroy
+                        ? "Terminate Resources"
+                        : "Terminate is only available for completed or failed requests"
               }
             >
-              <Trash2 className="h-4 w-4" />
+              {deletingIds.has(req.request_id)
+                ? <RefreshCw className="h-4 w-4 animate-spin" />
+                : <Trash2 className="h-4 w-4" />}
             </Button>
+
           </div>
         );
       },
