@@ -49,9 +49,6 @@ import {
   Trash2,
   Monitor,
   Boxes,
-  Trash2,
-  Monitor,
-  Boxes,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSSHKeys } from "@/hooks/useSSHKeys";
