@@ -91,6 +91,7 @@ export default function VMRequests() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [serviceFilter, setServiceFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [pagination, setPagination] = useState({
     total: 0, page: 1, limit: 10, totalPages: 1, hasNext: false, hasPrev: false,
   });
