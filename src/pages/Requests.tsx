@@ -364,6 +364,8 @@ export default function VMRequests() {
   };
 
   const deleteRequest = async (requestId: string, service?: string) => {
+    if (deletingIds.has(requestId)) return;
+
     const confirmed = await confirm({
       title: `Are you sure you want to terminate all resources for ${requestId}?`,
       icon: "destroy",
@@ -374,6 +376,12 @@ export default function VMRequests() {
     alert({
       title: "Terminating in progress",
       severity: "loading",
+    });
+
+    setDeletingIds((prev) => {
+      const next = new Set(prev);
+      next.add(requestId);
+      return next;
     });
 
     try {
@@ -453,8 +461,15 @@ export default function VMRequests() {
         title: `Failed to terminate request ${requestId}`,
         severity: "error",
       });
+    } finally {
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(requestId);
+        return next;
+      });
     }
   };
+
 
   const isAwsDisconnected = awsConfig?.status !== "CONNECTED";
 
