@@ -295,6 +295,7 @@ export interface AuditLogsQueryParams {
   search?: string;
   userId?: string[];
   category?: string[];
+  serviceName?: string[];
   page: number;
   dateRangeOption?: string;
   startDate?: string;

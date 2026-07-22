@@ -34,6 +34,8 @@ export const fetchAuditLogs = (params: AuditLogsQueryParams): Promise<AuditLogsR
     query.userId = params.userId.join(',');
   if (params.category?.length && !params.category.includes('all'))
     query.category = params.category.join(',');
+  if (params.serviceName?.length && !params.serviceName.includes('all'))
+    query.serviceName = params.serviceName.join(',');
   if (params.dateRangeOption && params.dateRangeOption !== 'all' && params.dateRangeOption !== 'custom')
     query.dateRangeOption = params.dateRangeOption;
   if (params.startDate) query.startDate = params.startDate;
@@ -53,6 +55,8 @@ export const fetchAuditCategoryCounts = (
     query.userId = params.userId.join(',');
   if (params.category?.length && !params.category.includes('all'))
     query.category = params.category.join(',');
+  if (params.serviceName?.length && !params.serviceName.includes('all'))
+    query.serviceName = params.serviceName.join(',');
   if (params.dateRangeOption && params.dateRangeOption !== 'all' && params.dateRangeOption !== 'custom')
     query.dateRangeOption = params.dateRangeOption;
   if (params.startDate) query.startDate = params.startDate;
@@ -69,6 +73,8 @@ export const fetchAuditAnalytics = (
     query.userId = params.userId.join(',');
   if (params.category?.length && !params.category.includes('all'))
     query.category = params.category.join(',');
+  if (params.serviceName?.length && !params.serviceName.includes('all'))
+    query.serviceName = params.serviceName.join(',');
   if (params.dateRangeOption && params.dateRangeOption !== 'all' && params.dateRangeOption !== 'custom')
     query.dateRangeOption = params.dateRangeOption;
   if (params.startDate) query.startDate = params.startDate;
@@ -85,6 +91,8 @@ export const downloadAuditLogsCSV = (
     query.set('userId', params.userId.join(','));
   if (params.category?.length && params.category[0] !== 'all')
     query.set('category', params.category.join(','));
+  if (params.serviceName?.length && params.serviceName[0] !== 'all')
+    query.set('serviceName', params.serviceName.join(','));
   if (params.dateRangeOption && params.dateRangeOption !== 'all' && params.dateRangeOption !== 'custom')
     query.set('dateRangeOption', params.dateRangeOption);
   if (params.startDate) query.set('startDate', params.startDate);

@@ -26,6 +26,7 @@ import {
   HardDrive,
   Route,
   Boxes,
+  UserCog,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -120,6 +121,7 @@ const navGroups: { label?: string; items: NavItem[] }[] = [
     label: "Administration",
     items: [
       { to: "/users", icon: Users, label: "User Management", adminOnly: true },
+      {to: "/rolesmanagement", icon: UserCog, label: "Role Management", adminOnly: true },
       { to: "/auditlogs", icon: ScrollText, label: "Audit Logs", adminOnly: true },
       { to: "/leadership-billing", icon: FinOpsIcon, label: "FinOps", adminOnly: true },
       { to: "/admin/runtime-governance", icon: Clock, label: "Runtime Governance", adminOnly: true },

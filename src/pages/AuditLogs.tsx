@@ -35,6 +35,11 @@ import {
   BarChart3,
   Table as TableIcon,
   Database,
+  Route,
+  HardDrive,
+  Network,
+  Boxes,
+  Layers
 } from "lucide-react";
 import { CATEGORY_DISPLAY_LABELS, ACTION_DISPLAY_LABELS } from "@/types";
 import {
@@ -96,6 +101,156 @@ const CATEGORY_BADGE_CONFIG: Record<
   }
 };
 
+const SERVICE_BADGE_CONFIG: Record<
+  string,
+  {
+    icon: React.ElementType;
+    color: string;
+    bgSelected: string;
+    shortName: string;
+    displayName: string;
+    category: "aws" | "platform";
+    relatedServices?: string[];
+  }
+> = {
+  "auth-service": {
+    icon: Shield,
+    color: "text-blue-400",
+    bgSelected: "bg-blue-500/15 border border-blue-500/25",
+    shortName: "Auth",
+    displayName: "Platform",
+    category: "platform",
+  },
+  "user-management-service": {
+    icon: Users,
+    color: "text-pink-400",
+    bgSelected: "bg-pink-500/15 border border-pink-500/25",
+    shortName: "User Mgmt",
+    displayName: "Platform",
+    category: "platform",
+  },
+  "notification-service": {
+    icon: FileText,
+    color: "text-indigo-400",
+    bgSelected: "bg-indigo-500/15 border border-indigo-500/25",
+    shortName: "Notify",
+    displayName: "Platform",
+    category: "platform",
+  },
+  "ssh-key-service": {
+    icon: Shield,
+    color: "text-cyan-400",
+    bgSelected: "bg-cyan-500/15 border border-cyan-500/25",
+    shortName: "SSH",
+    displayName: "Platform",
+    category: "platform",
+  },
+  "aws-settings-service": {
+    icon: Settings,
+    color: "text-purple-400",
+    bgSelected: "bg-purple-500/15 border border-purple-500/25",
+    shortName: "Settings",
+    displayName: "Platform",
+    category: "platform",
+  },
+  "feedback-service": {
+    icon: FileText,
+    color: "text-orange-400",
+    bgSelected: "bg-orange-500/15 border border-orange-500/25",
+    shortName: "Feedback",
+    displayName: "Platform",
+    category: "platform",
+  },
+  "vm-request-service": {
+    icon: Server,
+    color: "text-emerald-400",
+    bgSelected: "bg-emerald-500/15 border border-emerald-500/25",
+    shortName: "EC2",
+    displayName: "EC2",
+    category: "aws",
+    relatedServices: ["vm-runtime-service"],
+  },
+  "vm-runtime-service": {
+    icon: Server,
+    color: "text-emerald-400",
+    bgSelected: "bg-emerald-500/15 border border-emerald-500/25",
+    shortName: "EC2",
+    displayName: "EC2",
+    category: "aws",
+    relatedServices: ["vm-request-service"],
+  },
+  "load-balancer-service": {
+    icon: Server,
+    color: "text-yellow-400",
+    bgSelected: "bg-yellow-500/15 border border-yellow-500/25",
+    shortName: "ELB",
+    displayName: "ELB",
+    category: "aws",
+  },
+  "rds-service": {
+    icon: Database,
+    color: "text-emerald-400",
+    bgSelected: "bg-emerald-500/15 border border-emerald-500/25",
+    shortName: "RDS",
+    displayName: "RDS",
+    category: "aws",
+  },
+  "route53-service": {
+    icon: Route,
+    color: "text-cyan-400",
+    bgSelected: "bg-cyan-500/15 border border-cyan-500/25",
+    shortName: "Route 53",
+    displayName: "Route 53",
+    category: "aws",
+  },
+  "s3-bucket-service": {
+    icon: HardDrive,
+    color: "text-cyan-400",
+    bgSelected: "bg-cyan-500/15 border border-cyan-500/25",
+    shortName: "S3",
+    displayName: "S3",
+    category: "aws",
+  },
+  "vpc-service": {
+    icon: Network,
+    color: "text-cyan-400",
+    bgSelected: "bg-cyan-500/15 border border-cyan-500/25",
+    shortName: "VPC",
+    displayName: "VPC",
+    category: "aws",
+  },
+  "eks-cluster-service": {
+    icon: Boxes,
+    color: "text-emerald-400",
+    bgSelected: "bg-emerald-500/15 border border-emerald-500/25",
+    shortName: "EKS",
+    displayName: "EKS",
+    category: "aws",
+  },
+};
+
+const PLATFORM_BADGE_CONFIG = {
+  icon: Shield,
+  color: "text-cyan-400",
+  bgSelected: "bg-cyan-500/15 border border-cyan-500/25",
+  shortName: "Platform",
+};
+
+// Get unique AWS services (merge duplicates like EC2)
+const getUniqueAwsServices = () => {
+  const seen = new Set<string>();
+  const unique: Array<[string, typeof SERVICE_BADGE_CONFIG[string]]> = [];
+  
+  Object.entries(SERVICE_BADGE_CONFIG).forEach(([key, config]) => {
+    if (config.category === "aws" && !seen.has(config.shortName)) {
+      seen.add(config.shortName);
+      unique.push([key, config]);
+    }
+  });
+  
+  return unique;
+};
+
 // ─── Category config for stat cards ──────────────────────────────────────────
 const CATEGORY_CONFIG = [
   {
@@ -133,13 +288,13 @@ const CATEGORY_CONFIG = [
     color: "text-indigo-400",
     bg: "bg-indigo-500/10",
   },
-  {
-    key: "S3",
-    label: "S3",
-    icon: Database,
-    color: "text-purple-400",
-    bg: "bg-purple-500/10",
-  }
+  // {
+  //   key: "S3",
+  //   label: "S3",
+  //   icon: Database,
+  //   color: "text-purple-400",
+  //   bg: "bg-purple-500/10",
+  // }
 ];
 
 export default function AuditLogs() {
@@ -147,6 +302,7 @@ export default function AuditLogs() {
   const [search, setSearch] = useState("");
   const [userId, setUserId] = useState<string[]>([]);
   const [category, setCategory] = useState<string[]>([]);
+  const [serviceName, setServiceName] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const [viewMode, setViewMode] = useState<"table" | "graph">("table");
   const [dateRange, setDateRange] = useState<{
@@ -167,6 +323,7 @@ export default function AuditLogs() {
     search,
     userId,
     category,
+    serviceName,
     page,
     dateRangeOption: dateRangeOption !== "custom" ? dateRangeOption : undefined,
     startDate: dateRange.from ? format(dateRange.from, "yyyy-MM-dd") : undefined,
@@ -183,6 +340,7 @@ export default function AuditLogs() {
   const { data: analytics } = useAuditAnalytics({
     userId,
     category,
+    serviceName,
     dateRangeOption: dateRangeOption !== "custom" ? dateRangeOption : undefined,
     startDate: dateRange.from ? format(dateRange.from, "yyyy-MM-dd") : undefined,
     endDate: dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : undefined,
@@ -259,6 +417,30 @@ export default function AuditLogs() {
       key: "user_name",
       header: "User",
       render: (row) => <span className="text-foreground">{row.user_name ?? "—"}</span>,
+    },
+    {
+      key: "service_name",
+      header: "Service",
+      render: (row) => {
+        const serviceName = row.service_name ?? "—";
+        const config = SERVICE_BADGE_CONFIG[serviceName];
+        const isPlatform = config?.category === "platform";
+        const Icon = isPlatform ? PLATFORM_BADGE_CONFIG.icon : config?.icon;
+        const color = isPlatform ? PLATFORM_BADGE_CONFIG.color : config?.color;
+        const bgSelected = isPlatform ? PLATFORM_BADGE_CONFIG.bgSelected : config?.bgSelected;
+        const displayName = config?.displayName ?? serviceName;
+        return (
+          <span
+            className={`inline-flex items-center whitespace-nowrap gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+              bgSelected ??
+              "bg-muted text-muted-foreground border border-border"
+            }`}
+          >
+            {Icon && <Icon className={`h-3 w-3 ${color}`} />}
+            {displayName}
+          </span>
+        );
+      },
     },
     {
       key: "action",
@@ -447,7 +629,111 @@ export default function AuditLogs() {
         </div>
       </div>
 
-      {/* ── Filters ──────────────────────────────────────────────────────────── */}
+      {/* AWS Services & Platform Filter Card */}
+      <div className="pb-6 pl-6 pr-6">
+        <Card className="glass-panel rounded-xl">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 text-sm font-bold mb-3">
+              <Database className="h-4 w-4" />
+              AWS Services <span className="text-muted-foreground text-xs font-normal">activity across your infrastructure</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {/* AWS Services */}
+              {getUniqueAwsServices().map(([serviceKey, config]) => {
+                // For services with related services (like EC2), use IIFE pattern
+                if (config.relatedServices && config.relatedServices.length > 0) {
+                  return (() => {
+                    const allRelated = [serviceKey, ...config.relatedServices];
+                    const isAnySelected = allRelated.some(s => serviceName.includes(s));
+                    return (
+                      <button
+                        key={serviceKey}
+                        onClick={() => {
+                          const allSelected = allRelated.every(s => serviceName.includes(s));
+                          if (allSelected) {
+                            setServiceName(serviceName.filter(s => !allRelated.includes(s)));
+                          } else {
+                            const newServices = [...serviceName];
+                            allRelated.forEach(s => {
+                              if (!newServices.includes(s)) {
+                                newServices.push(s);
+                              }
+                            });
+                            setServiceName(newServices);
+                          }
+                          setPage(1);
+                        }}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                          isAnySelected
+                            ? `${config.bgSelected} ${config.color}`
+                            : `text-muted-foreground bg-transparent border border-border hover:border-muted-foreground/50`
+                        }`}
+                      >
+                        <config.icon className={`h-3 w-3 ${config.color}`} />
+                        {config.shortName}
+                      </button>
+                    );
+                  })();
+                }
+                
+                // For regular services without related services
+                const isSelected = serviceName.includes(serviceKey);
+                return (
+                  <button
+                    key={serviceKey}
+                    onClick={() => {
+                      if (isSelected) {
+                        setServiceName(serviceName.filter(s => s !== serviceKey));
+                      } else {
+                        setServiceName([...serviceName, serviceKey]);
+                      }
+                      setPage(1);
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                      isSelected
+                        ? `${config.bgSelected} ${config.color}`
+                        : `text-muted-foreground bg-transparent border border-border hover:border-muted-foreground/50`
+                    }`}
+                  >
+                    <config.icon className={`h-3 w-3 ${config.color}`} />
+                    {config.shortName}
+                  </button>
+                );
+              })}
+              
+              {/* Platform Chip */}
+              {(() => {
+                const platformServices = Object.keys(SERVICE_BADGE_CONFIG).filter(
+                  key => SERVICE_BADGE_CONFIG[key].category === "platform"
+                );
+                const isAnyPlatformSelected = platformServices.some(s => serviceName.includes(s));
+                return (
+                  <button
+                    onClick={() => {
+                      if (isAnyPlatformSelected) {
+                        setServiceName(serviceName.filter(s => !platformServices.includes(s)));
+                      } else {
+                        setServiceName([...serviceName, ...platformServices]);
+                      }
+                      setPage(1);
+                    }}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                      isAnyPlatformSelected
+                        ? `${PLATFORM_BADGE_CONFIG.bgSelected} ${PLATFORM_BADGE_CONFIG.color}`
+                        : `text-muted-foreground bg-transparent border border-border hover:border-muted-foreground/50`
+                    }`}
+                  >
+                    <PLATFORM_BADGE_CONFIG.icon className={`h-3 w-3 ${PLATFORM_BADGE_CONFIG.color}`} />
+                    {PLATFORM_BADGE_CONFIG.shortName}
+                  </button>
+                );
+              })()}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
       <div className="px-6">
         <Card className="glass-panel rounded-xl">
           <CardContent className="p-4">

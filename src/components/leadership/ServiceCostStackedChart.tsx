@@ -139,7 +139,7 @@ function getBarLayout(pointCount: number) {
         return {
             barCategoryGap: "14%",
             maxBarSize: 30,
-            tickInterval: 1,
+            tickInterval: 0,
         };
     }
 

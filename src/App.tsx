@@ -18,7 +18,7 @@ import S3 from "./pages/S3";
 import Login from "./pages/Login";
 import MicrosoftRedirect from "./pages/MicrosoftRedirect";
 import NotFound from "./pages/NotFound";
-import { Loader2 } from "lucide-react";
+import { Loader2, View } from "lucide-react";
 import { AuthProvider, useAuth } from "@/hooks/useLogin";
 import { useEffect } from "react";
 import { useAppStore } from "./store/appStore";
@@ -56,6 +56,8 @@ import CreateRds from "./pages/CreateRds";
 import RdsDetailPage from "./pages/RdsDetail";
 import HostedZoneDetails from "./components/route-53/HostedZoneDetails";
 import CreateRecord from "./components/route-53/CreateRecord";
+import RolesManagement from "./pages/RolesManagement";
+import ViewRoles from "./components/roles/ViewRoles";
 
 const API_AUTH_BASE = env.auth;
 const queryClient = new QueryClient();
@@ -292,6 +294,8 @@ function AppRoutes() {
         <Route path="/aws/eks" element={<Eks />} />
         <Route path="/aws/eks/:eksId" element={<EksDetails />} />
         <Route path="/aws/eks/create" element={<CreateEks />} />
+        <Route path="/rolesmanagement" element={<RolesManagement />} />
+        <Route path="/roles/viewroles" element={<ViewRoles />} />
       </Route>
       <Route path="*" element={<NotFound />} />
       <Route path="/Signup-access" element={<SignUp />} />
