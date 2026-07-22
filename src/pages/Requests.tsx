@@ -625,26 +625,31 @@ export default function VMRequests() {
             <Button
               variant="ghost"
               size="icon"
-              disabled={!canDestroy || isAwsDisconnected}
-              className={`h-8 w-8 transition-colors ${canDestroy && !isAwsDisconnected
+              disabled={!canDestroy || isAwsDisconnected || deletingIds.has(req.request_id)}
+              className={`h-8 w-8 transition-colors ${canDestroy && !isAwsDisconnected && !deletingIds.has(req.request_id)
                   ? "text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                   : "text-muted-foreground/30 cursor-not-allowed"
                 }`}
               onClick={() =>
-                canDestroy && deleteRequest(req.request_id, req.service)
+                canDestroy && !deletingIds.has(req.request_id) && deleteRequest(req.request_id, req.service)
               }
               tooltip={
                 isAwsDisconnected
                   ? "AWS Disconnected"
-                  : isTerminateFailed
-                    ? "Use 'Retry Terminate' to retry the failed termination"
-                    : canDestroy
-                      ? "Terminate Resources"
-                      : "Terminate is only available for completed or failed requests"
+                  : deletingIds.has(req.request_id)
+                    ? "Terminating..."
+                    : isTerminateFailed
+                      ? "Use 'Retry Terminate' to retry the failed termination"
+                      : canDestroy
+                        ? "Terminate Resources"
+                        : "Terminate is only available for completed or failed requests"
               }
             >
-              <Trash2 className="h-4 w-4" />
+              {deletingIds.has(req.request_id)
+                ? <RefreshCw className="h-4 w-4 animate-spin" />
+                : <Trash2 className="h-4 w-4" />}
             </Button>
+
           </div>
         );
       },
