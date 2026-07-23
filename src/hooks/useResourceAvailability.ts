@@ -41,7 +41,9 @@ export function useResourceAvailability() {
         fetchEksCountForUser(user.id).catch(() => 0),
       ]);
 
-      const vpcCount = Array.isArray(vpcs) ? vpcs.filter((v: any) => v.userId === user.id).length : 0;
+      const completedVpcCount = Array.isArray(vpcs) ? vpcs.filter((v: any) => v.userId === user.id).length : 0;
+      const hasPendingVpc = !!getPendingVpc(user.id);
+      const vpcCount = completedVpcCount + (hasPendingVpc ? 1 : 0);
       const s3Count = Array.isArray(buckets)
         ? buckets.filter((b) => Number(b.user_id) === Number(user.id)).length
         : 0;
