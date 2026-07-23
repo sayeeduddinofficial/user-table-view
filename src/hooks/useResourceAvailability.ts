@@ -4,6 +4,7 @@ import { fetchVpcListApi } from "@/services/vpcService";
 import { fetchBucketsApi } from "@/services/bucketService";
 import { useAuth } from "@/hooks/useLogin";
 import { env } from "@/lib/env";
+import { getPendingVpc } from "@/components/vpc/pendingVpc";
 
 type AvailabilityEntry = { count: number; reached: boolean; limit?: number };
 
