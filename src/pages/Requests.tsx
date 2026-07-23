@@ -474,8 +474,15 @@ export default function VMRequests() {
         title: `Failed to terminate request ${requestId}`,
         severity: "error",
       });
+    } finally {
+      setDeletingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(requestId);
+        return next;
+      });
     }
   };
+
 
   const isAwsDisconnected = awsConfig?.status !== "CONNECTED";
 
@@ -651,8 +658,11 @@ export default function VMRequests() {
                         : "Terminate is only available for completed or failed requests"
               }
             >
-              <Trash2 className="h-4 w-4" />
+              {deletingIds.has(req.request_id)
+                ? <RefreshCw className="h-4 w-4 animate-spin" />
+                : <Trash2 className="h-4 w-4" />}
             </Button>
+
           </div>
         );
       },
