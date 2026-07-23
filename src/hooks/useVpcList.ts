@@ -73,14 +73,19 @@ export function useVpcList() {
       setPendingCount(0);
       return;
     }
-    // If the pending requestId now shows up in the list, provisioning finished — clear it.
-    const showedUp = vpcs.some((v: any) => v.id === pending.requestId);
-    if (showedUp && currentUser?.id) {
-      clearPendingVpc(currentUser.id);
+
+    const showedUp = vpcs.some((v: any) => String(v.id) === String(pending.requestId));
+    const listIsEmpty = vpcs.length === 0;
+
+    if (showedUp || listIsEmpty) {
+      if (currentUser?.id) {
+        clearPendingVpc(currentUser.id);
+      }
       setPendingCount(0);
-    } else {
-      setPendingCount(1);
+      return;
     }
+
+    setPendingCount(1);
   }, [vpcs, currentUser?.id]);
 
   return {

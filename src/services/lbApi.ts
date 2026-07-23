@@ -46,7 +46,7 @@ export const lbApi = {
   availabilityZones: (region: string) =>
     apiClient.get<{ availabilityZones: AzItem[] }>(BASE, '/availability-zones', { region }),
   create: (payload: CreateLbPayload) =>
-  apiClient.post<CreateLbResponse>(BASE, '/load-balancers', payload),
+    apiClient.post<CreateLbResponse>(BASE, '/load-balancers', payload),
   delete: (id: string) =>
     apiClient.delete<{ message: string }>(BASE, `/load-balancers/${id}`),
   deleteSdk: (id: string) =>
@@ -71,7 +71,8 @@ export const lbApi = {
     apiClient.get<{ exists: boolean; loadBalancer: ProvisioningLbItem | null }>(
       BASE, '/load-balancers/check-provisioning', { user_id: String(userId) }
     ),
-
+  checkLbName: (name: string, region: string) =>
+    apiClient.get<{ exists: boolean }>(BASE, '/load-balancers/check-name', { name, region }),
 
 };
 

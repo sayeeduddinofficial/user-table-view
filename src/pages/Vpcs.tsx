@@ -63,7 +63,7 @@ export default function Vpcs() {
   const hasCompletedVpc = !!currentUser && filtered.some((v: any) => Number(v.userId) === Number(currentUser.id) || Number(v.user_id) === Number(currentUser.id));
   const hasActiveVpc = hasCompletedVpc || hasPending;
 
-  const totalVpcs = filtered.length + pendingCount;
+  const totalVpcs = filtered.length;
   const activeSubnets = filtered.reduce(
     (total, v) => total + (v.subnetCount ?? 0),
     0,

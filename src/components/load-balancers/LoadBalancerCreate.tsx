@@ -78,6 +78,7 @@ const createTargetGroup = (): TargetGroupRow => ({
   weight: 1,
 });
 
+
 const createListener = (id: number, isAlb: boolean, port = 80): ListenerConfig => ({
   id,
   protocol: isAlb ? "HTTP" : "TCP",
@@ -127,6 +128,19 @@ export function LoadBalancerCreate({ kind }: Props) {
     ? "The Application Load Balancer distributes incoming HTTP and HTTPS traffic across multiple targets such as Amazon EC2 instances, microservices, and containers, based on request attributes. When the load balancer receives a connection request, it evaluates the listener rules in priority order to determine which rule to apply, and if applicable, it selects a target from the target group for the rule action."
     : "The Network Load Balancer distributes incoming TCP and UDP traffic across multiple targets such as Amazon EC2 instances, microservices, and containers. When the load balancer receives a connection request, it selects a target based on the protocol and port that are specified in the listener configuration, and the routing rule specified as the default action.";
 
+  const [portErrorIds, setPortErrorIds] = useState<number[]>([]);
+
+  const sanitizePort = (raw: string) => {
+    const digitsOnly = raw.replace(/[^0-9]/g, "");        // strip non-digits
+    const noLeadingZeros = digitsOnly.replace(/^0+(?=\d)/, ""); // "05" -> "5", "008" -> "8"
+    return noLeadingZeros;
+  };
+
+  const sanitizeStatusCode = (raw: string) => raw.replace(/[^0-9]/g, "").slice(0, 3);
+
+  const isValidStatusCode = (code: string) => /^[245]\d\d$/.test(code);
+
+  const [fixedResponseErrorIds, setFixedResponseErrorIds] = useState<number[]>([]);
 
   const [vpcError, setVpcError] = useState(false);
   const [subnetError, setSubnetError] = useState(false);
@@ -148,6 +162,9 @@ export function LoadBalancerCreate({ kind }: Props) {
   const [scheme, setScheme] = useState<"internet-facing" | "internal">("internet-facing");
   const [ipType, setIpType] = useState("ipv4");
   const [ipv6SourceNat, setIpv6SourceNat] = useState<"off" | "on">("off");
+
+
+
 
   const hasActiveBalancer = existingLbs.some((lb) => ["active", "completed"].includes(String(lb.state || "").toLowerCase()));
   const disabledReason = provisioningLb
@@ -235,6 +252,48 @@ export function LoadBalancerCreate({ kind }: Props) {
   const [loadingRegion, setLoadingRegion] = useState(false);
   const [loadingVpc, setLoadingVpc] = useState(false);
   const [nameErrorMsg, setNameErrorMsg] = useState<string | null>(null);
+
+  const [nameCheckLoading, setNameCheckLoading] = useState(false);
+  const [nameExistsError, setNameExistsError] = useState(false);
+  const nameCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (nameCheckTimer.current) clearTimeout(nameCheckTimer.current);
+
+    if (!name || validateLbName(name)) {
+      setNameExistsError(false);
+      setNameCheckLoading(false);
+      return;
+    }
+
+    setNameCheckLoading(true);
+    nameCheckTimer.current = setTimeout(() => {
+      lbApi.checkLbName(name, selectedRegion)
+        .then((res) => setNameExistsError(!!res.exists))
+        .catch(() => setNameExistsError(false)) // fail open on lookup errors
+        .finally(() => setNameCheckLoading(false));
+    }, 500);
+
+    return () => { if (nameCheckTimer.current) clearTimeout(nameCheckTimer.current); };
+  }, [name, selectedRegion]);
+  const isFormComplete = (() => {
+    if (validateLbName(name)) return false;
+    if (nameExistsError || nameCheckLoading) return false;
+    if (!vpc) return false;
+    if (azs.length < 2 || azs.some((az) => !azSubnets[az]?.subnet)) return false;
+    if (isAlb && sgs.length === 0) return false;
+
+    const listenersOk = listeners.every((l) => {
+      if (!l.port || l.port < 1 || l.port > 65535) return false;
+      if (l.action === "forward" && !l.targetGroups.some((t) => t.group)) return false;
+      if (l.action === "fixed-response" && !isValidStatusCode(l.fixedResponseCode)) return false;
+      return true;
+    });
+    if (!listenersOk) return false;
+
+    if (!isJustificationValid) return false;
+    return true;
+  })();
 
   useEffect(() => {
     if (azs.length === 0) return;
@@ -405,7 +464,7 @@ export function LoadBalancerCreate({ kind }: Props) {
     setLoadBalancerTags((prev) => prev.map((tag) => (tag.id === tagId ? { ...tag, [field]: value } : tag)));
   };
 
-  function submit() {
+  async function submit() {
     let valid = true;
 
     if (provisioningLb) {
@@ -481,6 +540,30 @@ export function LoadBalancerCreate({ kind }: Props) {
       valid = false;
     }
 
+    const badPorts = listeners
+      .filter((l) => !l.port || l.port < 1 || l.port > 65535)
+      .map((l) => l.id);
+    setPortErrorIds(badPorts);
+    if (badPorts.length > 0) {
+      if (valid) {
+        alert({ title: "Port must be an integer between 1 and 65535, inclusive.", severity: "error" });
+        document.getElementById("listeners-routing")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      valid = false;
+    }
+
+    const badFixedResponses = listeners
+      .filter((l) => l.action === "fixed-response" && !isValidStatusCode(l.fixedResponseCode))
+      .map((l) => l.id);
+    setFixedResponseErrorIds(badFixedResponses);
+    if (badFixedResponses.length > 0) {
+      if (valid) {
+        alert({ title: "Response code must be a valid HTTP status code (2xx, 4xx, or 5xx).", severity: "error" });
+        document.getElementById("listeners-routing")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      valid = false;
+    }
+
     if (justifications.trim().length < 20) {
       setJustificationError(true);
       if (valid) {
@@ -490,6 +573,24 @@ export function LoadBalancerCreate({ kind }: Props) {
       valid = false;
     } else {
       setJustificationError(false);
+    }
+
+    if (valid && !validateLbName(name)) {
+      try {
+        const res = await lbApi.checkLbName(name, selectedRegion);
+        if (res.exists) {
+          setNameExistsError(true);
+          alert({
+            title: `A load balancer named "${name}" already exists in ${selectedRegion}.`,
+            severity: "error",
+          });
+          nameInputRef.current?.focus();
+          nameInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+          valid = false;
+        }
+      } catch {
+        // fail open — a network hiccup shouldn't block submission; a true dupe still gets caught by AWS on create
+      }
     }
 
     if (!valid) return;
@@ -686,16 +787,23 @@ export function LoadBalancerCreate({ kind }: Props) {
                 setName(value);
                 setNameErrorMsg(validateLbName(value));
               }}
-              className={`w-full bg-input/40 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40 ${nameErrorMsg ? "border-red-500 ring-red-200" : "border-blue-500 ring-blue-200"
+              className={`w-full bg-input/40 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40 ${nameErrorMsg || nameExistsError ? "border-red-500 ring-red-200" : "border-blue-500 ring-blue-200"
                 }`}
               placeholder=""
             />
-            {nameErrorMsg && (
+            {nameErrorMsg ? (
               <div className="mt-2 flex items-start gap-2 text-xs text-red-600">
                 <XCircle size={14} className="mt-0.5 shrink-0" />
                 <span>{nameErrorMsg}</span>
               </div>
-            )}
+            ) : nameCheckLoading ? (
+              <p className="mt-2 text-xs text-muted-foreground">Checking availability...</p>
+            ) : nameExistsError ? (
+              <div className="mt-2 flex items-start gap-2 text-xs text-red-600">
+                <XCircle size={14} className="mt-0.5 shrink-0" />
+                <span>A load balancer named "{name}" already exists in {selectedRegion}. Choose a different name.</span>
+              </div>
+            ) : null}
           </Field>
 
           <Field label="Scheme" >
@@ -1069,12 +1177,31 @@ export function LoadBalancerCreate({ kind }: Props) {
                       </Field>
                       <Field label="Port" inline>
                         <input
-                          type="number"
-                          value={listener.port}
-                          onChange={(e) => updateListener(listener.id, { port: Number(e.target.value) })}
-                          className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
+                          type="text"
+                          inputMode="numeric"
+                          value={listener.port === 0 ? "" : listener.port}
+                          onChange={(e) => {
+                            const cleaned = sanitizePort(e.target.value);
+                            const num = cleaned === "" ? 0 : Number(cleaned);
+                            updateListener(listener.id, { port: num });
+                            // live-clear the error once it's valid again
+                            if (num >= 1 && num <= 65535) {
+                              setPortErrorIds((prev) => prev.filter((id) => id !== listener.id));
+                            }
+                          }}
+                          className={`w-full bg-input/40 border rounded-md px-3 py-2 text-sm ${portErrorIds.includes(listener.id)
+                            ? "border-red-500 ring-2 ring-red-200"
+                            : "border-border"
+                            }`}
                         />
-                        <p className="text-[11px] text-muted-foreground mt-1">1 - 65535</p>
+                        {portErrorIds.includes(listener.id) ? (
+                          <div className="mt-2 flex items-start gap-2 text-xs text-red-600">
+                            <XCircle size={14} className="mt-0.5 shrink-0" />
+                            <span>Port must be an integer between 1 and 65535, inclusive.</span>
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-muted-foreground mt-1">1 - 65535</p>
+                        )}
                       </Field>
                     </div>
 
@@ -1318,11 +1445,27 @@ export function LoadBalancerCreate({ kind }: Props) {
                             <div className="text-sm font-medium mb-0.5">Response code</div>
                             <p className="text-xs text-muted-foreground mb-1.5">The type of message you want to send.</p>
                             <input
+                              type="text"
+                              inputMode="numeric"
                               value={listener.fixedResponseCode}
-                              onChange={(e) => updateListener(listener.id, { fixedResponseCode: e.target.value })}
-                              className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
+                              onChange={(e) => {
+                                const cleaned = sanitizeStatusCode(e.target.value);
+                                updateListener(listener.id, { fixedResponseCode: cleaned });
+                                if (isValidStatusCode(cleaned)) {
+                                  setFixedResponseErrorIds((prev) => prev.filter((id) => id !== listener.id));
+                                }
+                              }}
+                              className={`w-full bg-input/40 border rounded-md px-3 py-2 text-sm ${fixedResponseErrorIds.includes(listener.id) ? "border-red-500 ring-2 ring-red-200" : "border-border"
+                                }`}
                             />
-                            <p className="text-[11px] text-muted-foreground mt-0.5">2xx, 4xx, 5xx</p>
+                            {fixedResponseErrorIds.includes(listener.id) ? (
+                              <div className="mt-2 flex items-start gap-2 text-xs text-red-600">
+                                <XCircle size={14} className="mt-0.5 shrink-0" />
+                                <span>Response code must be a valid HTTP status code (2xx, 4xx, or 5xx).</span>
+                              </div>
+                            ) : (
+                              <p className="text-[11px] text-muted-foreground mt-0.5">2xx, 4xx, 5xx</p>
+                            )}
                           </div>
                           <div>
                             <div className="text-sm font-medium mb-0.5">Content type</div>
@@ -1585,7 +1728,7 @@ export function LoadBalancerCreate({ kind }: Props) {
           <span title={disabledReason ?? undefined}>
             <Button
               onClick={submit}
-              disabled={!!disabledReason || !isJustificationValid}
+              disabled={!!disabledReason || !isFormComplete}
               className="bg-warning text-warning-foreground hover:bg-warning/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Create Load Balancer

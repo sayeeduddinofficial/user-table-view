@@ -537,23 +537,48 @@ export const ACTION_DISPLAY_LABELS: Record<string, string> = {
   VPC_DESTROY_REQUESTED: "Requested VPC Deletion",
   VPC_DESTROYED: "VPC Terminated",
   VPC_DESTROYED_FAILED: "VPC Termination Failed",
+
+
   FOLDER_CREATED: "Created Folder in S3 Bucket",
+  FOLDER_CREATE_FAILED: "Folder Creation Failed",
   OBJECT_UPLOADED: "Uploaded Object to S3 Bucket",
+  OBJECT_UPLOAD_FAILED: "Object Upload Failed",
   OBJECT_DELETED: "Deleted Object from S3 Bucket",
+  OBJECT_DELETE_FAILED: "Object Deletion Failed",
+  OBJECT_DOWNLOADED: "Downloaded Object from S3 Bucket",
+  OBJECT_DOWNLOAD_FAILED: "Object Download Failed",
+  BUCKET_CREATED: "Bucket created",
+  BUCKET_DELETED: "Bucket Terminated",
+  BUCKET_CREATION_FAILED: "Bucket Provisioning Failed ",
+  BUCKET_DELETE_FAILED: "Bucket Termination Failed ", 
+
   LOAD_BALANCER_CREATED: "Created Load Balancer",
   LOAD_BALANCER_DELETED: "Deleted Load Balancer",
+
   EKS_CLUSTER_DESTROYED: "EKS Cluster Terminated",
   EKS_CLUSTER_DESTROY_FAILED: "EKS Cluster Termination Failed",
   EKS_CLUSTER_CREATED: "EKS Cluster Created",
   EKS_CLUSTER_REQUEST_SUBMITTED: "Submitted EKS Cluster Request",
   EKS_CLUSTER_DESTROY_REQUESTED: "Requested EKS Cluster Termination",
   EKS_CLUSTER_CREATION_FAILED: "EKS Cluster Creation Failed",
+
   RDS_DESTROY_COMPLETED: "RDS Cluster Terminated",
   RDS_DESTROY_REQUESTED: "Requested RDS Cluster Termination",
   RDS_PROVISION_COMPLETED: "RDS Cluster Provisioned",
   RDS_REQUEST_SUBMITTED: "RDS Request Submitted",
   RDS_PROVISION_FAILED: "RDS Provisioning Failed",
   RDS_DESTROY_FAILED: "RDS Cluster Termination Failed",
+
+  LB_REQUEST_SUBMITTED: "Submitted LB Request",
+  LB_REQUEST_FAILED: "LB Request Failed",
+  LB_CREATED: "Provisioned Load Balancer",
+  LB_CREATED_FAILED: "LB Provisioning Failed",
+  LB_DESTROY_REQUESTED: "Requested LB Destroy",
+  LB_DESTROYED: "Destroyed Load Balancer",
+  LB_DESTROYED_FAILED: "LB Destroy Failed", 
+
+  DNS_RECORD_CREATED: "DNS Provisioned",
+  DNS_RECORD_DELETED: "DNS Terminated",
 };
 
 export const ROLE_NAMES = [
