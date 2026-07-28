@@ -3,6 +3,7 @@ import { useDialog } from "@/components/ui/dialog-context";
 import { useAppStore } from "@/store/appStore";
 import { useAwsConfig } from "@/hooks/useAwsConfig";
 import { VM, normalizeStatus } from "@/utils/myVMs.utils";
+import { useNavigate } from 'react-router-dom';
 import {
   fetchVMSummaryApi,
   fetchVMListApi,
@@ -19,8 +20,9 @@ import {
 } from "@/components/vms/myVMsApi";
 
 export function useMyVMs() {
+  const navigate = useNavigate();
   const { alert, confirm } = useDialog();
-  const { currentUser, refreshCurrentUser } = useAppStore();
+  const { currentUser, refreshCurrentUser, setActiveRequest } = useAppStore();
   const { data: awsConfig } = useAwsConfig();
   const isAwsConnected = awsConfig?.status === "CONNECTED";
 
@@ -158,7 +160,7 @@ export function useMyVMs() {
     catch (error) { console.error("Silent refresh failed:", error); }
   }, [fetchVMList, fetchAWSCounts]);
 
-  const watchVM = useCallback((instanceId: string) => {
+  const watchVM = useCallback((instanceId: string, vmName: string) => {
     if (watchers.current[instanceId]) return;
     let attempt = 0;
     let timeoutId: ReturnType<typeof setTimeout>;
@@ -180,18 +182,28 @@ export function useMyVMs() {
                   ...vm, status: normalized,
                   publicIp: data.publicIp !== undefined ? data.publicIp : vm.publicIp,
                   privateIp: data.privateIp !== undefined ? data.privateIp : vm.privateIp,
+                  stop_time: data.stop_time !== undefined ? data.stop_time : vm.stop_time,
                 }
               : vm
           )
         );
 
+        // For "running": only stop polling once stop_time is present in DB
+        // (monitorInstanceState writes stop_time atomically with status=running)
+        if (normalized === "running" && !data.stop_time) {
+          attempt++;
+          timeoutId = setTimeout(poll, attempt > 5 ? 10000 : 5000);
+          watchers.current[instanceId] = timeoutId;
+          return;
+        }
+
         if (normalized === "running" || normalized === "stopped" || normalized === "terminated") {
-          let vmName = instanceId;
-          setVMs((prev) => {
-            const found = prev.find((v) => v.instanceId === instanceId);
-            if (found) vmName = found.name;
-            return prev;
-          });
+          // let vmName = instanceId;
+          // setVMs((prev) => {
+          //   const found = prev.find((v) => v.instanceId === instanceId);
+          //   if (found) vmName = found.name;
+          //   return prev;
+          // });
           delete watchers.current[instanceId];
 
           if (normalized === "running") alert({ title: `VM "${vmName}" started successfully`, severity: "success" });
@@ -226,7 +238,7 @@ export function useMyVMs() {
       const data = await startVMApi(instanceId);
       const freshStopTime: string | null = data?.stop_time ?? null;
       setVMs((prev) => prev.map((vm) => vm.instanceId === instanceId ? { ...vm, status: "starting", stop_time: freshStopTime } : vm));
-      watchVM(instanceId);
+      watchVM(instanceId,vmName);
     } catch (error: any) {
       const msg = error instanceof ApiError
         ? `${error.message}${error.details ? `\n\nDetails: ${JSON.stringify(error.details)}` : ""}`
@@ -247,7 +259,7 @@ export function useMyVMs() {
     try {
       await stopVMApi(instanceId);
       setVMs((prev) => prev.map((vm) => vm.instanceId === instanceId ? { ...vm, status: "stopping" } : vm));
-      watchVM(instanceId);
+      watchVM(instanceId,vmName);
     } catch (error: any) {
       const msg = error instanceof ApiError
         ? `${error.message}${error.details ? `\n\nDetails: ${JSON.stringify(error.details)}` : ""}`
@@ -268,9 +280,17 @@ export function useMyVMs() {
     setOperatingVMs((prev) => new Set(prev).add(instanceId));
     try {
       await deleteVMApi(instanceId);
+      const targetVM = vms.find((v) => v.instanceId === instanceId);
+      if (targetVM?.requestId) {
+      setActiveRequest(targetVM.requestId, "ec2-service");
+      // ✅ ADD THIS: Navigate to Console to view live logs
+      // await new Promise(resolve => setTimeout(resolve, 100));
+      navigate("/console");
+    }
+
       await refreshCurrentUser();
       setVMs((prev) => prev.map((vm) => vm.instanceId === instanceId ? { ...vm, status: "terminating", publicIp: "", privateIp: "" } : vm));
-      watchVM(instanceId);
+      watchVM(instanceId,vmName);
       setDeletingRequest(null);
     } catch (error) {
       alert({ title: `Failed to delete VM: ${error instanceof Error ? error.message : "Unknown error"}`, severity: "error" });
@@ -294,7 +314,7 @@ export function useMyVMs() {
       const data = await startAllVMsApi(requestId);
       const freshStopTime: string | null = data?.stop_time ?? null;
       setVMs((prev) => prev.map((vm) => vm.requestId === requestId && vm.status === "stopped" ? { ...vm, status: "starting", stop_time: freshStopTime } : vm));
-      stoppedVMs.forEach((vm) => watchVM(vm.instanceId));
+      stoppedVMs.forEach((vm) => watchVM(vm.instanceId, vm.name));
     } catch (error: any) {
       const msg = error instanceof ApiError
         ? `${error.message}${error.details ? `\n\nDetails: ${JSON.stringify(error.details)}` : ""}`
@@ -316,7 +336,7 @@ export function useMyVMs() {
       try {
         await stopVMApi(vm.instanceId);
         setVMs((prev) => prev.map((v) => v.instanceId === vm.instanceId ? { ...v, status: "stopping" } : v));
-        watchVM(vm.instanceId);
+        watchVM(vm.instanceId,vm.name);
       } catch { /* continue stopping others */ }
       finally { setOperatingVMs((prev) => { const s = new Set(prev); s.delete(vm.instanceId); return s; }); }
     }
@@ -420,7 +440,7 @@ export function useMyVMs() {
         if (pollingIntervalRef.current) { clearInterval(pollingIntervalRef.current); pollingIntervalRef.current = null; }
       } else {
         vms.forEach((vm) => {
-          if (["starting", "stopping", "terminating"].includes(vm.status)) watchVM(vm.instanceId);
+          if (["starting", "stopping", "terminating"].includes(vm.status)) watchVM(vm.instanceId,vm.name);
         });
         if (!pollingIntervalRef.current) {
           pollingIntervalRef.current = setInterval(() => {

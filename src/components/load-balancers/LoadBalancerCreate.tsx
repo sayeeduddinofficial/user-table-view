@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronDown, ChevronUp, Plus, X, XCircle, RefreshCw, Info, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,7 @@ import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { FileText, Info as InfoIcon, RefreshCw as RefreshIcon } from "lucide-react";
 import { lbApi, type VpcItem, type SubnetItem, type SgItem, type TgItem, type EipItem, type AzItem } from "@/services/lbApi";
+import { CreateTargetGroupPage } from "./CreateTargetGroupPage";
 
 type LbKind = "ALB" | "NLB";
 type RoutingAction = "forward" | "redirect" | "fixed-response";
@@ -119,6 +120,7 @@ function validateLbName(value: string): string | null {
 
 export function LoadBalancerCreate({ kind }: Props) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const user = useAppStore((s: any) => s.currentUser);
   const setActiveRequest = useAppStore((s) => s.setActiveRequest);
   const { alert } = useDialog()
@@ -164,13 +166,19 @@ export function LoadBalancerCreate({ kind }: Props) {
   const [ipv6SourceNat, setIpv6SourceNat] = useState<"off" | "on">("off");
 
 
+  const currentTypeValue = isAlb ? "application" : "network";
+  const relevantExistingLbs = existingLbs.filter((lb) => lb.type === currentTypeValue);
 
+  const hasActiveBalancer = relevantExistingLbs.some((lb) =>
+    ["active", "completed"].includes(String(lb.state || "").toLowerCase())
+  );
 
-  const hasActiveBalancer = existingLbs.some((lb) => ["active", "completed"].includes(String(lb.state || "").toLowerCase()));
-  const disabledReason = provisioningLb
+  const isProvisioningSameType = provisioningLb?.type === currentTypeValue;
+
+  const disabledReason = isProvisioningSameType
     ? `"${provisioningLb.name}" is still provisioning. Wait for it to finish before creating another.`
-    : hasActiveBalancer || existingLbs.length > 0
-      ? "You already have a load balancer under your name. Use the existing one or delete it before creating a new one."
+    : hasActiveBalancer || relevantExistingLbs.length > 0
+      ? `You already have an ${kind} under your name. Use the existing one or delete it before creating a new one.`
       : null;
   // const [vpc, setVpc] = useState(isAlb ? "vpc-0a1b2c (splunkops-vpc)" : "vpc-bbd2a2c1 (prudent-default-vpc)");
   // const [azs, setAzs] = useState<string[]>(isAlb ? ["us-east-2a", "us-east-2b"] : []);
@@ -323,23 +331,25 @@ export function LoadBalancerCreate({ kind }: Props) {
   useEffect(() => {
     if (!user?.id) return;
     setCheckingProvisioning(true);
-    lbApi.checkProvisioning(user.id)
+    lbApi.checkProvisioning(user.id,  currentTypeValue as "application" | "network")
       .then((res) => setProvisioningLb(res.loadBalancer ?? null))
       .catch(() => setProvisioningLb(null))
       .finally(() => setCheckingProvisioning(false));
-  }, [user?.id]);
+  }, [user?.id, currentTypeValue]);
 
   useEffect(() => {
     if (!selectedRegion) return;
     setCheckingExisting(true);
     lbApi.checkExisting(selectedRegion)
       .then((res) => {
-        setExistingLbs(res.loadBalancers ?? []);
-        setExistingLbDialogOpen((res.loadBalancers ?? []).length > 0);
+         const all = res.loadBalancers ?? [];
+      setExistingLbs(all);
+      const sameType = all.filter((lb) => lb.type === currentTypeValue);
+      setExistingLbDialogOpen(sameType.length > 0);
       })
       .catch(() => setExistingLbs([])) // fail open on lookup errors, don't block the page
       .finally(() => setCheckingExisting(false));
-  }, [selectedRegion]);
+  }, [selectedRegion,currentTypeValue]);
 
 
   useEffect(() => {
@@ -472,7 +482,7 @@ export function LoadBalancerCreate({ kind }: Props) {
       return;
     }
 
-    if (existingLbs.length > 0) {
+    if (relevantExistingLbs.length > 0) {
       setExistingLbDialogOpen(true);
       alert({ title: "You already have a load balancer under your name.", severity: "error" });
       return;
@@ -716,6 +726,53 @@ export function LoadBalancerCreate({ kind }: Props) {
     }
   };
 
+
+  const panel = searchParams.get("panel");
+  const showCreateTargetGroup = panel === "create-target-group";
+
+  const handleCreateTargetGroup = () => {
+    const next = new URLSearchParams(searchParams);
+    next.set("panel", "create-target-group");
+    next.set("region", selectedRegion);
+    if (vpc) next.set("vpcId", vpc);
+    setSearchParams(next);
+  };
+
+  const closeCreateTargetGroup = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("panel");
+    next.delete("region");
+    next.delete("vpcId");
+    setSearchParams(next);
+  };
+
+  const handleTargetGroupCreated = (tg: TgItem) => {
+    setTgOptions((prev) => [...prev, tg]);
+    alert({
+      title: `Target group "${tg.name}" created successfully`,
+      severity: "success",
+    });
+    closeCreateTargetGroup();
+  };
+
+  if (showCreateTargetGroup) {
+    return (
+      <div>
+        <Header title="Load Balancers" subtitle="" />
+        <div className="max-w-[1100px] mx-auto pb-8 m-5">
+          <CreateTargetGroupPage
+            isAlb={isAlb}
+            vpcList={filteredVpcList}
+            defaultVpcId={searchParams.get("vpcId") ?? vpc}
+            onCancel={closeCreateTargetGroup}
+            onCreate={handleTargetGroupCreated}
+          />
+        </div>
+
+
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -1230,6 +1287,11 @@ export function LoadBalancerCreate({ kind }: Props) {
                             </label>
                           ))}
                         </div>
+                        <div>
+                          <div className="text-xs font-medium mb-3">Forward to target group</div>
+                           <p className="text-xs text-muted-foreground mb-3">Choose a target group and specify routing weight or <button type="button" onClick={handleCreateTargetGroup} className="text-primary hover:underline text-xs cursor-pointer"> Create target group</button></p>
+                        </div>
+                              
                       </Field>
                     )}
 
@@ -1728,7 +1790,7 @@ export function LoadBalancerCreate({ kind }: Props) {
           <span title={disabledReason ?? undefined}>
             <Button
               onClick={submit}
-              disabled={!!disabledReason || !isFormComplete}
+              disabled={!isFormComplete}
               className="bg-warning text-warning-foreground hover:bg-warning/90 disabled:cursor-not-allowed disabled:opacity-60"
             >
               Create Load Balancer

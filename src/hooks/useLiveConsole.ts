@@ -93,9 +93,10 @@ export function useClearRequestLogs() {
 // ── Download Request Logs ────────────────────────────────────────────────────
 export function useDownloadRequestLogs() {
   const { alert } = useDialog();
+  const { activeService } = useAppStore();
 
   return useMutation({
-    mutationFn: downloadRequestLogsApi,
+    mutationFn: (requestId: string) => downloadRequestLogsApi(requestId, activeService ?? undefined),
     onError: (err) => {
       alert({
         title: err instanceof Error ? err.message : "Failed to download logs",

@@ -13,7 +13,8 @@ import { useDialog } from "@/components/ui/dialog-context";
 import { useRdsClusters ,useDeleteRdsCluster} from "@/hooks/useRds";
 import { deleteRdsCluster, type RdsClusterApi } from "@/services/rdsService";
 import { useAppStore } from "@/store/appStore";
-
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { useResourceAvailability } from "@/hooks/useResourceAvailability";
 
 export type RdsEngine = "Aurora MySQL" | "Aurora PostgreSQL" | "MySQL" | "PostgreSQL" | "MariaDB" | "Oracle" | "SQL Server";
 export type RdsRole = "Regional cluster" | "Writer instance" | "Reader instance" | "Standalone";
@@ -154,6 +155,10 @@ export function RdsList() {
 
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const { available } = useResourceAvailability();
+  const hasActiveRds = available?.rds?.reached ?? false;
+  console.log(hasActiveRds);
+
 
   const clusters = rows.filter((r) => r.isCluster);
   const standalones = rows.filter((r) => !r.isCluster && !r.clusterId);
@@ -194,7 +199,7 @@ export function RdsList() {
     setActiveRequest(row.requestId, 'rds-service');
     nav('/console');
     toast.success(`${row.dbIdentifier} deletion initiated`);
-    await refresh();
+    // await refresh();
   } catch {
     toast.error(`Failed to delete ${row.dbIdentifier}`);
   }
@@ -292,7 +297,7 @@ export function RdsList() {
       {!isInstance && (
        <button
       onClick={() => handleDelete(row)}
-      disabled={isDeletingCluster}
+      disabled={isDeletingCluster || row.status === "Deleting"}
       className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
     >
       <Trash2 size={15} />
@@ -335,16 +340,31 @@ export function RdsList() {
             <Input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by identifier, engine, region..."
+              placeholder="Search by identifier, region..."
               className="pl-9 bg-card/50 border-border/50"
             />
           </div>
           <Button variant="outline" size="icon" className="rounded-full shrink-0" onClick={refresh} disabled={loading}>
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           </Button>
-          <Button className="bg-primary hover:bg-primary/90 text-white gap-1.5 shrink-0" onClick={() => nav("/aws/rds/create")}>
-            <Plus size={14} /> Create RDS
-          </Button>
+         <Tooltip>
+  <TooltipTrigger asChild>
+    <span>
+      <Button
+        className="bg-primary hover:bg-primary/90 text-white gap-1.5 shrink-0"
+        onClick={() => nav("/aws/rds/create")}
+        disabled={hasActiveRds}
+      >
+        <Plus size={14} /> Create RDS
+      </Button>
+    </span>
+  </TooltipTrigger>
+  {hasActiveRds && (
+    <TooltipContent side="top">
+      <p>Maximum RDS limit of {available?.rds?.limit ?? 1} reached.</p>
+    </TooltipContent>
+  )}
+</Tooltip>
         </div>
 
         <div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur overflow-hidden">

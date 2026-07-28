@@ -15,8 +15,8 @@ export function RdsDetail() {
   const { cluster, loading } = useRdsCluster(requestId);
   const [tab, setTab] = useState<DetailTab>("connectivity");
   const [connectUsing, setConnectUsing] = useState<ConnectUsing>("code");
-  const [programmingLanguage, setProgrammingLanguage] = useState("Node.js");
-  const [connectTo, setConnectTo] = useState("Writer");
+  const [psqlPlatform, setPsqlPlatform] = useState<"macos" | "linux" | "windows">("macos");
+  // const [connectTo, setConnectTo] = useState("Writer");
   const [showTokenDialog, setShowTokenDialog] = useState(false);
 
   if (loading) {
@@ -88,7 +88,10 @@ export function RdsDetail() {
 
   return (
     <div className="space-y-4">
-      <Header title={`RDS ${dbIdentifier}`} subtitle={`Details for ${dbIdentifier}`} />
+      <Header
+        title={`RDS ${dbIdentifier}`}
+        subtitle={`Details for ${dbIdentifier}`}
+      />
 
       <Dialog open={showTokenDialog} onOpenChange={setShowTokenDialog}>
         <DialogContent className="max-w-2xl">
@@ -96,20 +99,36 @@ export function RdsDetail() {
             <DialogTitle>Get token for {dbIdentifier}</DialogTitle>
           </DialogHeader>
           <div>
-            <p className="text-sm font-semibold mb-1">Authentication token (password)</p>
+            <p className="text-sm font-semibold mb-1">
+              Authentication token (password)
+            </p>
             <p className="text-xs text-muted-foreground mb-4">
-              Choose the authentication option that aligns with the policy attached to your IAM identity. Copy the authentication token and provide it as the password when you connect to your cluster. To learn more, see{" "}
-              <a href="#" className="text-primary hover:underline">Understanding authentication and authorization ↗</a>
+              Choose the authentication option that aligns with the policy
+              attached to your IAM identity. Copy the authentication token and
+              provide it as the password when you connect to your cluster. To
+              learn more, see{" "}
+              <a href="#" className="text-primary hover:underline">
+                Understanding authentication and authorization ↗
+              </a>
             </p>
             <div className="flex items-start gap-2 bg-blue-500/10 border border-blue-500/20 rounded-md px-4 py-3 mb-4 text-xs text-blue-400">
               <Info size={14} className="shrink-0 mt-0.5" />
-              <span>The following authentication token will expire in 15 minutes</span>
+              <span>
+                The following authentication token will expire in 15 minutes
+              </span>
             </div>
             <div className="bg-muted/20 border border-border rounded-md">
               <div className="flex items-start gap-3 px-4 py-3">
-                <span className="text-xs text-muted-foreground shrink-0 mt-0.5">1</span>
-                <span className="font-mono text-xs text-foreground break-all flex-1">{mockToken}</span>
-                <button onClick={() => copyToClipboard(mockToken, "Token")} className="shrink-0 p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors">
+                <span className="text-xs text-muted-foreground shrink-0 mt-0.5">
+                  1
+                </span>
+                <span className="font-mono text-xs text-foreground break-all flex-1">
+                  {mockToken}
+                </span>
+                <button
+                  onClick={() => copyToClipboard(mockToken, "Token")}
+                  className="shrink-0 p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                >
                   <Copy size={14} />
                 </button>
               </div>
@@ -121,11 +140,16 @@ export function RdsDetail() {
       <div className="space-y-4 p-6">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Link to="/aws/rds" className="text-primary hover:underline">RDS</Link>
+          <Link to="/aws/rds" className="text-primary hover:underline">
+            RDS
+          </Link>
           <ChevronRight size={14} />
           {isInstance ? (
             <>
-              <Link to={`/aws/rds/${cluster.request_id}`} className="text-primary hover:underline">
+              <Link
+                to={`/aws/rds/${cluster.request_id}`}
+                className="text-primary hover:underline"
+              >
                 {cluster.cluster_identifier}
               </Link>
               <ChevronRight size={14} />
@@ -147,7 +171,9 @@ export function RdsDetail() {
                 key={t.key}
                 onClick={() => setTab(t.key as DetailTab)}
                 className={`pb-2.5 -mb-px border-b-2 transition-colors ${
-                  tab === t.key ? "border-primary text-primary font-medium" : "border-transparent text-muted-foreground hover:text-foreground"
+                  tab === t.key
+                    ? "border-primary text-primary font-medium"
+                    : "border-transparent text-muted-foreground hover:text-foreground"
                 }`}
               >
                 {t.label}
@@ -162,22 +188,51 @@ export function RdsDetail() {
             <div className="bg-card border border-border rounded-lg p-5">
               <div className="flex items-center gap-2 mb-4">
                 <h2 className="text-base font-semibold">Connect using</h2>
-                <span className="text-xs bg-blue-500/10 text-blue-400 px-2 py-1 rounded">Info</span>
+                <span className="text-xs bg-blue-500/10 text-blue-400 px-2 py-1 rounded">
+                  Info
+                </span>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <label onClick={() => setConnectUsing("code")} className={`p-3 rounded-lg border cursor-pointer transition-colors ${connectUsing === "code" ? "border-primary bg-primary/5" : "border-border/50 bg-muted/20 hover:border-primary/50"}`}>
+                <label
+                  onClick={() => setConnectUsing("code")}
+                  className={`p-3 rounded-lg border cursor-pointer transition-colors ${connectUsing === "code" ? "border-primary bg-primary/5" : "border-border/50 bg-muted/20 hover:border-primary/50"}`}
+                >
                   <div className="flex items-center gap-2 mb-1">
-                    <input type="radio" name="connect" checked={connectUsing === "code"} readOnly className="cursor-pointer" />
-                    <span className="text-sm font-medium text-foreground">Code snippets</span>
+                    <input
+                      type="radio"
+                      name="connect"
+                      checked={connectUsing === "code"}
+                      readOnly
+                      className="cursor-pointer"
+                    />
+                    <span className="text-sm font-medium text-foreground">
+                      Code snippets
+                    </span>
                   </div>
-                  <p className="text-xs text-muted-foreground">Use when connecting through SDK, APIs, or third-party tools including agents.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Use when connecting through SDK, APIs, or third-party tools
+                    including agents.
+                  </p>
                 </label>
-                <label onClick={() => setConnectUsing("endpoints")} className={`p-3 rounded-lg border cursor-pointer transition-colors ${connectUsing === "endpoints" ? "border-primary bg-primary/5" : "border-border/50 bg-muted/20 hover:border-primary/50"}`}>
+                <label
+                  onClick={() => setConnectUsing("endpoints")}
+                  className={`p-3 rounded-lg border cursor-pointer transition-colors ${connectUsing === "endpoints" ? "border-primary bg-primary/5" : "border-border/50 bg-muted/20 hover:border-primary/50"}`}
+                >
                   <div className="flex items-center gap-2 mb-1">
-                    <input type="radio" name="connect" checked={connectUsing === "endpoints"} readOnly className="cursor-pointer" />
-                    <span className="text-sm font-medium text-foreground">Endpoints</span>
+                    <input
+                      type="radio"
+                      name="connect"
+                      checked={connectUsing === "endpoints"}
+                      readOnly
+                      className="cursor-pointer"
+                    />
+                    <span className="text-sm font-medium text-foreground">
+                      Endpoints
+                    </span>
                   </div>
-                  <p className="text-xs text-muted-foreground">Use when connecting through any IDE interface.</p>
+                  <p className="text-xs text-muted-foreground">
+                    Use when connecting through any IDE interface.
+                  </p>
                 </label>
               </div>
             </div>
@@ -186,60 +241,110 @@ export function RdsDetail() {
               <div className="bg-card border border-border rounded-lg p-5 space-y-5">
                 <div className="grid grid-cols-2 gap-6">
                   <div>
-                    <p className="text-xs font-semibold text-foreground mb-2">Internet access gateway</p>
+                    <p className="text-xs font-semibold text-foreground mb-2">
+                      Internet access gateway
+                    </p>
                     <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-sm text-emerald-400 font-medium">
-                      <CheckCircle2 size={14} />{connectivityData.internetAccessGateway}
+                      <CheckCircle2 size={14} />
+                      {connectivityData.internetAccessGateway}
                     </div>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-foreground mb-2">IAM Authentication</p>
+                    <p className="text-xs font-semibold text-foreground mb-2">
+                      IAM Authentication
+                    </p>
                     <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-sm text-emerald-400 font-medium">
-                      <CheckCircle2 size={14} />{connectivityData.iamAuthentication}
+                      <CheckCircle2 size={14} />
+                      {connectivityData.iamAuthentication}
                     </div>
                   </div>
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-foreground mb-1">IAM authentication token</p>
-                  <button onClick={() => setShowTokenDialog(true)} className="text-sm text-primary hover:underline font-medium">Get token</button>
+                  <p className="text-xs font-semibold text-foreground mb-1">
+                    IAM authentication token
+                  </p>
+                  <button
+                    onClick={() => setShowTokenDialog(true)}
+                    className="text-sm text-primary hover:underline font-medium"
+                  >
+                    Get token
+                  </button>
                 </div>
                 <div className="grid grid-cols-2 gap-6">
                   <div>
-                    <label className="text-xs text-muted-foreground mb-2 block font-medium">Programming language</label>
-                    <Select value={programmingLanguage} onValueChange={setProgrammingLanguage}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                    <label className="text-xs text-muted-foreground mb-2 block font-medium">
+                      Programming language
+                    </label>
+                    <Select
+                      value={psqlPlatform}
+                      onValueChange={(v) =>
+                        setPsqlPlatform(v as "macos" | "linux" | "windows")
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
-                        {["Node.js", "Python", "Java", "Go", "Ruby", "PHP", "C#"].map((lang) => (
-                          <SelectItem key={lang} value={lang}>{lang}</SelectItem>
-                        ))}
+                        <SelectItem value="macos">psql (macOS)</SelectItem>
+                        <SelectItem value="linux">psql (Linux)</SelectItem>
+                        <SelectItem value="windows">psql (Windows)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <label className="text-xs text-muted-foreground mb-2 block font-medium">Connect to</label>
-                    <Select value={connectTo} onValueChange={setConnectTo}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                    <label className="text-xs text-muted-foreground mb-2 block font-medium">
+                      Connect to
+                    </label>
+                    <Select value="Writer" disabled>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="Writer">Writer</SelectItem>
-                        <SelectItem value="Reader">Reader</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
+
                 <div>
-                  <h2 className="text-base font-semibold mb-1">Connection steps</h2>
-                  <p className="text-xs text-muted-foreground mb-4">Follow the steps below to paste the code of each step in your tool and run the commands.</p>
+                  <h2 className="text-base font-semibold mb-1">
+                    Connection steps
+                  </h2>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Follow the steps below to paste the code of each step in
+                    your tool and run the commands.
+                  </p>
                   <div className="space-y-4">
-                    {getConnectionSteps(programmingLanguage, connectivityData.endpoint).map((step, idx) => (
+                    {getConnectionSteps(
+                      psqlPlatform,
+                      connectivityData.endpoint,
+                      connectivityData.masterUsername,
+                      connectivityData.databaseName,
+                      connectivityData.port,
+                      cluster.master_user_secret_arn ?? "",
+                      cluster.region ?? "us-east-1",
+                    ).map((step, idx) => (
                       <div key={idx} className="flex gap-3">
-                        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold shrink-0">{idx + 1}</div>
+                        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold shrink-0">
+                          {idx + 1}
+                        </div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-2">
-                            <p className="text-sm font-medium text-foreground">{step.label}</p>
-                            <button onClick={() => copyToClipboard(step.code, step.label)} className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors">
+                            <p className="text-sm font-medium text-foreground">
+                              {step.label}
+                            </p>
+                            <button
+                              onClick={() =>
+                                copyToClipboard(step.code, step.label)
+                              }
+                              className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                            >
                               <Copy size={14} />
                             </button>
                           </div>
-                          <pre className="bg-muted/20 border border-border rounded p-3 font-mono text-xs text-foreground overflow-x-auto whitespace-pre-wrap">{step.code}</pre>
+                          <pre className="bg-muted/20 border border-border rounded p-3 font-mono text-xs text-foreground overflow-x-auto whitespace-pre-wrap">
+                            {step.code}
+                          </pre>
                         </div>
                       </div>
                     ))}
@@ -252,46 +357,90 @@ export function RdsDetail() {
               <>
                 <div className="bg-card border border-border rounded-lg p-5">
                   <div className="grid grid-cols-4 gap-6 mb-4">
-                    <FieldWithCopy label="Database name" value={connectivityData.databaseName} />
-                    <FieldWithCopy label="Master username" value={connectivityData.masterUsername} />
+                    <FieldWithCopy
+                      label="Database name"
+                      value={connectivityData.databaseName}
+                    />
+                    <FieldWithCopy
+                      label="Master username"
+                      value={connectivityData.masterUsername}
+                    />
                     <div>
-                      <div className="text-xs text-muted-foreground mb-1">Internet access gateway</div>
+                      <div className="text-xs text-muted-foreground mb-1">
+                        Internet access gateway
+                      </div>
                       <div className="inline-flex items-center gap-1.5 text-emerald-400 text-sm">
-                        <CheckCircle2 size={14} />{connectivityData.internetAccessGateway}
+                        <CheckCircle2 size={14} />
+                        {connectivityData.internetAccessGateway}
                       </div>
                     </div>
-                    <FieldWithCopy label="Port" value={String(connectivityData.port)} />
+                    <FieldWithCopy
+                      label="Port"
+                      value={String(connectivityData.port)}
+                    />
                   </div>
                   <div>
-                    <div className="text-xs text-muted-foreground mb-1">IAM authentication token</div>
-                    <button onClick={() => setShowTokenDialog(true)} className="text-sm text-primary hover:underline font-medium">Get token</button>
+                    <div className="text-xs text-muted-foreground mb-1">
+                      IAM authentication token
+                    </div>
+                    <button
+                      onClick={() => setShowTokenDialog(true)}
+                      className="text-sm text-primary hover:underline font-medium"
+                    >
+                      Get token
+                    </button>
                   </div>
                 </div>
 
                 {!isInstance && (
                   <div className="bg-card border border-border rounded-lg overflow-hidden">
                     <div className="px-5 py-4 border-b border-border">
-                      <h2 className="text-base font-semibold">Endpoints ({endpoints.length})</h2>
+                      <h2 className="text-base font-semibold">
+                        Endpoints ({endpoints.length})
+                      </h2>
                     </div>
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="text-xs text-muted-foreground border-b border-border bg-muted/20">
-                          <th className="px-5 py-3 text-left font-medium">Endpoint name</th>
-                          <th className="px-5 py-3 text-left font-medium">Status</th>
-                          <th className="px-5 py-3 text-left font-medium">Type</th>
-                          <th className="px-5 py-3 text-left font-medium">Port</th>
+                          <th className="px-5 py-3 text-left font-medium">
+                            Endpoint name
+                          </th>
+                          <th className="px-5 py-3 text-left font-medium">
+                            Status
+                          </th>
+                          <th className="px-5 py-3 text-left font-medium">
+                            Type
+                          </th>
+                          <th className="px-5 py-3 text-left font-medium">
+                            Port
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
                         {endpoints.map((ep, idx) => (
-                          <tr key={idx} className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors">
+                          <tr
+                            key={idx}
+                            className="border-b border-border last:border-0 hover:bg-muted/20 transition-colors"
+                          >
                             <td className="px-5 py-3">
                               <div className="flex items-center gap-2">
-                                <Copy size={14} className="text-muted-foreground cursor-pointer hover:text-primary shrink-0" onClick={() => copyToClipboard(ep.name, "Endpoint")} />
-                                <span className="font-mono text-xs text-primary">{ep.name}</span>
+                                <Copy
+                                  size={14}
+                                  className="text-muted-foreground cursor-pointer hover:text-primary shrink-0"
+                                  onClick={() =>
+                                    copyToClipboard(ep.name, "Endpoint")
+                                  }
+                                />
+                                <span className="font-mono text-xs text-primary">
+                                  {ep.name}
+                                </span>
                               </div>
                             </td>
-                            <td className="px-5 py-3"><span className="inline-flex items-center gap-1.5 text-emerald-400"><CheckCircle2 size={14} /> {ep.status}</span></td>
+                            <td className="px-5 py-3">
+                              <span className="inline-flex items-center gap-1.5 text-emerald-400">
+                                <CheckCircle2 size={14} /> {ep.status}
+                              </span>
+                            </td>
                             <td className="px-5 py-3">{ep.type}</td>
                             <td className="px-5 py-3">{ep.port}</td>
                           </tr>
@@ -302,7 +451,10 @@ export function RdsDetail() {
                 )}
 
                 {isInstance && (
-                  <AdditionalConfigurations connectivityData={connectivityData} copyToClipboard={copyToClipboard} />
+                  <AdditionalConfigurations
+                    connectivityData={connectivityData}
+                    copyToClipboard={copyToClipboard}
+                  />
                 )}
               </>
             )}
@@ -312,45 +464,138 @@ export function RdsDetail() {
         {/* Configuration Tab */}
         {tab === "configuration" && (
           <div className="bg-card border border-border rounded-lg p-5">
-            <h2 className="text-base font-semibold mb-5">{isInstance ? "Instance" : "Database"}</h2>
-            <div className={`grid gap-0 divide-x divide-border ${isInstance ? "grid-cols-4" : "grid-cols-5"}`}>
-
+            <h2 className="text-base font-semibold mb-5">
+              {isInstance ? "Instance" : "Database"}
+            </h2>
+            <div
+              className={`grid gap-0 divide-x divide-border ${isInstance ? "grid-cols-4" : "grid-cols-5"}`}
+            >
               {/* Col 1: Configuration */}
               <div className="pr-6">
-                <p className="text-xs font-semibold text-foreground mb-4">Configuration</p>
+                <p className="text-xs font-semibold text-foreground mb-4">
+                  Configuration
+                </p>
                 <div className="space-y-4">
                   {isInstance && instance ? (
                     <>
-                      <ConfigField label="DB instance ID" value={instance.instance_identifier} />
-                      <ConfigField label="Engine version" value={engineVersion} />
-                      <ConfigField label="RDS Extended Support" value="Enabled" />
+                      <ConfigField
+                        label="DB instance ID"
+                        value={instance.instance_identifier}
+                      />
+                      <ConfigField
+                        label="Engine version"
+                        value={engineVersion}
+                      />
+                      <ConfigField
+                        label="RDS Extended Support"
+                        value="Enabled"
+                      />
                       <ConfigField label="DB name" value="—" />
-                      <ConfigField label="Option groups" value={<span className="text-primary text-xs">default.aurora-postgresql17</span>} />
-                      <ConfigField label="Amazon Resource Name (ARN)" value={
-                        <div className="flex items-start gap-1">
-                          <Copy size={12} className="text-muted-foreground cursor-pointer hover:text-primary mt-0.5 shrink-0" onClick={() => copyToClipboard(instance.instance_arn ?? "", "ARN")} />
-                          <span className="text-xs text-primary break-all">{instance.instance_arn ?? "—"}</span>
-                        </div>
-                      } />
-                      <ConfigField label="Resource ID" value={instance.resource_id ?? "—"} />
-                      <ConfigField label="Created time" value={instance.created_at ? new Date(instance.created_at).toLocaleString() : "—"} />
-                      <ConfigField label="DB instance parameter group" value={<span className="text-primary text-xs">default.aurora-postgresql17 <span className="text-emerald-400">✓ In sync</span></span>} />
-                      <ConfigField label="DB cluster parameter group" value={<span className="text-primary text-xs">default.aurora-postgresql17 <span className="text-emerald-400">✓ In sync</span></span>} />
-                      <ConfigField label="Architecture settings" value="Non-multitenant architecture" />
+                      <ConfigField
+                        label="Option groups"
+                        value={
+                          <span className="text-primary text-xs">
+                            default.aurora-postgresql17
+                          </span>
+                        }
+                      />
+                      <ConfigField
+                        label="Amazon Resource Name (ARN)"
+                        value={
+                          <div className="flex items-start gap-1">
+                            <Copy
+                              size={12}
+                              className="text-muted-foreground cursor-pointer hover:text-primary mt-0.5 shrink-0"
+                              onClick={() =>
+                                copyToClipboard(
+                                  instance.instance_arn ?? "",
+                                  "ARN",
+                                )
+                              }
+                            />
+                            <span className="text-xs text-primary break-all">
+                              {instance.instance_arn ?? "—"}
+                            </span>
+                          </div>
+                        }
+                      />
+                      <ConfigField
+                        label="Resource ID"
+                        value={instance.resource_id ?? "—"}
+                      />
+                      <ConfigField
+                        label="Created time"
+                        value={
+                          instance.created_at
+                            ? new Date(instance.created_at).toLocaleString()
+                            : "—"
+                        }
+                      />
+                      <ConfigField
+                        label="DB instance parameter group"
+                        value={
+                          <span className="text-primary text-xs">
+                            default.aurora-postgresql17{" "}
+                            <span className="text-emerald-400">✓ In sync</span>
+                          </span>
+                        }
+                      />
+                      <ConfigField
+                        label="DB cluster parameter group"
+                        value={
+                          <span className="text-primary text-xs">
+                            default.aurora-postgresql17{" "}
+                            <span className="text-emerald-400">✓ In sync</span>
+                          </span>
+                        }
+                      />
+                      <ConfigField
+                        label="Architecture settings"
+                        value="Non-multitenant architecture"
+                      />
                     </>
                   ) : (
                     <>
-                      <ConfigField label="DB cluster role" value="Regional cluster" />
-                      <ConfigField label="Engine version" value={engineVersion} />
-                      <ConfigField label="RDS Extended Support" value="Enabled" />
-                      <ConfigField label="Resource ID" value={cluster.resource_id ?? "—"} />
-                      <ConfigField label="Cluster storage configuration" value="Aurora Standard" />
-                      <ConfigField label="Amazon Resource Name (ARN)" value={
-                        <div className="flex items-start gap-1">
-                          <Copy size={12} className="text-muted-foreground cursor-pointer hover:text-primary mt-0.5 shrink-0" onClick={() => copyToClipboard(cluster.cluster_arn ?? "", "ARN")} />
-                          <span className="text-xs text-primary break-all">{cluster.cluster_arn ?? "—"}</span>
-                        </div>
-                      } />
+                      <ConfigField
+                        label="DB cluster role"
+                        value="Regional cluster"
+                      />
+                      <ConfigField
+                        label="Engine version"
+                        value={engineVersion}
+                      />
+                      <ConfigField
+                        label="RDS Extended Support"
+                        value="Enabled"
+                      />
+                      <ConfigField
+                        label="Resource ID"
+                        value={cluster.resource_id ?? "—"}
+                      />
+                      <ConfigField
+                        label="Cluster storage configuration"
+                        value="Aurora Standard"
+                      />
+                      <ConfigField
+                        label="Amazon Resource Name (ARN)"
+                        value={
+                          <div className="flex items-start gap-1">
+                            <Copy
+                              size={12}
+                              className="text-muted-foreground cursor-pointer hover:text-primary mt-0.5 shrink-0"
+                              onClick={() =>
+                                copyToClipboard(
+                                  cluster.cluster_arn ?? "",
+                                  "ARN",
+                                )
+                              }
+                            />
+                            <span className="text-xs text-primary break-all">
+                              {cluster.cluster_arn ?? "—"}
+                            </span>
+                          </div>
+                        }
+                      />
                       <ConfigField label="Network type" value="—" />
                     </>
                   )}
@@ -361,33 +606,89 @@ export function RdsDetail() {
               <div className="px-6">
                 {isInstance && instance ? (
                   <>
-                    <p className="text-xs font-semibold text-foreground mb-4">Instance configuration</p>
+                    <p className="text-xs font-semibold text-foreground mb-4">
+                      Instance configuration
+                    </p>
                     <div className="space-y-4">
-                      <ConfigField label="Instance type" value={instance.instance_class === "db.serverless" ? "Aurora serverless" : instance.instance_class} />
-                      <ConfigField label="Minimum capacity" value={`${cluster.min_acu ?? 0} ACUs`} />
-                      <ConfigField label="Maximum capacity" value={`${cluster.max_acu ?? 8} ACUs`} />
+                      <ConfigField
+                        label="Instance type"
+                        value={
+                          instance.instance_class === "db.serverless"
+                            ? "Aurora serverless"
+                            : instance.instance_class
+                        }
+                      />
+                      <ConfigField
+                        label="Minimum capacity"
+                        value={`${cluster.min_acu ?? 0} ACUs`}
+                      />
+                      <ConfigField
+                        label="Maximum capacity"
+                        value={`${cluster.max_acu ?? 8} ACUs`}
+                      />
                       <ConfigField label="Platform version" value="4" />
-                      <ConfigField label="Allowed DB Cluster idle time before pausing" value={
-                        cluster.auto_pause_seconds
-                          ? `${Math.floor(cluster.auto_pause_seconds / 60)}:${String(cluster.auto_pause_seconds % 60).padStart(2, "0")}:00`
-                          : "—"
-                      } />
+                      <ConfigField
+                        label="Allowed DB Cluster idle time before pausing"
+                        value={
+                          cluster.auto_pause_seconds
+                            ? `${Math.floor(cluster.auto_pause_seconds / 60)}:${String(cluster.auto_pause_seconds % 60).padStart(2, "0")}:00`
+                            : "—"
+                        }
+                      />
                     </div>
-                    <p className="text-xs font-semibold text-foreground mt-6 mb-4">Availability</p>
+                    <p className="text-xs font-semibold text-foreground mt-6 mb-4">
+                      Availability
+                    </p>
                     <div className="space-y-4">
-                      <ConfigField label="Failover priority" value={String(instance.failover_priority ?? 1)} />
+                      <ConfigField
+                        label="Failover priority"
+                        value={String(instance.failover_priority ?? 1)}
+                      />
                     </div>
                   </>
                 ) : (
                   <>
-                    <p className="text-xs font-semibold text-foreground mb-4">Capacity type</p>
+                    <p className="text-xs font-semibold text-foreground mb-4">
+                      Capacity type
+                    </p>
                     <div className="space-y-4">
-                      <ConfigField label="" value={cluster.engine_mode === "provisioned" ? "Provisioned" : cluster.engine_mode ?? "Provisioned"} />
-                      <ConfigField label="Local read replica write forwarding" value={<span className="inline-flex items-center gap-1 text-muted-foreground">⊘ Disabled</span>} />
-                      <ConfigField label="DB cluster ID" value={cluster.cluster_identifier} />
-                      <ConfigField label="DB cluster parameter group" value={<span className="text-primary text-xs">{cluster.parameter_group ?? "default.aurora-postgresql17"}</span>} />
-                      <ConfigField label="Deletion protection" value="Disabled" />
-                      <ConfigField label="Limitless Database" value="Disabled" />
+                      <ConfigField
+                        label=""
+                        value={
+                          cluster.engine_mode === "provisioned"
+                            ? "Provisioned"
+                            : (cluster.engine_mode ?? "Provisioned")
+                        }
+                      />
+                      <ConfigField
+                        label="Local read replica write forwarding"
+                        value={
+                          <span className="inline-flex items-center gap-1 text-muted-foreground">
+                            ⊘ Disabled
+                          </span>
+                        }
+                      />
+                      <ConfigField
+                        label="DB cluster ID"
+                        value={cluster.cluster_identifier}
+                      />
+                      <ConfigField
+                        label="DB cluster parameter group"
+                        value={
+                          <span className="text-primary text-xs">
+                            {cluster.parameter_group ??
+                              "default.aurora-postgresql17"}
+                          </span>
+                        }
+                      />
+                      <ConfigField
+                        label="Deletion protection"
+                        value="Disabled"
+                      />
+                      <ConfigField
+                        label="Limitless Database"
+                        value="Disabled"
+                      />
                     </div>
                   </>
                 )}
@@ -397,21 +698,54 @@ export function RdsDetail() {
               <div className="px-6">
                 {isInstance ? (
                   <>
-                    <p className="text-xs font-semibold text-foreground mb-4">Primary storage</p>
+                    <p className="text-xs font-semibold text-foreground mb-4">
+                      Primary storage
+                    </p>
                     <div className="space-y-4">
-                      <ConfigField label="Encryption key" value="AWS owned KMS key" />
-                      <ConfigField label="Storage type" value={cluster.storage_type ?? "aurora"} />
+                      <ConfigField
+                        label="Encryption key"
+                        value="AWS owned KMS key"
+                      />
+                      <ConfigField
+                        label="Storage type"
+                        value={cluster.storage_type ?? "aurora"}
+                      />
                     </div>
                   </>
                 ) : (
                   <>
-                    <p className="text-xs font-semibold text-foreground mb-4">Authentication</p>
+                    <p className="text-xs font-semibold text-foreground mb-4">
+                      Authentication
+                    </p>
                     <div className="space-y-4">
-                      <ConfigField label="IAM DB authentication" value={<span className="text-primary text-sm">{cluster.iam_auth_enabled ? "Enabled" : "Disabled"}</span>} />
-                      <ConfigField label="Kerberos authentication" value={<span className="text-muted-foreground text-sm">Not enabled</span>} />
-                      <ConfigField label="Master username" value={<span className="text-primary text-sm">{cluster.master_username ?? "—"}</span>} />
+                      <ConfigField
+                        label="IAM DB authentication"
+                        value={
+                          <span className="text-primary text-sm">
+                            {cluster.iam_auth_enabled ? "Enabled" : "Disabled"}
+                          </span>
+                        }
+                      />
+                      <ConfigField
+                        label="Kerberos authentication"
+                        value={
+                          <span className="text-muted-foreground text-sm">
+                            Not enabled
+                          </span>
+                        }
+                      />
+                      <ConfigField
+                        label="Master username"
+                        value={
+                          <span className="text-primary text-sm">
+                            {cluster.master_username ?? "—"}
+                          </span>
+                        }
+                      />
                     </div>
-                    <p className="text-xs font-semibold text-foreground mt-6 mb-4">Availability</p>
+                    <p className="text-xs font-semibold text-foreground mt-6 mb-4">
+                      Availability
+                    </p>
                     <div className="space-y-4">
                       <ConfigField label="Multi-AZ" value="No" />
                     </div>
@@ -422,24 +756,46 @@ export function RdsDetail() {
               {/* Col 4: Encryption (cluster only) */}
               {!isInstance && (
                 <div className="px-6">
-                  <p className="text-xs font-semibold text-foreground mb-4">Encryption</p>
+                  <p className="text-xs font-semibold text-foreground mb-4">
+                    Encryption
+                  </p>
                   <div className="space-y-4">
-                    <ConfigField label="Encryption" value={cluster.encryption_enabled ? "Enabled" : "Disabled"} />
-                    <ConfigField label="Encryption key" value={cluster.kms_key_id ? <span className="text-primary text-xs">{cluster.kms_key_id}</span> : "AWS owned KMS key"} />
+                    <ConfigField
+                      label="Encryption"
+                      value={
+                        cluster.encryption_enabled ? "Enabled" : "Disabled"
+                      }
+                    />
+                    <ConfigField
+                      label="Encryption key"
+                      value={
+                        cluster.kms_key_id ? (
+                          <span className="text-primary text-xs">
+                            {cluster.kms_key_id}
+                          </span>
+                        ) : (
+                          "AWS owned KMS key"
+                        )
+                      }
+                    />
                   </div>
                 </div>
               )}
 
               {/* Last Col: Monitoring */}
               <div className="pl-6">
-                <p className="text-xs font-semibold text-foreground mb-4">Monitoring</p>
+                <p className="text-xs font-semibold text-foreground mb-4">
+                  Monitoring
+                </p>
                 <div className="space-y-4">
-                  <ConfigField label="Monitoring type" value="Database Insights - Standard" />
+                  <ConfigField
+                    label="Monitoring type"
+                    value="Database Insights - Standard"
+                  />
                   <ConfigField label="Performance Insights" value="Disabled" />
                   <ConfigField label="Enhanced Monitoring" value="Disabled" />
                 </div>
               </div>
-
             </div>
           </div>
         )}
@@ -535,154 +891,43 @@ function ConfigField({ label, value }: { label: string; value: React.ReactNode }
   );
 }
 
-function getConnectionSteps(lang: string, endpoint: string): { label: string; code: string }[] {
-  const steps: Record<string, { label: string; code: string }[]> = {
-    "Node.js": [
-      { label: "Install required packages", code: "npm install pg aws-sdk" },
-      {
-        label: "Connection code",
-        code: `const { Client } = require('pg');
-const aws = require('aws-sdk');
-const signer = new aws.RDS.Signer({ region: 'us-east-1', hostname: '${endpoint}', port: 5432, username: 'postgres' });
-const password = signer.getAuthToken({});
 
-const client = new Client({
-  host: '${endpoint}',
-  port: 5432,
-  database: 'postgres',
-  user: 'postgres',
-  password,
-  ssl: { rejectUnauthorized: false }
-});
-await client.connect();`,
-      },
-    ],
-    "Python": [
-      { label: "Install required packages", code: "pip install psycopg2-binary boto3" },
-      {
-        label: "Connection code",
-        code: `import boto3
-import psycopg2
+function getConnectionSteps(
+  platform: "macos" | "linux" | "windows",
+  endpoint: string,
+  masterUsername: string,
+  databaseName: string,
+  port: number,
+  secretArn: string,
+  region: string
+): { label: string; code: string }[] {
+  const isWindows = platform === "windows";
 
-client = boto3.client('rds', region_name='us-east-1')
-token = client.generate_db_auth_token(
-    DBHostname='${endpoint}',
-    Port=5432,
-    DBUsername='postgres'
-)
-
-conn = psycopg2.connect(
-    host='${endpoint}',
-    port=5432,
-    database='postgres',
-    user='postgres',
-    password=token,
-    sslmode='require'
-)`,
-      },
-    ],
-    "Java": [
-      {
-        label: "Add Maven dependency",
-        code: `<dependency>
-  <groupId>org.postgresql</groupId>
-  <artifactId>postgresql</artifactId>
-  <version>42.6.0</version>
-</dependency>`,
-      },
-      {
-        label: "Connection code",
-        code: `RdsIamAuthTokenGenerator generator = RdsIamAuthTokenGenerator.builder()
-    .credentials(DefaultAWSCredentialsProviderChain.getInstance())
-    .region("us-east-1")
-    .build();
-
-String token = generator.getAuthToken(
-    GetIamAuthTokenRequest.builder()
-        .hostname("${endpoint}")
-        .port(5432)
-        .userName("postgres")
-        .build());
-
-Connection conn = DriverManager.getConnection(
-    "jdbc:postgresql://${endpoint}:5432/postgres?ssl=true&sslmode=require",
-    "postgres", token);`,
-      },
-    ],
-    "Go": [
-      { label: "Install required packages", code: "go get github.com/lib/pq\ngo get github.com/aws/aws-sdk-go/aws" },
-      {
-        label: "Connection code",
-        code: `import (
-    "database/sql"
-    "github.com/aws/aws-sdk-go/aws/credentials"
-    "github.com/aws/aws-sdk-go/service/rds/rdsutils"
-    _ "github.com/lib/pq"
-)
-
-creds := credentials.NewEnvCredentials()
-token, _ := rdsutils.BuildAuthToken(
-    "${endpoint}:5432", "us-east-1", "postgres", creds)
-
-dsn := fmt.Sprintf("host=%s port=5432 user=postgres password=%s dbname=postgres sslmode=require",
-    "${endpoint}", token)
-db, _ := sql.Open("postgres", dsn)`,
-      },
-    ],
-    "Ruby": [
-      { label: "Install required packages", code: "gem install pg aws-sdk-rds" },
-      {
-        label: "Connection code",
-        code: `require 'pg'
-require 'aws-sdk-rds'
-
-rds_client = Aws::RDS::AuthTokenGenerator.new(region: 'us-east-1')
-token = rds_client.auth_token(
-  endpoint: '${endpoint}:5432',
-  user_name: 'postgres'
-)
-
-conn = PG.connect(
-  host: '${endpoint}',
-  port: 5432,
-  dbname: 'postgres',
-  user: 'postgres',
-  password: token,
-  sslmode: 'require'
-)`,
-      },
-    ],
-    "PHP": [
-      { label: "Install required packages", code: "composer require aws/aws-sdk-php" },
-      {
-        label: "Connection code",
-        code: `<?php
-use Aws\\Rds\\AuthTokenGenerator;
-use Aws\\Credentials\\CredentialProvider;
-
-$generator = new AuthTokenGenerator(CredentialProvider::defaultProvider());
-$token = $generator->createToken('${endpoint}:5432', 'us-east-1', 'postgres');
-
-$dsn = "pgsql:host=${endpoint};port=5432;dbname=postgres;sslmode=require";
-$pdo = new PDO($dsn, 'postgres', $token);`,
-      },
-    ],
-    "C#": [
-      { label: "Install required packages", code: "dotnet add package Npgsql\ndotnet add package AWSSDK.RDS" },
-      {
-        label: "Connection code",
-        code: `using Amazon.RDS.Util;
-using Npgsql;
-
-var token = RDSAuthTokenGenerator.GenerateAuthToken(
-    "${endpoint}", 5432, "postgres");
-
-var connStr = $"Host=${endpoint};Port=5432;Database=postgres;Username=postgres;Password={token};SSL Mode=Require;Trust Server Certificate=true";
-using var conn = new NpgsqlConnection(connStr);
-await conn.OpenAsync();`,
-      },
-    ],
+  const downloadCert = {
+    label: "Download SSL certificate",
+    code: "curl -o global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem",
   };
-  return steps[lang] ?? steps["Node.js"];
-}
 
+  if (isWindows) {
+    return [
+      downloadCert,
+      {
+        label: "Connect using psql",
+        code: `psql "host=${endpoint} port=${port} dbname=${databaseName} user=${masterUsername} sslmode=verify-full sslrootcert=./global-bundle.pem password=$( ($s = aws secretsmanager get-secret-value --secret-id ${secretArn} --region ${region} | ConvertFrom-Json).SecretString | ConvertFrom-Json | Select-Object -ExpandProperty password )"`,
+      },
+    ];
+  }
+
+  // macOS and Linux — same snippet
+  return [
+    downloadCert,
+    {
+      label: "Set host variable",
+      code: `export RDSHOST="${endpoint}"`,
+    },
+    {
+      label: "Connect using psql",
+      code: `psql "host=$RDSHOST port=${port} dbname=${databaseName} user=${masterUsername} sslmode=verify-full sslrootcert=./global-bundle.pem password=$(aws secretsmanager get-secret-value --secret-id '${secretArn}' --region ${region} --query SecretString --output text | jq -r '.password')"`,
+    },
+  ];
+}

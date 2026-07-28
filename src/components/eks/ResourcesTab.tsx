@@ -93,7 +93,7 @@ const WORKLOAD_COLUMN_IDS = new Set([
 // Per-type overrides for anything that isn't DEFAULT_COLUMNS or WORKLOAD_COLUMNS.
 const CUSTOM_COLUMNS: Record<string, string[]> = {
   pods: ["name", "created_at", "status"],
-  nodes: ["name", "instance_type", "roles", "created_at", "status"],
+  nodes: ["name", "instance_type", "created_at", "status"],
 };
 
 // Fixed column layout per resource type, so headers stay consistent even

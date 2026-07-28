@@ -30,7 +30,7 @@ import {
 import { Info, RotateCcw } from "lucide-react";
 import { useDialog } from "@/components/ui/dialog-context";
 import { deleteVpcApi } from "@/services/vpcService";
-
+import { useNavigate } from "react-router-dom";
 /**
  * VPCs main page. State lives in {@link useVpcList}, mutations go through
  * {@link vpcApi}, and create flows open as standalone routes.
@@ -60,6 +60,8 @@ function formatCreatedDate(dateString: string | undefined | null) {
 export default function Vpcs() {
   const { query, setQuery, filtered, selected, allChecked, toggleAll, toggleOne, refresh, loading, clearSelection, hasPending, pendingCount } = useVpcList();
   const currentUser = useAppStore((s) => s.currentUser);
+  const navigate = useNavigate();
+  const setActiveRequest = useAppStore((s) => s.setActiveRequest);
   const hasCompletedVpc = !!currentUser && filtered.some((v: any) => Number(v.userId) === Number(currentUser.id) || Number(v.user_id) === Number(currentUser.id));
   const hasActiveVpc = hasCompletedVpc || hasPending;
 
@@ -82,21 +84,47 @@ export default function Vpcs() {
   } | null>(null);
   const [deletingVpcId, setDeletingVpcId] = useState<string | null>(null);
 
+// const handleDeleteRow = (vpc: any) => {
+//   setDeletingVpcId(vpc.id);
+//   setDialog({
+//     icon: "destroy",
+//     title: `Delete ${vpc.name || vpc.id}?`,
+//     onConfirm: async () => {
+//       setDeletingVpcId(vpc.id);
+//       try {
+//         await deleteVpcApi(vpc.awsVpcId);  // waits until AWS deletion is done
+//         setActiveRequest(vpc.id, "vpc-terminate-service"); 
+//         useAppStore.getState().deleteVpc(vpc.id);  // remove from store
+//         alert({ title: `VPC deleted successfully`, severity: "success" });
+//       } catch (error) {
+//         alert({ title: `Failed to delete VPC ${vpc.name || vpc.id}`, severity: "error" });
+//       } finally {
+//         setDeletingVpcId(null);  // clear deleting state
+//       }
+//     },
+//   });
+// };
+
 const handleDeleteRow = (vpc: any) => {
-  setDeletingVpcId(vpc.id);
   setDialog({
     icon: "destroy",
     title: `Delete ${vpc.name || vpc.id}?`,
     onConfirm: async () => {
       setDeletingVpcId(vpc.id);
+      // ✅ Set active request BEFORE calling delete so LiveConsole starts streaming immediately
+      setActiveRequest(vpc.id, "vpc-terminate-service");
+      navigate("/console");
       try {
-        await deleteVpcApi(vpc.awsVpcId);  // waits until AWS deletion is done
-        useAppStore.getState().deleteVpc(vpc.id);  // remove from store
-        alert({ title: `VPC deleted successfully`, severity: "success" });
+        await deleteVpcApi(vpc.awsVpcId);
+        // ✅ Remove from store only after deletion is confirmed
+        useAppStore.getState().deleteVpc(vpc.id);
+        // alert({ title: `VPC deletion submitted`, severity: "success" });
       } catch (error) {
+        // ✅ Clear active request if delete failed
+        setActiveRequest(null);
         alert({ title: `Failed to delete VPC ${vpc.name || vpc.id}`, severity: "error" });
       } finally {
-        setDeletingVpcId(null);  // clear deleting state
+        setDeletingVpcId(null);
       }
     },
   });
@@ -312,7 +340,7 @@ const handleRefresh = async () => {
                       <td className="px-5 py-4 text-muted-foreground">
                         {formatCreatedDate(v?.createdDate)}
                       </td>
-                      <td className="px-5 py-4 text-right">
+                      {/* <td className="px-5 py-4 text-right">
                         <button
                           onClick={() => handleDeleteRow(v)}
                           disabled={deletingVpcId === v.id || v?.status === 'deleting'}
@@ -321,7 +349,34 @@ const handleRefresh = async () => {
                         >
                           <Trash2 size={15} />
                         </button>
-                      </td>
+                      </td> */}
+
+                  <td className="px-5 py-4 text-right">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="inline-flex">
+                          <button
+                            onClick={() => handleDeleteRow(v)}
+                            disabled={deletingVpcId === v.id || v?.status === 'deleting'}
+                            className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:cursor-not-allowed disabled:pointer-events-none"
+                            aria-label="Delete VPC"
+                          >
+                            <Trash2 size={15} />
+                          </button>
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent side="left">
+                        <p>
+                          {deletingVpcId === v.id || v?.status === 'deleting'
+                            ? 'Termination in progress...'
+                            : `Terminate VPC`}
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </td>
+
                     </tr>
                   );
                 })}

@@ -1,0 +1,302 @@
+import { useMemo, useState } from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  RefreshCw,
+  Settings as SettingsIcon,
+  Target,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { useDialog } from "@/components/ui/dialog-context";
+import { DataTable, type Column } from "@/components/common/DataTable";
+
+export type InstanceRow = {
+  id: string;
+  instanceId: string;
+  name: string;
+  state: string;
+  securityGroups: string;
+  zone: string;
+  subnetId: string;
+  privateIpv4: string;
+};
+
+export type PendingTarget = InstanceRow & { port: string; launchTime: string };
+
+type Props = {
+  pendingTargets: PendingTarget[];
+  onPendingTargetsChange: (targets: PendingTarget[]) => void;
+  onCancel: () => void;
+  onPrevious: () => void;
+  onNext: () => void;
+};
+
+export function RegisterTargetsStep({ pendingTargets, onPendingTargetsChange, onCancel, onPrevious, onNext }: Props) {
+  const { alert } = useDialog();
+  const [instanceFilter, setInstanceFilter] = useState("");
+  const [selectedInstances, setSelectedInstances] = useState<Set<string>>(new Set());
+  const [registerPorts, setRegisterPorts] = useState("80");
+  const [targetFilter, setTargetFilter] = useState("");
+  const [showOnlyPending, setShowOnlyPending] = useState(false);
+  const instances: InstanceRow[] = [
+    {
+      id: "i-0a1b2c3d4e5f60001",
+      instanceId: "i-0a1b2c3d4e5f60001",
+      name: "web-server-01",
+      state: "running",
+      securityGroups: "launch-wizard-1",
+      zone: "us-east-1a",
+      subnetId: "subnet-0f1e2d3c4b5a6001",
+      privateIpv4: "10.0.1.10",
+    },
+    {
+      id: "i-0a1b2c3d4e5f60009",
+      instanceId: "i-0a1b2c3d4e5f60001",
+      name: "web-server-02",
+      state: "running",
+      securityGroups: "launch-wizard-1",
+      zone: "us-east-1b",
+      subnetId: "subnet-0f1e2d3c4b5a6002",
+      privateIpv4: "10.0.2.11",
+    }
+  ];
+
+  const filteredInstances = useMemo(() => {
+    const q = instanceFilter.trim().toLowerCase();
+    return instances.filter((i) => !q || Object.values(i).some((v) => String(v).toLowerCase().includes(q)));
+  }, [instances, instanceFilter]);
+
+  const allInstancesSelected = filteredInstances.length > 0 && filteredInstances.every((i) => selectedInstances.has(i.id));
+  const toggleAllInstances = () => {
+    const next = new Set(selectedInstances);
+    if (allInstancesSelected) filteredInstances.forEach((i) => next.delete(i.id));
+    else filteredInstances.forEach((i) => next.add(i.id));
+    setSelectedInstances(next);
+  };
+  const toggleOneInstance = (id: string) => {
+    const next = new Set(selectedInstances);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setSelectedInstances(next);
+  };
+
+  const includeAsPending = () => {
+    const picked = instances.filter((i) => selectedInstances.has(i.id));
+    const additions: PendingTarget[] = picked.map((i) => ({
+      ...i,
+      port: registerPorts,
+      launchTime: new Date().toISOString(),
+    }));
+    onPendingTargetsChange([...pendingTargets, ...additions]);
+    setSelectedInstances(new Set());
+  };
+
+  const visibleTargets = useMemo(() => {
+    const q = targetFilter.trim().toLowerCase();
+    return pendingTargets.filter((t) => !q || Object.values(t).some((v) => String(v).toLowerCase().includes(q)));
+  }, [pendingTargets, targetFilter]);
+
+  const removeAllPending = () => onPendingTargetsChange([]);
+
+  const instanceColumns: Column<InstanceRow>[] = [
+    {
+      key: "select",
+      header: (
+        <input
+          type="checkbox"
+          checked={allInstancesSelected}
+          onChange={toggleAllInstances}
+          className="h-4 w-4 rounded border-border"
+        />
+      ),
+      render: (i) => (
+        <input
+          type="checkbox"
+          checked={selectedInstances.has(i.id)}
+          onChange={() => toggleOneInstance(i.id)}
+          className="h-4 w-4 rounded border-border"
+        />
+      ),
+    },
+    { key: "instanceId", header: "Instance ID" },
+    { key: "name", header: "Name" },
+    { key: "state", header: "State" },
+    { key: "securityGroups", header: "Security groups" },
+    { key: "zone", header: "Zone" },
+    { key: "subnetId", header: "Subnet ID" },
+    { key: "privateIpv4", header: "Private IPv4 address" },
+  ];
+
+  const targetColumns: Column<PendingTarget>[] = [
+    { key: "instanceId", header: "Instance ID" },
+    { key: "name", header: "Name" },
+    { key: "port", header: "Port" },
+    { key: "state", header: "State" },
+    { key: "securityGroups", header: "Security groups" },
+    { key: "zone", header: "Zone" },
+    { key: "subnetId", header: "Subnet ID" },
+    { key: "launchTime", header: "Launch time" },
+  ];
+
+  return (
+    <>
+      <div className="mb-2">
+        <h1 className="text-2xl font-semibold">
+          Register targets
+        </h1>
+        <p className="text-sm text-muted-foreground mt-2 leading-relaxed max-w-5xl">
+          This is an optional step to create a target group. However, to ensure that your load balancer
+          routes traffic to this target group you must register your targets.
+        </p>
+      </div>
+
+      <section className="glass-panel rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <div className="flex items-center gap-2">
+            <Target className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold text-foreground">
+              Available instances <span className="text-muted-foreground font-normal">({filteredInstances.length})</span>
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => alert({ title: "Refreshing instances...", severity: "loading" })}
+            className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-border hover:bg-accent/40"
+            title="Refresh"
+          >
+            <RefreshCw size={14} />
+          </button>
+        </div>
+
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={instanceFilter}
+              onChange={(e) => setInstanceFilter(e.target.value)}
+              placeholder="Filter instances"
+              className="w-full bg-input/40 border border-border rounded-md pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40"
+            />
+          </div>
+          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+            <button type="button" className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-border hover:bg-accent/40 disabled:opacity-40" disabled>
+              <ChevronLeft size={14} />
+            </button>
+            <span className="px-1">1</span>
+            <button type="button" className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-border hover:bg-accent/40 disabled:opacity-40" disabled>
+              <ChevronRight size={14} />
+            </button>
+          </div>
+          <button
+            type="button"
+            className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-border hover:bg-accent/40"
+            title="Preferences"
+          >
+            <SettingsIcon size={14} />
+          </button>
+        </div>
+
+        <DataTable
+          columns={instanceColumns}
+          data={filteredInstances}
+          emptyMessage="No instances"
+          rowKey={(i) => i.id}
+        />
+
+        <div className="px-6 py-6 border-t border-border space-y-4">
+          <p className="text-center text-sm font-medium text-foreground">{selectedInstances.size} selected</p>
+
+          <div className="max-w-sm mx-auto space-y-2">
+            <Label htmlFor="register-ports">Ports for the selected instances</Label>
+            <p className="text-xs text-muted-foreground">Ports for routing traffic to the selected instances.</p>
+            <Input
+              id="register-ports"
+              value={registerPorts}
+              onChange={(e) => setRegisterPorts(e.target.value)}
+              className="bg-muted/50"
+            />
+            <p className="text-xs text-muted-foreground">1-65535 (separate multiple ports with commas)</p>
+          </div>
+
+          <div className="flex justify-center">
+            <Button
+              variant="outline"
+              disabled={selectedInstances.size === 0}
+              onClick={includeAsPending}
+            >
+              Include as pending below
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <section className="glass-panel rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+          <h2 className="text-sm font-semibold text-foreground">
+            Targets <span className="text-muted-foreground font-normal">({pendingTargets.length})</span>
+          </h2>
+          <Button variant="outline" size="sm" disabled={pendingTargets.length === 0} onClick={removeAllPending}>
+            Remove all pending
+          </Button>
+        </div>
+
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={targetFilter}
+              onChange={(e) => setTargetFilter(e.target.value)}
+              placeholder="Filter targets"
+              className="w-full bg-input/40 border border-border rounded-md pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40"
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
+            <Switch checked={showOnlyPending} onCheckedChange={setShowOnlyPending} />
+            Show only pending
+          </label>
+          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+            <button type="button" className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-border hover:bg-accent/40 disabled:opacity-40" disabled>
+              <ChevronLeft size={14} />
+            </button>
+            <span className="px-1">1</span>
+            <button type="button" className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-border hover:bg-accent/40 disabled:opacity-40" disabled>
+              <ChevronRight size={14} />
+            </button>
+          </div>
+          <button
+            type="button"
+            className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-border hover:bg-accent/40"
+            title="Preferences"
+          >
+            <SettingsIcon size={14} />
+          </button>
+        </div>
+
+        <DataTable
+          columns={targetColumns}
+          data={visibleTargets}
+          emptyMessage="No instances added yet. Specify instances above, or leave the group empty if you prefer to add targets later."
+          rowKey={(t) => t.id}
+        />
+      </section>
+
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">{pendingTargets.length} pending</p>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button variant="outline" onClick={onPrevious}>
+            Previous
+          </Button>
+          <Button onClick={onNext} className="min-w-[100px]">
+            Next
+          </Button>
+        </div>
+      </div>
+    </>
+  );
+}

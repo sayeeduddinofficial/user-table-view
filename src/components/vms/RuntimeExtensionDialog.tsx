@@ -537,14 +537,14 @@ export default function RuntimeExtensionDialog({
           </div>
 
           {/* ── Free extension quota banner ──────────────────────────────── */}
-          {freeExtLoading && (
+          {/* {freeExtLoading && (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               Checking free extension quota…
             </div>
-          )}
+          )} */}
 
-          {freeExtInfoLabel && (
+          {/* {freeExtInfoLabel && (
             <div className="rounded-md border border-border/50 bg-muted/30 px-3 py-2.5 space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground font-medium">Free extension quota</span>
@@ -553,7 +553,7 @@ export default function RuntimeExtensionDialog({
                 </span>
               </div>
               {/* Progress bar */}
-              <div className="h-1.5 w-full rounded-full bg-muted/60 overflow-hidden">
+              {/* <div className="h-1.5 w-full rounded-full bg-muted/60 overflow-hidden">
                 <div
                   className="h-full rounded-full bg-primary/70 transition-all"
                   style={{
@@ -568,7 +568,7 @@ export default function RuntimeExtensionDialog({
                   : ' · Free quota exhausted — next extension requires manager approval'}
               </p>
             </div>
-          )}
+          )} */} 
 
           {/* ── Duration ─────────────────────────────────────────────────── */}
           <div className="space-y-2">

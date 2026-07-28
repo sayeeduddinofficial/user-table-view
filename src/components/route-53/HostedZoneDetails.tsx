@@ -14,8 +14,18 @@ import { useNavigate } from "react-router-dom";
 import { Copy, Check } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { fetchRoute53Records, deleteRoute53Record, Route53RecordItem } from "@/services/route53Api";
+import { fetchRoute53Records, deleteRoute53Record, Route53RecordItem, checkExistingRoute53Record } from "@/services/route53Api";
 import { useDialog } from "../ui/dialog-context";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
+import { useHasActiveDnsRecord } from "@/hooks/useHasActiveDnsRecord";
+
+// inside the component, replace the hasActiveRecord/checkingExisting state + loadExistingCheck:
+
 type HostedZone = {
   id: string;
   name: string;
@@ -31,9 +41,15 @@ const data: HostedZone[] = [
 ];
 
 
+const DEFAULT_HOSTED_ZONE_ID = "e028d1bc-abef-44b4-91ae-efa139e4d2af";
 
 const ZONE_NAME = "prusplunk.com"; // matches the Header title below; swap for a route param if available
 
+
+
+
+// in handleDelete's onConfirm, replace loadExistingCheck() with:
+// refreshActiveRecord();
 function formatRecordValue(record: Route53RecordItem): string {
   if (record.is_alias) {
     return record.alias_dns_name ?? "-";
@@ -49,6 +65,15 @@ function formatRecordValue(record: Route53RecordItem): string {
 }
 
 export default function HostedZoneDetails() {
+  
+
+ const { hasActiveRecord, checkingExisting, refresh: refreshActiveRecord } =
+  useHasActiveDnsRecord(DEFAULT_HOSTED_ZONE_ID);
+
+  useEffect(() => {
+    loadRecords();
+  }, []);
+
 
   const [dialog, setDialog] = useState<{
     icon?: "destroy" | "retry" | "info";
@@ -116,6 +141,7 @@ export default function HostedZoneDetails() {
           const result = await deleteRoute53Record(record.id);
           alert({ title: "DNS record deleted", description: `"${record.record_name}" was deleted successfully.`, severity: "success" });
           setRecords(prev => prev.filter(r => r.id !== record.id));
+          refreshActiveRecord();
           const requestId = result.data?.requestId;
           if (requestId) {
             const consoleSearch = new URLSearchParams({
@@ -250,12 +276,30 @@ export default function HostedZoneDetails() {
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           </Button>
 
-          <Link to="/aws/createrecord">
-            <Button className="bg-primary hover:bg-primary/90 text-white shrink-0">
-              <Plus size={14} className="mr-1.5" />
-              Create Record
-            </Button>
-          </Link>
+          {hasActiveRecord ? (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span tabIndex={0}>
+                    <Button className="bg-primary/50 text-white shrink-0 cursor-not-allowed" disabled>
+                      <Plus size={14} className="mr-1.5" />
+                      Create Record
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  You already have an active DNS record in this hosted zone. Delete it before creating another.
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : (
+            <Link to="/aws/createrecord">
+              <Button className="bg-primary hover:bg-primary/90 text-white shrink-0" disabled={checkingExisting}>
+                <Plus size={14} className="mr-1.5" />
+                Create Record
+              </Button>
+            </Link>
+          )}
         </div>
 
         {/* Table */}

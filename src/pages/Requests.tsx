@@ -36,6 +36,7 @@ import {
   deleteLbRequestApi,
   SERVICE_LABELS,
   SERVICE_OPTIONS,
+  deleteRdsRequestApi,
   type VMRequest as Request,
 } from "@/components/requests/vmRequestsApi";
 import { DataTable, type Column } from "@/components/common/DataTable";
@@ -446,7 +447,19 @@ export default function VMRequests() {
       setActiveRequest(requestId, service);
       navigate("/console");
     }
-
+    else if (service === "rds-service") {
+  await deleteRdsRequestApi(requestId);
+  setRequests((prev) =>
+    prev.map((r) =>
+      r.request_id === requestId
+        ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
+        : r,
+    ),
+  );
+  watchRequest(requestId, service);
+  setActiveRequest(requestId, service);
+  navigate("/console");
+}
       else {
         const deleteResult = await deleteVMRequestApi(requestId);
         console.log("Delete request result:", deleteResult);
@@ -474,15 +487,8 @@ export default function VMRequests() {
         title: `Failed to terminate request ${requestId}`,
         severity: "error",
       });
-    } finally {
-      setDeletingIds((prev) => {
-        const next = new Set(prev);
-        next.delete(requestId);
-        return next;
-      });
     }
   };
-
 
   const isAwsDisconnected = awsConfig?.status !== "CONNECTED";
 
@@ -658,11 +664,8 @@ export default function VMRequests() {
                         : "Terminate is only available for completed or failed requests"
               }
             >
-              {deletingIds.has(req.request_id)
-                ? <RefreshCw className="h-4 w-4 animate-spin" />
-                : <Trash2 className="h-4 w-4" />}
+              <Trash2 className="h-4 w-4" />
             </Button>
-
           </div>
         );
       },

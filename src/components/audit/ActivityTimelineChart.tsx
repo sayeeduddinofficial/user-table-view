@@ -8,11 +8,10 @@ import { useChartTooltip } from "@/components/charts/useChartTooltip";
 
 const CATEGORY_COLORS = {
   Auth: "#60a5fa",
-  "VM Ops": "#34d399",
+  "AWS Ops": "#34d399",
   "User Mgmt": "#f472b6",
   Settings: "#fb923c",
   Requests: "#818cf8",
-  "Load Balancer": "#facc15",
 };
 
 export const ActivityTimelineChart = ({ data }) => {

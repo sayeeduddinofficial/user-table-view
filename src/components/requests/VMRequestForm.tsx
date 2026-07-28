@@ -115,7 +115,9 @@ export function VMRequestForm({ onSubmit, isSubmitting = false }: Props) {
   >({});
   const [category, setCategory] = useState<CategoryType | null>(null);
   const [ami, setAmi] = useState<string>(() => getAmiOptions(getDefaultRegion())[0]?.value ?? "");
-
+  const selectedAmi = getAmiOptions(region).find(
+    option => option.value === ami
+  );
   useEffect(() => {
     const opts = getAmiOptions(region);
     if (!opts.some((o) => o.value === ami)) {
@@ -305,6 +307,21 @@ export function VMRequestForm({ onSubmit, isSubmitting = false }: Props) {
     setRegion(defaultRegion);
     setSelectedRegions([defaultRegion]);
   }, []);
+  useEffect(() => {
+    if (!selectedAmi) return;
+
+    setDiskSize((prev) => {
+      if (prev < selectedAmi.minimumDiskSize) {
+        return selectedAmi.defaultDiskSize;
+      }
+
+      if (prev > selectedAmi.defaultDiskSize) {
+        return selectedAmi.defaultDiskSize;
+      }
+
+      return prev;
+    });
+  }, [selectedAmi]);
 
   useEffect(() => {
     if (
@@ -316,21 +333,21 @@ export function VMRequestForm({ onSubmit, isSubmitting = false }: Props) {
   }, [currentUser]);
 
   useEffect(() => {
-  if (category === 5 && currentUser?.allowedInstanceTypes?.length) {
-    const firstAllowed = currentUser.allowedInstanceTypes[0];
-    setCat5InstanceTypes(
-      Object.fromEntries(
-        CATEGORY_4_INFRA.map((r) => [
-          r.id,
-          currentUser.allowedInstanceTypes.includes(r.type) ? r.type: firstAllowed,
-        ])
-      )
-    );
-  }
-}, [category,currentUser]);
+    if (category === 5 && currentUser?.allowedInstanceTypes?.length) {
+      const firstAllowed = currentUser.allowedInstanceTypes[0];
+      setCat5InstanceTypes(
+        Object.fromEntries(
+          CATEGORY_4_INFRA.map((r) => [
+            r.id,
+            currentUser.allowedInstanceTypes.includes(r.type) ? r.type : firstAllowed,
+          ])
+        )
+      );
+    }
+  }, [category, currentUser]);
 
   const MAX_VM_LIMIT = currentUser?.maxVMs || 13; //13
-  
+
   const activeVMs = currentUser?.activeVMs || 0;
   const provisioningVMs = currentUser?.provisioningVMs || 0;
 
@@ -362,7 +379,7 @@ export function VMRequestForm({ onSubmit, isSubmitting = false }: Props) {
 
   const totalVMs = usedVMs + requestedVMs;
   const isOverQuota = totalVMs > MAX_VM_LIMIT; //5>13
- 
+
   const effectiveVMs = requestedVMs;
 
   const defaultType = currentUser?.allowedInstanceTypes?.[0] ?? "";
@@ -400,7 +417,7 @@ export function VMRequestForm({ onSubmit, isSubmitting = false }: Props) {
     });
   };
 
-const onOpenDialog = () => {
+  const onOpenDialog = () => {
     if (!category) {
       alert({
         title: "Please select a category for your VM request",
@@ -433,64 +450,76 @@ const onOpenDialog = () => {
       return;
     }
 
-  if (category === 5 && !/^[a-z0-9-]{1,32}$/i.test(projectIdentifier)) {
-    alert({
-      title: "Project Identifier must contain only letters, numbers, and hyphens (-), with a maximum length of 32 characters.",
-      severity: "error",
-    });
-    return;
-  }
+    if (category === 5 && !/^[a-z0-9-]{1,32}$/i.test(projectIdentifier)) {
+      alert({
+        title: "Project Identifier must contain only letters, numbers, and hyphens (-), with a maximum length of 32 characters.",
+        severity: "error",
+      });
+      return;
+    }
 
-  if (!selectedSSHKeyName) {
-    alert({
-      title: "Please select an SSH key for VM access",
-      severity: "error"
-    })
-    return;
-  }
+    if (!selectedSSHKeyName) {
+      alert({
+        title: "Please select an SSH key for VM access",
+        severity: "error"
+      })
+      return;
+    }
 
-  if (category !== 1 && !splunkVersion) {
-    alert({
-      title: "Please select a Splunk Version",
-      severity: "error",
-    });
-    return;
-  }
-  if (category === 1 && !ami) {
-    alert({
-      title: "Please select an AMI",
-      severity: "error",
-    });
-    return;
-  }
-  const trimmedJustification = justification.trim();
+    if (category !== 1 && !splunkVersion) {
+      alert({
+        title: "Please select a Splunk Version",
+        severity: "error",
+      });
+      return;
+    }
+    if (category === 1 && !ami) {
+      alert({
+        title: "Please select an AMI",
+        severity: "error",
+      });
+      return;
+    }
+    if (
+      category === 1 &&
+      selectedAmi &&
+      diskSize < selectedAmi.minimumDiskSize
+    ) {
+      alert({
+        title: `Minimum disk size for ${selectedAmi.label} is ${selectedAmi.minimumDiskSize} GB.`,
+        severity: "error",
+      });
 
-  if (!trimmedJustification) {
-    alert({
-      title: "Justification is required",
-      severity: "error",
-    });
-    return;
-  }
+      return;
+    }
+    const trimmedJustification = justification.trim();
 
-  if (trimmedJustification.length < 20) {
-    alert({
-      title: "Justification must be at least 20 characters.",
-      severity: "error",
-    });
-    return;
-  }
+    if (!trimmedJustification) {
+      alert({
+        title: "Justification is required",
+        severity: "error",
+      });
+      return;
+    }
 
-  // Must contain at least one alphabet
-  if (!/[a-zA-Z]/.test(trimmedJustification)) {
-    alert({
-      title: "Justification must contain meaningful text.",
-      severity: "error",
-    });
-    return;
-  }
+    if (trimmedJustification.length < 20) {
+      alert({
+        title: "Justification must be at least 20 characters.",
+        severity: "error",
+      });
+      return;
+    }
 
-  let rolesData: VMRoleConfig[] = [];
+    // Must contain at least one alphabet
+    if (!/[a-zA-Z]/.test(trimmedJustification)) {
+      alert({
+        title: "Justification must contain meaningful text.",
+        severity: "error",
+      });
+      return;
+    }
+
+    let rolesData: VMRoleConfig[] = [];
 
   if (category === 2) {
      // All-in-One role
@@ -568,23 +597,24 @@ const onOpenDialog = () => {
     }
   }
 
-  if (category === 3 && CATEGORY_3_TOTAL_VMS > remainingQuota) {
-    alert({
+    if (category === 3 && CATEGORY_3_TOTAL_VMS > remainingQuota) {
+      alert({
         title: `Category 3 requires ${CATEGORY_3_TOTAL_VMS} VMs, but only ${remainingQuota} are available.`,
         severity: "error"
       })
-    return;
-  }
+      return;
+    }
 
-  setRoleConfigs(rolesData);
-  setIsDialogOpen(true);
-};
+    setRoleConfigs(rolesData);
+    setIsDialogOpen(true);
+  };
 
   function handleSubmit() {
     const selectedAmi = getAmiOptions(region).find((option) => option.value === ami);
 
     const payload = {
       category: Number(category),
+      provisionMode: vmMode,
       environmentTag,
       projectIdentifier,
       ...(category !== 1 && { splunkVersion }),
@@ -603,7 +633,9 @@ const onOpenDialog = () => {
       justification,
     };
 
-    onSubmit(payload);
+    console.log("Submitting VM request payload:", payload);
+
+    // onSubmit(payload);
   };
 
   const visibleCategories = CATEGORY_OPTIONS.filter((cat) =>
@@ -623,7 +655,7 @@ const onOpenDialog = () => {
       setSplunkVersion((prev) => prev || "10.2.3");
     }
   }, [category]);
-  
+
   const isAwsDisconnected = awsConfig?.status !== "CONNECTED";
   const isDisabled = requestedVMs === 0 || isOverQuota || isAwsDisconnected || isSubmitting;
 
@@ -944,14 +976,14 @@ const onOpenDialog = () => {
             <Slider
               value={[diskSize]}
               onValueChange={([v]) => setDiskSize(v)}
-              min={10}
-              max={50}
+              min={selectedAmi?.minimumDiskSize ?? 10}
+              max={100}
               step={5}
               className="py-4"
             />
             <div className="flex justify-between text-xs text-muted-foreground">
-              <span>10 GB</span>
-              <span>50 GB</span>
+              <span>{selectedAmi?.minimumDiskSize ?? 10} GB</span>
+              <span>100 GB</span>
             </div>
           </div>
 
@@ -980,15 +1012,15 @@ const onOpenDialog = () => {
                   value={selectedSSHKeyName}
                   onValueChange={setSelectedSSHKeyName}
                 >
-                        <SelectTrigger className="bg-muted/50">
-                          <SelectValue
-                            placeholder={
-                              <span className="text-muted-foreground">
-                                Select SSH key...
-                              </span>
-                            }
-                          />
-                        </SelectTrigger>
+                  <SelectTrigger className="bg-muted/50">
+                    <SelectValue
+                      placeholder={
+                        <span className="text-muted-foreground">
+                          Select SSH key...
+                        </span>
+                      }
+                    />
+                  </SelectTrigger>
                   <SelectContent>
                     {sshKeys.map((key) => (
                       <SelectItem key={key.id} value={key.name}>
@@ -1159,6 +1191,7 @@ const onOpenDialog = () => {
                     count={roleState.count || 0}
                     instanceType={roleState.instanceType}
                     allowedTypes={currentUser?.allowedInstanceTypes || []}
+                    isMacAmi={!!selectedAmi?.isMacOS}
                     onUpdateCount={(count) => updateRole(role.id, "count", count)}
                     onUpdateType={(type) =>
                       updateRole(role.id, "instanceType", type)
@@ -1309,7 +1342,6 @@ const onOpenDialog = () => {
         </section>
       )}
 
-
       {/* ============================
       All In One Configuration (Category 2)
       ============================ */}
@@ -1389,7 +1421,7 @@ const onOpenDialog = () => {
                 className={cn(
                   "ml-2 font-normal text-lg",
                   CATEGORY_3_TOTAL_VMS > remainingQuota &&
-                    "border-destructive text-destructive",
+                  "border-destructive text-destructive",
                 )}
               >
                 {CATEGORY_3_TOTAL_VMS} / {remainingQuota}
@@ -1442,7 +1474,7 @@ const onOpenDialog = () => {
                 className={cn(
                   "ml-2 font-normal text-lg",
                   CATEGORY_4_TOTAL_VMS > remainingQuota &&
-                    "border-destructive text-destructive",
+                  "border-destructive text-destructive",
                 )}
               >
                 {CATEGORY_4_TOTAL_VMS} / {remainingQuota}
@@ -1490,7 +1522,7 @@ const onOpenDialog = () => {
                 className={cn(
                   "ml-2 font-normal text-lg",
                   CATEGORY_4_TOTAL_VMS > remainingQuota &&
-                    "border-destructive text-destructive",
+                  "border-destructive text-destructive",
                 )}
               >
                 {CATEGORY_4_TOTAL_VMS} / {remainingQuota}
@@ -1793,6 +1825,7 @@ function RoleRow({
   count,
   instanceType,
   allowedTypes,
+  isMacAmi,
   onUpdateCount,
   onUpdateType,
 }: {
@@ -1800,11 +1833,13 @@ function RoleRow({
   count: number;
   instanceType: string;
   allowedTypes: string[];
+  isMacAmi: boolean;
   onUpdateCount: (count: number) => void;
   onUpdateType: (type: string) => void;
 }) {
   const filteredTypes = INSTANCE_TYPES.filter((t) =>
-    allowedTypes.includes(t.value),
+    allowedTypes.includes(t.value) &&
+    (isMacAmi ? t.category === "mac" : t.category !== "mac"),
   );
 
   return (

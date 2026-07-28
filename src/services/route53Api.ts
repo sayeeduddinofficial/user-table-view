@@ -82,6 +82,20 @@ export interface CreateRoute53RecordResponse {
   data?: CreateRoute53RecordResult;
 }
 
+export interface ExistingRoute53RecordResponse {
+  success: boolean;
+  exists: boolean;
+  record: Route53RecordItem | null;
+}
+
+export async function checkExistingRoute53Record(hostedZoneId: string) {
+  return apiClient.get<ExistingRoute53RecordResponse>(
+    env.route53Service,
+    "/records/existing",
+    { hostedZoneId }
+  );
+}
+
 export async function fetchRoute53Records() {
   const response = await apiClient.get<{ success: boolean; count?: number; data?: Route53RecordItem[] }>(
     env.route53Service,

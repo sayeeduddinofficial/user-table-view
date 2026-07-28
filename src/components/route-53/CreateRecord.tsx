@@ -27,8 +27,18 @@ import {
   createRoute53Record,
   fetchRoute53LoadBalancers,
   Route53LoadBalancerItem,
+  checkExistingRoute53Record
 } from "@/services/route53Api";
 import { ApiError } from "@/lib/api";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
+import { useHasActiveDnsRecord } from "@/hooks/useHasActiveDnsRecord";
+
+// replace the local hasActiveRecord/checkingExisting state + useEffect check with:
 
 const DEFAULT_HOSTED_ZONE_NAME = "prusplunk.com";
 const DEFAULT_HOSTED_ZONE_ID = "e028d1bc-abef-44b4-91ae-efa139e4d2af";
@@ -119,6 +129,10 @@ export default function CreateRecord() {
     [loadBalancers, selectedLoadBalancerId]
   );
 
+
+  const { hasActiveRecord, checkingExisting } = useHasActiveDnsRecord(hostedZoneId);
+
+
   useEffect(() => {
     const shouldLoad = alias && endpointType && region;
     if (!shouldLoad) {
@@ -179,7 +193,7 @@ export default function CreateRecord() {
     const trimmed = ttl.trim();
     if (trimmed === "") return "TTL is required.";
     if (!/^\d+$/.test(trimmed)) return "TTL must be a non-negative integer.";
-     if (Number(trimmed) > TTL_MAX) return `TTL cannot exceed ${TTL_MAX} seconds.`;
+    if (Number(trimmed) > TTL_MAX) return `TTL cannot exceed ${TTL_MAX} seconds.`;
     return "";
   }, [ttl, alias]);
 
@@ -202,6 +216,8 @@ export default function CreateRecord() {
   };
 
   const isFormValid = useMemo(() => {
+    if (hasActiveRecord) return false;
+
     const trimmedRecordName = recordName.trim();
     if (trimmedRecordName && !isValidRecordName(trimmedRecordName)) return false;
 
@@ -587,13 +603,31 @@ export default function CreateRecord() {
             >
               Cancel
             </Button>
-            <Button
-              onClick={() => setIsConfirmOpen(true)}
-              disabled={!isFormValid}
-              className="bg-primary text-white hover:bg-primary/90"
-            >
-              Create Record
-            </Button>
+
+            {hasActiveRecord ? (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span tabIndex={0}>
+                      <Button disabled className="bg-primary/50 text-white cursor-not-allowed">
+                        Create Record
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    You already have an active DNS record in this hosted zone. Delete it before creating another.
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : (
+              <Button
+                onClick={() => setIsConfirmOpen(true)}
+                disabled={!isFormValid || checkingExisting}
+                className="bg-primary text-white hover:bg-primary/90"
+              >
+                Create Record
+              </Button>
+            )}
           </div>
         </div>
       </div>

@@ -50,7 +50,8 @@ export function LoadBalancersList() {
   const [chooserOpen, setChooserOpen] = useState(false);
   const [globalFilter, setGlobalFilter] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [provisioningLb, setProvisioningLb] = useState<ProvisioningLbItem | null>(null);
+  const [provisioningAlb, setProvisioningAlb] = useState<ProvisioningLbItem | null>(null);
+  const [provisioningNlb, setProvisioningNlb] = useState<ProvisioningLbItem | null>(null);
   const [existingLbs, setExistingLbs] = useState<ExistingLbItem[]>([]);
   const [userOwnedLbs, setUserOwnedLbs] = useState<LbItem[]>([]);
   const [checkingProvisioning, setCheckingProvisioning] = useState(false);
@@ -62,7 +63,7 @@ export function LoadBalancersList() {
       const res = await lbApi.list();
       setLbs((res as any).data ?? []);
     } catch {
-      alert({ title: "Failed to load load balancers", severity: "error" });
+      console.error("Failed to fetch load balancers");
     } finally {
       if (showLoading) setLoading(false);
     }
@@ -82,16 +83,47 @@ export function LoadBalancersList() {
     }
   };
 
+
+
+
   useEffect(() => { fetchLbs(true); }, []);
 
   useEffect(() => {
     if (!user?.id) return;
     setCheckingProvisioning(true);
-    lbApi.checkProvisioning(user.id)
-      .then((res) => setProvisioningLb(res.loadBalancer ?? null))
-      .catch(() => setProvisioningLb(null))
+    Promise.all([
+      lbApi.checkProvisioning(user.id, "application").catch(() => ({ exists: false, loadBalancer: null })),
+      lbApi.checkProvisioning(user.id, "network").catch(() => ({ exists: false, loadBalancer: null })),
+    ])
+      .then(([albRes, nlbRes]) => {
+        setProvisioningAlb(albRes.loadBalancer ?? null);
+        setProvisioningNlb(nlbRes.loadBalancer ?? null);
+      })
       .finally(() => setCheckingProvisioning(false));
   }, [user?.id]);
+
+  useEffect(() => {
+    const hasPendingLb = Boolean(
+      provisioningAlb || provisioningNlb || lbs.some((lb) => ["pending", "provisioning", "creating"].includes(String(lb.status || "").toLowerCase()))
+    );
+
+    if (!user?.id || !hasPendingLb) return;
+
+    const interval = window.setInterval(() => {
+      void fetchLbs(false);
+      void refreshUserOwnedLbs();
+      Promise.all([
+        lbApi.checkProvisioning(user.id, "application").catch(() => ({ exists: false, loadBalancer: null })),
+        lbApi.checkProvisioning(user.id, "network").catch(() => ({ exists: false, loadBalancer: null })),
+      ])
+        .then(([albRes, nlbRes]) => {
+          setProvisioningAlb(albRes.loadBalancer ?? null);
+          setProvisioningNlb(nlbRes.loadBalancer ?? null);
+        });
+    }, 10000);
+
+    return () => window.clearInterval(interval);
+  }, [user?.id, provisioningAlb, provisioningNlb, lbs]);
 
   useEffect(() => {
     if (!user?.id) {
@@ -107,6 +139,8 @@ export function LoadBalancersList() {
     };
   }, [user?.id]);
 
+
+
   useEffect(() => {
     const region = lbs[0]?.region ?? "us-east-2";
     if (!user?.id) return;
@@ -118,7 +152,36 @@ export function LoadBalancersList() {
   }, [user?.id, lbs[0]?.region]);
 
 
-  const handleRemove = async (id: string, name: string) => {
+  // const handleRemove = async (id: string, name: string) => {
+  //   const confirmed = await confirm({
+  //     title: `Delete load balancer "${name}"?`,
+  //     description: "This will remove it from AWS immediately.",
+  //     icon: "destroy",
+  //   });
+  //   if (!confirmed) return;
+
+  //   const previousLbs = lbs;
+  //   const previousUserOwnedLbs = userOwnedLbs;
+  //   setLbs((prev) => prev.filter((lb) => lb.id !== id));
+  //   setUserOwnedLbs((prev) => prev.filter((lb) => lb.id !== id));
+
+  //   try {
+  //     await lbApi.deleteSdk(id);
+  //     await fetchLbs(false);
+  //     await refreshUserOwnedLbs();
+  //     alert({ title: `Load balancer "${name}" deleted`, severity: "success" });
+  //   } catch (err: any) {
+  //     setLbs(previousLbs);
+  //     setUserOwnedLbs(previousUserOwnedLbs);
+  //     alert({
+  //       title: `Failed to delete "${name}"`,
+  //       description: err?.message ?? "Unknown error",
+  //       severity: "error",
+  //     });
+  //   }
+  // };
+
+  const handleRemove = async (id: string, name: string, requestId: string) => {
     const confirmed = await confirm({
       title: `Delete load balancer "${name}"?`,
       description: "This will remove it from AWS immediately.",
@@ -126,19 +189,13 @@ export function LoadBalancersList() {
     });
     if (!confirmed) return;
 
-    const previousLbs = lbs;
-    const previousUserOwnedLbs = userOwnedLbs;
-    setLbs((prev) => prev.filter((lb) => lb.id !== id));
-    setUserOwnedLbs((prev) => prev.filter((lb) => lb.id !== id));
+    useAppStore.getState().setActiveRequest(requestId, "lb-cli-terminate-service");
+    nav("/console");
 
     try {
       await lbApi.deleteSdk(id);
-      await fetchLbs(false);
-      await refreshUserOwnedLbs();
-      alert({ title: `Load balancer "${name}" deleted`, severity: "success" });
     } catch (err: any) {
-      setLbs(previousLbs);
-      setUserOwnedLbs(previousUserOwnedLbs);
+      useAppStore.getState().setActiveRequest(null);
       alert({
         title: `Failed to delete "${name}"`,
         description: err?.message ?? "Unknown error",
@@ -146,6 +203,7 @@ export function LoadBalancersList() {
       });
     }
   };
+
 
   const formatDate = (date: string | Date) =>
     new Date(date).toLocaleDateString("en-GB", {
@@ -212,14 +270,6 @@ export function LoadBalancersList() {
     });
   }, [rows, globalFilter]);
 
-  if (loading) {
-    return (
-      <div className="text-center py-10">
-        <h2 className="text-xl font-semibold">Loading load balancers...</h2>
-      </div>
-    );
-  }
-
   // if (isError) {
   //   const message = error instanceof ApiError ? error.message : "Please try again later.";
   //   return (
@@ -237,13 +287,22 @@ export function LoadBalancersList() {
   // }
 
   const sorted = filtered;
-  const hasUserCreatedBalancer = !!user?.id && userOwnedLbs.some(lb => lb.user_id === user.id);
-  const createDisabledReason = provisioningLb
-    ? `"${provisioningLb.name}" is still provisioning. Wait for it to finish before creating another.`
-    : hasUserCreatedBalancer
-      ? "You already have a load balancer under your name. Use the existing one or delete it before creating a new one."
-      : null;
-  const isCreateDisabled = !!createDisabledReason;
+  const TERMINAL_STATUSES = ["failed", "destroyed", "deleted", "terminated"];
+
+  const activeUserLbs = userOwnedLbs.filter(
+    (lb) => lb.user_id === user?.id && !TERMINAL_STATUSES.includes(lb.status)
+  );
+  const hasAlb = activeUserLbs.some((lb) => lb.type === "application");
+  const hasNlb = activeUserLbs.some((lb) => lb.type === "network");
+
+  // provisioningLb.type tells us which kind is currently mid-flight
+  const albBlocked = hasAlb || !!provisioningAlb;
+  const nlbBlocked = hasNlb || !!provisioningNlb;
+
+  const isCreateDisabled = albBlocked && nlbBlocked;
+  const createDisabledReason = isCreateDisabled
+    ? "You already have both an ALB and an NLB under your name. Delete one before creating another."
+    : null;
 
   const allSelected = sorted.length > 0 && sorted.every((r) => selected.has(r.id));
   const toggleAll = () => {
@@ -273,7 +332,7 @@ export function LoadBalancersList() {
           <StatCard
             icon={<Scale className="h-4 w-4 text-primary" />}
             iconBg="bg-primary/10"
-            value={rows.length}
+            value={rows.filter((r) => r.state === "Completed").length}
             label="Total LBs"
           />
 
@@ -328,7 +387,7 @@ export function LoadBalancersList() {
           <Button
             className="bg-primary hover:bg-primary/90 text-white gap-1.5 shrink-0"
             title={!loading ? createDisabledReason ?? undefined : undefined}
-            tooltip={!loading && createDisabledReason ? "Maximum 1 balancer limit reached." : undefined}
+            tooltip={!loading && createDisabledReason ? "Maximum balancer limit reached." : undefined}
             onClick={() => {
               if (!loading && !isCreateDisabled) {
                 setChooserOpen(true);
@@ -464,11 +523,11 @@ export function LoadBalancersList() {
                     <td className="px-5 py-4 text-right">
 
                       <button
-                        onClick={() => handleRemove(r.id, r.name)}
+                        onClick={() => handleRemove(r.id, r.name, r.requestId)}
                         disabled={r.state.toLowerCase() === "provisioning"}
                         className={`p-1.5 rounded-md transition-colors ${r.state.toLowerCase() === "provisioning"
-                            ? "cursor-not-allowed opacity-50 text-muted-foreground"
-                            : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                          ? "cursor-not-allowed opacity-50 text-muted-foreground"
+                          : "text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                           }`}
                         title={
                           r.state.toLowerCase() === "provisioning"
@@ -501,7 +560,24 @@ export function LoadBalancersList() {
           setChooserOpen(false);
           nav(`/aws/load-balancers/create/${type}`);
         }}
+        albDisabled={albBlocked}
+        nlbDisabled={nlbBlocked}
+        albDisabledReason={
+          provisioningAlb
+            ? `"${provisioningAlb.name}" is still provisioning.`
+            : hasAlb
+              ? "You already have an Application Load Balancer."
+              : undefined
+        }
+        nlbDisabledReason={
+          provisioningNlb
+            ? `"${provisioningNlb.name}" is still provisioning.`
+            : hasNlb
+              ? "You already have a Network Load Balancer."
+              : undefined
+        }
       />
+
     </div>
   );
 }

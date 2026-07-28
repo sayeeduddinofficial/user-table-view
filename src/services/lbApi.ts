@@ -7,6 +7,16 @@ export type VpcItem = { id: string; name: string; cidr: string };
 export type SubnetItem = { id: string; name: string; cidr: string; az: string };
 export type SgItem = { id: string; name: string; description: string };
 export type TgItem = { arn: string; name: string; protocol: string; port: number, loadBalancerArns: string[] };
+export type TargetGroupListItem = {
+  targetGroupName: string;
+  targetGroupArn: string;
+  protocol: string;
+  port: number;
+  targetType: string;
+  vpcId: string;
+  healthCheckProtocol: string;
+  healthCheckPort: string;
+};
 export type CertItem = { arn: string; domain: string; status: string };
 export type EipItem = { allocationId: string; publicIp: string };
 export type AzItem = { name: string; zoneId: string };
@@ -39,6 +49,8 @@ export const lbApi = {
     apiClient.get<{ securityGroups: SgItem[] }>(BASE, '/security-groups', { region, vpcId }),
   targetGroups: (region: string, vpcId?: string) =>
     apiClient.get<{ targetGroups: TgItem[] }>(BASE, '/target-groups', { region, ...(vpcId ? { vpcId } : {}) }),
+  targetGroupsFull: (vpcId: string) =>
+    apiClient.get<{ success: boolean; data: TargetGroupListItem[] }>(BASE, '/target-groups', { vpcId }),
   certificates: (region: string) =>
     apiClient.get<{ certificates: CertItem[] }>(BASE, '/certificates', { region }),
   elasticIps: (region: string) =>
@@ -67,9 +79,9 @@ export const lbApi = {
     apiClient.get<{ exists: boolean; loadBalancers: ExistingLbItem[] }>(
       BASE, '/load-balancers/check-existing', { region }
     ),
-  checkProvisioning: (userId: number) =>
+  checkProvisioning: (userId: number,  type?: 'application' | 'network') =>
     apiClient.get<{ exists: boolean; loadBalancer: ProvisioningLbItem | null }>(
-      BASE, '/load-balancers/check-provisioning', { user_id: String(userId) }
+      BASE, '/load-balancers/check-provisioning', { user_id: String(userId), ...(type ? { type } : {}) }
     ),
   checkLbName: (name: string, region: string) =>
     apiClient.get<{ exists: boolean }>(BASE, '/load-balancers/check-name', { name, region }),

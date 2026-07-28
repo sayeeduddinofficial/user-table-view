@@ -222,6 +222,15 @@ export async function deleteLbRequestApi(requestId: string): Promise<void> {
     env.lbService,
     `/load-balancers/by-request/${requestId}`
   );
+} 
+
+// add this to vmRequestsApi.ts
+export async function deleteRdsRequestApi(requestId: string): Promise<void> {
+  await apiClient.delete<ApiResponse<void>>(
+    env.rds,
+    `/clusters/${encodeURIComponent(requestId)}`
+  );
 }
+
 
 

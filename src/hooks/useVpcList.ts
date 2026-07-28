@@ -75,9 +75,8 @@ export function useVpcList() {
     }
 
     const showedUp = vpcs.some((v: any) => String(v.id) === String(pending.requestId));
-    const listIsEmpty = vpcs.length === 0;
 
-    if (showedUp || listIsEmpty) {
+    if (showedUp) {
       if (currentUser?.id) {
         clearPendingVpc(currentUser.id);
       }
@@ -87,6 +86,16 @@ export function useVpcList() {
 
     setPendingCount(1);
   }, [vpcs, currentUser?.id]);
+
+  useEffect(() => {
+    if (!currentUser?.id || pendingCount === 0) return;
+
+    const interval = window.setInterval(() => {
+      void loadVpcs();
+    }, 10000);
+
+    return () => window.clearInterval(interval);
+  }, [currentUser?.id, pendingCount, loadVpcs]);
 
   return {
     tab,

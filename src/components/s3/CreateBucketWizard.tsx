@@ -522,7 +522,7 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
           </div>
         </section>
 
-        <div className="flex items-center justify-between gap-3 pt-2">
+        <div className="flex items-center justify-end gap-3 mt-6">
           <Button variant="outline" onClick={onCancel}>
             Cancel
           </Button>

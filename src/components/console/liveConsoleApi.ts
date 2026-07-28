@@ -142,6 +142,23 @@ const SERVICE_ENDPOINTS: Record<string, ServiceEndpoints> = {
     // matches router.get("/records/:requestId/live-logs", getDNSLiveLogs)
     live: (id) => `/records/${id}/live-logs`,
   },
+  "ec2-service": {
+    base: env.runtime,
+    live: (id) => `/api/vms/vm-requests/${id}/instance-terminate/logs/live`,
+    liveOnly: true,
+  },
+  "vpc-terminate-service": {
+    base: env.vpcService,   
+    logs: (id) => `/requests/${id}/logs`,
+    live: (id) => `/requests/${id}/vpc-terminate/logs/live`,
+  },
+  "lb-cli-terminate-service": {
+    base: env.lbService,
+    logs: (id) => `/load-balancers/by-request/${id}/logs`,
+    live: (id) => `/load-balancers/by-request/${id}/sdk-terminate/logs/live`,
+  },
+
+
 };
 
 const DEFAULT_ENDPOINTS: Required<Pick<ServiceEndpoints, "details" | "logs" | "live">> & { base: string } = {
@@ -268,7 +285,41 @@ export async function clearRequestLogsApi(requestId: string): Promise<void> {
 }
 
 // ── Download request logs ────────────────────────────────────────────────────
-export async function downloadRequestLogsApi(requestId: string): Promise<void> {
+// export async function downloadRequestLogsApi(requestId: string): Promise<void> {
+//   await apiClient.download(
+//     env.vmRequest,
+//     `/api/vm-requests/${requestId}/logs/download`,
+//     `terraform-logs-${requestId}.txt`
+//   );
+// }
+export async function downloadRequestLogsApi(requestId: string, service?: string): Promise<void> {
+  const endpoints = service ? SERVICE_ENDPOINTS[service] : undefined;
+
+  if (endpoints?.logs) {
+    // For services with logs endpoints, construct download URL
+    const logsPath = endpoints.logs(requestId);
+    const downloadUrl = `${endpoints.base}${logsPath}/download`;
+    
+    const headers = await apiClient.getAuthHeaders();
+    const response = await fetch(downloadUrl, { headers });
+    
+    if (!response.ok) {
+      throw new Error(`Failed to download logs: ${response.status}`);
+    }
+    
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `terraform-logs-${requestId}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    return;
+  }
+
+  // Fallback to default vm-request-service endpoint
   await apiClient.download(
     env.vmRequest,
     `/api/vm-requests/${requestId}/logs/download`,

@@ -76,6 +76,7 @@ interface EksCluster {
 export function EksList() {
   const [query, setQuery] = useState("");
   const [clusters, setClusters] = useState<EksCluster[]>([]);
+  const [workerNodes, setWorkerNodes] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [selected] = useState<string[]>([]);
   const { alert } = useDialog();
@@ -96,7 +97,8 @@ export function EksList() {
         });
         return;
       }
-      setClusters(Array.isArray(data.data) ? data.data : []);
+      setClusters(data.data.clusters);
+      setWorkerNodes(data.data.workerNodes);
     } catch (err) {
       alert({ title: "Failed to load EKS clusters", severity: "error" });
     } finally {
@@ -231,13 +233,13 @@ export function EksList() {
           <StatCard
             icon={<Network className="h-4 w-4 text-primary" />}
             iconBg="bg-primary/10"
-            value={totalClusters}
+            value={activeCount}
             label="Total Clusters"
           />
           <StatCard
             icon={<Layers className="h-4 w-4 text-cyan-400" />}
             iconBg="bg-cyan-500/10"
-            value={activeCount}
+            value={workerNodes}
             label="Worker Nodes"
           />
           <StatCard
@@ -439,7 +441,7 @@ export function EksList() {
                         </td>
                         <td className="px-5 py-4 text-right">
                           {(() => {
-                            const deleteDisabled = ["PENDING", "PROVISIONING"].includes(v.status);
+                            const deleteDisabled = ["PENDING", "PROVISIONING","TERMINATING"].includes(v.status);
                             return (
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -457,7 +459,7 @@ export function EksList() {
                                 <TooltipContent side="top">
                                   <p>
                                     {deleteDisabled
-                                      ? "Cluster is still provisioning"
+                                      ? "Cluster is terminating"
                                       : "Terminate cluster"}
                                   </p>
                                 </TooltipContent>

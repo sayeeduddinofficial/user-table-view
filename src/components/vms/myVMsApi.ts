@@ -20,7 +20,7 @@ export async function fetchStatusUpdatesApi(): Promise<{ success: boolean; data:
   return apiClient.get(env.runtime, '/api/vms/status-updates');
 }
 
-export async function fetchVMStatusApi(instanceId: string): Promise<{ status: string; publicIp?: string; privateIp?: string }> {
+export async function fetchVMStatusApi(instanceId: string): Promise<{ status: string; publicIp?: string; privateIp?: string; stop_time?: string | null }> {
   return apiClient.get(env.runtime, `/api/vms/${instanceId}/status`);
 }
 

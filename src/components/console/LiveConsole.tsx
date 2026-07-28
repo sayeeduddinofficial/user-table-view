@@ -47,8 +47,13 @@ const stripAnsiCodes = (str: string): string => {
 const NOT_READY_PHRASES = ["logs not available yet", "no logs available"];
 
 /** True once the merged S3 log contains a DESTROY LOGS section. */
+// const hasDestroyLogs = (logText: string): boolean =>
+//   /DESTROY\s+LOGS/i.test(logText);
 const hasDestroyLogs = (logText: string): boolean =>
-  /DESTROY\s+LOGS/i.test(logText);
+  /DESTROY\s+LOGS/i.test(logText) || 
+  /VPC\s+CLI\s+TERMINATION\s+LOGS/i.test(logText) ||
+  /LOAD\s+BALANCER\s+CLI\s+TERMINATION\s+LOGS/i.test(logText);
+
 const hasRetryLogs = (logText: string): boolean =>
   /TERMINATE\s+RETRY\s+ATTEMPT/i.test(logText);
 
@@ -402,7 +407,7 @@ useEffect(() => {
 
                 // Regular log message
                 if (data.message) {
-                  const cleanMessage = stripAnsiCodes(data.message);
+                  const cleanMessage = stripAnsiCodes(stripTimestamp(data.message));
                  if (/TERMINATE\s+RETRY\s+ATTEMPT/i.test(cleanMessage)) {
                     liveStreamHadRetryRef.current = true;
                   }
@@ -447,8 +452,9 @@ useEffect(() => {
     if (!effectiveRequestId || !requestMeta) return;
 
     const status = requestMeta.status;
+    const isLiveOnlyActive = isLiveOnlyService(activeService ?? undefined);
 
-    if (PROVISIONING_STATUSES.includes(status)) {
+    if (PROVISIONING_STATUSES.includes(status) || isLiveOnlyActive) {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
@@ -529,6 +535,7 @@ useEffect(() => {
   }, [
     effectiveRequestId,
     requestMeta?.status,
+    activeService,     
     connectToLiveLogs,
     fetchCompletedLogs,
   ]);

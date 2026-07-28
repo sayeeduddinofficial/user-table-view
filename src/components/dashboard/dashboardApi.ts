@@ -32,12 +32,44 @@ export interface ProcessingRequestsResponse {
   processingCount: number;
 }
 
+export interface DashboardOverviewResponse {
+  totalResources: number;
+  activeResources: number;
+  provisioningResources: number;
+  averageProvisionTime: {
+    formatted: string;
+    averageMs: number;
+    count: number;
+    breakdown?: Record<string, string>;
+  };
+  quotaUsage: {
+    current: number;
+    max: number;
+    remaining: number;
+    percentage: number;
+  };
+  resourcesByService: Array<{
+    service: string;
+    label: string;
+    count: number;
+  }>;
+}
+
 export interface UserResponse {
   user: CurrentUser;
 }
 
 export interface RoleCountsResponse {
   [key: string]: number;
+}
+
+export interface ServiceQuota {
+  service: string;
+  label: string;
+  current: number;
+  max: number;
+  remaining: number;
+  percentage: number;
 }
 
 // ── Fetch AWS Counts ─────────────────────────────────────────────────────────
@@ -69,7 +101,7 @@ export async function fetchAverageProvisionTimeApi(): Promise<AverageProvisionTi
 export async function fetchActiveUsersApi(): Promise<number> {
   const response = await apiClient.get<ApiResponse<ActiveUsersResponse>>(
     env.vmRequest,
-    "/api/dashboard/dashboard/summary/users"
+    "/api/dashboard/summary/users"
   );
 
   if (!response.data) {
@@ -82,12 +114,23 @@ export async function fetchActiveUsersApi(): Promise<number> {
 export async function fetchProcessingRequestsCountApi(): Promise<number> {
   const response = await apiClient.get<ApiResponse<ProcessingRequestsResponse>>(
     env.vmRequest,
-    "/api/dashboard/dashboard/summary/processing-requests"
+    "/api/dashboard/summary/processing-requests"
   );
   if (!response.data) {
     throw new Error("Processing requests data not found");
   }
   return response.data.processingCount;
+}
+
+export async function fetchDashboardOverviewApi(): Promise<DashboardOverviewResponse> {
+  const response = await apiClient.get<ApiResponse<DashboardOverviewResponse>>(
+    env.vmRequest,
+    "/api/dashboard/overview"
+  );
+  if (!response.data) {
+    throw new Error("Dashboard overview data not found");
+  }
+  return response.data;
 }
 
 // ── Fetch Current User ───────────────────────────────────────────────────────
@@ -106,10 +149,22 @@ export async function fetchCurrentUserApi(): Promise<CurrentUser> {
 export async function fetchRoleCountsApi(): Promise<RoleCountsResponse> {
   const response = await apiClient.get<ApiResponse<RoleCountsResponse>>(
     env.vmRequest,
-    "/api/dashboard/dashboard/role-count"
+    "/api/dashboard/role-count"
   );
   if (!response.data) {
     throw new Error("Role counts data not found");
+  }
+  return response.data;
+}
+
+// ── Fetch Service Quotas ─────────────────────────────────────────────────────
+export async function fetchServiceQuotasApi(): Promise<ServiceQuota[]> {
+  const response = await apiClient.get<ApiResponse<ServiceQuota[]>>(
+    env.vmRequest,
+    "/api/dashboard/service-quotas"
+  );
+  if (!response.data) {
+    throw new Error("Service quotas data not found");
   }
   return response.data;
 }

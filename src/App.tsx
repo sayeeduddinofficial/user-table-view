@@ -294,8 +294,8 @@ function AppRoutes() {
         <Route path="/aws/eks" element={<Eks />} />
         <Route path="/aws/eks/:eksId" element={<EksDetails />} />
         <Route path="/aws/eks/create" element={<CreateEks />} />
-        <Route path="/rolesmanagement" element={<RolesManagement />} />
-        <Route path="/roles/viewroles" element={<ViewRoles />} />
+        {/* <Route path="/rolesmanagement" element={<RolesManagement />} /> */}
+        {/* <Route path="/roles/viewroles" element={<ViewRoles />} /> */}
       </Route>
       <Route path="*" element={<NotFound />} />
       <Route path="/Signup-access" element={<SignUp />} />
