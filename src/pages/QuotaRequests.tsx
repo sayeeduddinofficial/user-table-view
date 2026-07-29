@@ -33,9 +33,10 @@ interface QuotaRequest {
   admin_notes: string | null;
   created_at: string;
   updated_at: string;
-  requested_by_role:  string;
+  requested_by_role: string;
   manager_email: string;
   expires_at: string;
+  service: string;
 }
 const API_VM_URL = env.vmRequest;
 function getAccessToken() {
@@ -95,9 +96,8 @@ export default function QuotaRequests() {
     if (deepLinkRejectToken) query.push(`reject_token=${deepLinkRejectToken}`);
     const queryString = query.length ? `?${query.join("&")}` : "";
 
-    const returnUrl = `/admin/quota-requests${queryString}${
-      email ? `&email=${encodeURIComponent(email)}` : ""
-    }${source ? `&source=${encodeURIComponent(source)}` : ""}`;
+    const returnUrl = `/admin/quota-requests${queryString}${email ? `&email=${encodeURIComponent(email)}` : ""
+      }${source ? `&source=${encodeURIComponent(source)}` : ""}`;
 
     if (source === "email") {
       sessionStorage.setItem("postLoginReturnUrl", returnUrl);
@@ -144,13 +144,13 @@ export default function QuotaRequests() {
             Rejected
           </Badge>
         );
-        case "expired":
-          return (
-            <Badge variant="outline" className="border-muted text-muted-foreground">
-              <Clock className="h-3 w-3 mr-1" />
-              Expired
-            </Badge>
-          );
+      case "expired":
+        return (
+          <Badge variant="outline" className="border-muted text-muted-foreground">
+            <Clock className="h-3 w-3 mr-1" />
+            Expired
+          </Badge>
+        );
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
@@ -257,16 +257,16 @@ export default function QuotaRequests() {
         return;
       }
 
-      alert({ 
-        title: "Quota request approved successfully.", 
-        severity: "success" 
+      alert({
+        title: "Quota request approved successfully.",
+        severity: "success"
       });
       await fetchQuotaRequests(true);
     } catch (err) {
       console.error("Email approve failed:", err);
-      alert({ 
-        title: "An unexpected error occurred during approval.", 
-        severity: "error" 
+      alert({
+        title: "An unexpected error occurred during approval.",
+        severity: "error"
       });
     }
   };
@@ -295,16 +295,16 @@ export default function QuotaRequests() {
         return;
       }
 
-      alert({ 
-        title: "Quota request rejected successfully.", 
-        severity: "success" 
+      alert({
+        title: "Quota request rejected successfully.",
+        severity: "success"
       });
       await fetchQuotaRequests(true);
     } catch (err) {
       console.error("Email reject failed:", err);
-      alert({ 
-        title: "An unexpected error occurred during rejection.", 
-        severity: "error" 
+      alert({
+        title: "An unexpected error occurred during rejection.",
+        severity: "error"
       });
     }
   };
@@ -314,12 +314,61 @@ export default function QuotaRequests() {
     try {
       setUpdating(true);
       const token = await getAccessToken();
-      const endpoint =
-        reviewDialog.action === "approved"
-          ? `${API_VM_URL}/api/vms/quota-request/${reviewDialog.request.id}/approve`
-          : `${API_VM_URL}/api/vms/quota-request/${reviewDialog.request.id}/deny`;
+      let endpoint = "";
+      let method = "POST";
+
+      const service = reviewDialog.request?.service?.toLowerCase();
+
+      if (service === "vpc") {
+        endpoint =
+          reviewDialog.action === "approved"
+            ? `${API_VM_URL}/api/vpc-quota/approve/${reviewDialog.request.id}`
+            : `${API_VM_URL}/api/vpc-quota/deny/${reviewDialog.request.id}`;
+
+        method = "POST";
+      }
+      else if (service === "lb") {
+        endpoint =
+          reviewDialog.action === "approved"
+            ? `${API_VM_URL}/api/lb-quota/${reviewDialog.request.id}/approve`
+            : `${API_VM_URL}/api/lb-quota/${reviewDialog.request.id}/deny`;
+
+        method = "POST";
+      }
+      else if (service === "vm") {
+        endpoint =
+          reviewDialog.action === "approved"
+            ? `${API_VM_URL}/api/vms/quota-request/${reviewDialog.request.id}/approve`
+            : `${API_VM_URL}/api/vms/quota-request/${reviewDialog.request.id}/deny`;
+
+        method = "PUT";
+      }
+      else if (service === "rds") {
+        endpoint =
+          reviewDialog.action === "approved"
+            ? `${API_VM_URL}/api/rds-quota/approve/${reviewDialog.request.id}`
+            : `${API_VM_URL}/api/rds-quota/deny/${reviewDialog.request.id}`;
+
+        method = "POST";
+      }
+      else if (service === "eks") {
+        endpoint =
+          reviewDialog.action === "approved"
+            ? `${API_VM_URL}/api/eks-quota/approve/${reviewDialog.request.id}`
+            : `${API_VM_URL}/api/eks-quota/deny/${reviewDialog.request.id}`;
+
+        method = "POST";
+      }
+      else if (service === "s3") {
+        endpoint =
+          reviewDialog.action === "approved"
+            ? `${API_VM_URL}/api/s3-quota/${reviewDialog.request.id}/approve`
+            : `${API_VM_URL}/api/s3-quota/${reviewDialog.request.id}/reject`;
+
+        method = "PUT";
+      }
       const response = await fetch(endpoint, {
-        method: "PUT",
+        method,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
@@ -382,7 +431,7 @@ export default function QuotaRequests() {
     <div className="min-h-screen">
       <Header
         title="Quota Requests"
-        subtitle="Review and manage VM quota increase requests"
+        subtitle="Review and manage quota increase requests"
         showNewRequest={false}
       />
 
@@ -407,84 +456,94 @@ export default function QuotaRequests() {
               const isPending = displayStatus === "pending";
 
               return (
-              <div
-                key={req.id}
-                className="glass-panel rounded-xl p-4 md:p-5 flex flex-col md:flex-row md:items-center gap-4"
-              >
-                <div className="flex-1 space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-foreground">
-                      {req.user_name || req.user_email}
-                    </span>
-                    {statusBadge(displayStatus)}
-                  </div>
+                <div
+                  key={req.id}
+                  className="glass-panel rounded-xl p-4 md:p-5 flex flex-col md:flex-row md:items-center gap-4"
+                >
+                  <div className="flex-1 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-foreground">
+                        {req.user_name || req.user_email}
+                      </span>
+                      {statusBadge(displayStatus)}
+                    </div>
 
-                  <p className="text-sm text-muted-foreground">
-                    {req.user_email}
-                  </p>
-
-                  <p className="text-sm text-muted-foreground">
-                    Quota:
-                    <span className="text-foreground font-medium">
-                      {" "}
-                      {req.current_quota}{" "}
-                    </span>
-                    →
-                    <span className="text-primary font-medium">
-                      {" "}
-                      {req.current_quota + req.requested_quota}{" "}
-                    </span>{" "}
-                    VMs
-                  </p>
-
-                  <p className="text-sm text-muted-foreground">
-                    Reason: {req.reason}
-                  </p>
-
-                  {req.admin_notes && (
-                    <p className="text-sm italic text-muted-foreground">
-                      Admin notes: {req.admin_notes}
+                    <p className="text-sm text-muted-foreground">
+                      {req.user_email}
                     </p>
-                  )}
 
-                  <p className="text-xs text-muted-foreground">
-                    {new Date(req.created_at).toLocaleString()}
-                  </p>
-                </div>
+                    <p className="text-sm text-muted-foreground">
+                      Quota:
+                      <span className="text-foreground font-medium">
+                        {" "}
+                        {req.current_quota}{" "}
+                      </span>
+                      →
+                      <span className="text-primary font-medium">
+                        {req.current_quota + req.requested_quota}
+                      </span>
 
-                {isPending && canApproveRequest(req) && (
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      className="bg-success text-success-foreground hover:bg-success/90"
-                      onClick={() =>
-                        setReviewDialog({
-                          open: true,
-                          request: req,
-                          action: "approved",
-                        })
-                      }
-                    >
-                      <Check className="h-4 w-4 mr-1" /> Approve
-                    </Button>
+                      {req.service === "vm" && " VMs"}
+                      {req.service === "vpc" && " VPCs"}
+                      {req.service === "lb" && " Load Balancers"}
+                      {req.service === "rds" && " RDS Databases"}
+                      {req.service === "eks" && " EKS Clusters"}
+                      {req.service === "s3" && " S3 Buckets"}
+                    </p>
 
-                    <Button
-                      size="sm"
-                      variant="destructive"
-                      onClick={() =>
-                        setReviewDialog({
-                          open: true,
-                          request: req,
-                          action: "rejected",
-                        })
-                      }
-                    >
-                      <X className="h-4 w-4 mr-1" /> Reject
-                    </Button>
+                    <p className="text-sm text-muted-foreground">
+                      Reason: {req.reason}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Service:
+                      <span className="font-medium text-foreground">
+                        {" "}{req.service?.toUpperCase()}
+                      </span>
+                    </p>
+                    {req.admin_notes && (
+                      <p className="text-sm italic text-muted-foreground">
+                        Admin notes: {req.admin_notes}
+                      </p>
+                    )}
+
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(req.created_at).toLocaleString()}
+                    </p>
                   </div>
-                )}
-              </div>
-            );
+
+                  {isPending && canApproveRequest(req) && (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        className="bg-success text-success-foreground hover:bg-success/90"
+                        onClick={() =>
+                          setReviewDialog({
+                            open: true,
+                            request: req,
+                            action: "approved",
+                          })
+                        }
+                      >
+                        <Check className="h-4 w-4 mr-1" /> Approve
+                      </Button>
+
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() =>
+                          setReviewDialog({
+                            open: true,
+                            request: req,
+                            action: "rejected",
+                          })
+                        }
+                      >
+                        <X className="h-4 w-4 mr-1" /> Reject
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
             })}
           </div>
         )}
@@ -496,7 +555,7 @@ export default function QuotaRequests() {
           if (!open) {
             setReviewDialog({ open: false, request: null, action: "approved" });
             setAdminNotes("");
-            }
+          }
         }}
       >
         <DialogContent>
@@ -508,11 +567,23 @@ export default function QuotaRequests() {
 
             <DialogDescription>
               {reviewDialog.action === "approved"
-                ? `Approve quota increase to ${
-                    (reviewDialog.request?.current_quota || 0) +
-                    (reviewDialog.request?.requested_quota || 0)
-                  } VMs?`
-                : `Reject quota increase request?`}
+                ? `Approve quota increase to ${(reviewDialog.request?.current_quota || 0) +
+                (reviewDialog.request?.requested_quota || 0)
+                } ${reviewDialog.request?.service === "vm"
+                  ? "VMs"
+                  : reviewDialog.request?.service === "vpc"
+                    ? "VPCs"
+                    : reviewDialog.request?.service === "lb"
+                      ? "Load Balancers"
+                      : reviewDialog.request?.service === "rds"
+                        ? "RDS Databases"
+                        : reviewDialog.request?.service === "eks"
+                          ? "EKS Clusters"
+                          : reviewDialog.request?.service === "s3"
+                            ? "S3 Buckets"
+                            : "Resources"
+                }?`
+                : "Reject quota increase request?"}
             </DialogDescription>
           </DialogHeader>
 

@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   CheckCircle2,
-  Clock,
+  Monitor,
   Globe,
   Layers,
   Network,
@@ -29,7 +29,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useAppStore } from "@/store/appStore";
-
+import { EksQuotaIncreaseDialog } from "@/components/eks/EksQuotaIncreaseDialog";
+import { env } from "@/lib/env";
 // const STATIC_CLUSTERS = [
 //   {
 //     id: "EKS-REQ-1001",
@@ -70,17 +71,25 @@ interface EksCluster {
   created_at: string;
   updated_at: string;
   creator_name?: string;
-  created_by: number; 
+  created_by: number;
 }
 
 export function EksList() {
   const [query, setQuery] = useState("");
+  const [showQuotaDialog, setShowQuotaDialog] = useState(false);
+  const [requestedQuota, setRequestedQuota] = useState(0);
+  const [reason, setReason] = useState("");
+  const [submitQuota, setSubmitQuota] = useState(false);
+  const [quotaError, setQuotaError] = useState("");
+  const [touched, setTouched] = useState(false);
   const [clusters, setClusters] = useState<EksCluster[]>([]);
   const [workerNodes, setWorkerNodes] = useState<number>(0);
   const [loading, setLoading] = useState(false);
   const [selected] = useState<string[]>([]);
   const { alert } = useDialog();
+
   const currentUser = useAppStore((s) => s.currentUser);
+  const MAX_EKS = currentUser?.maxEksClusters ?? 0;
 
   const fetchClusters = async () => {
     setLoading(true);
@@ -112,13 +121,13 @@ export function EksList() {
 
   console.log("Fetched clusters:", clusters);
 
-  const userHasCluster =
-    currentUser != null &&
-    clusters.some(
-      (c) =>
-        String(c.created_by) === String(currentUser.id) &&
-        ["PENDING", "PROVISIONING", "ACTIVE", "TERMINATING"].includes(c.status),
-    );
+  const userClusterCount = clusters.filter(
+    (c) =>
+      String(c.created_by) === String(currentUser?.id) &&
+      ["PENDING", "PROVISIONING", "ACTIVE", "TERMINATING"].includes(c.status)
+  ).length;
+
+  const quotaReached = userClusterCount >= MAX_EKS;
 
   const filtered = clusters.filter((c) =>
     [
@@ -134,7 +143,7 @@ export function EksList() {
       .includes(query.toLowerCase()),
   );
 
-  const totalClusters = filtered.length;
+  const remainingQuota = Math.max(0, MAX_EKS - userClusterCount);
   const latestVersion =
     filtered
       .map((c) => c.kubernetes_version)
@@ -167,9 +176,9 @@ export function EksList() {
               "Content-Type": "application/json",
               ...(token
                 ? {
-                    Authorization: `Bearer ${token}`,
-                    "x-client-ip": (await getClientIp()) || "",
-                  }
+                  Authorization: `Bearer ${token}`,
+                  "x-client-ip": (await getClientIp()) || "",
+                }
                 : {}),
             },
           });
@@ -179,8 +188,8 @@ export function EksList() {
           if (!res.ok || data?.status !== "SUCCESS") {
             throw new Error(
               data?.message ||
-                data?.data?.message ||
-                "Failed to terminate EKS cluster",
+              data?.data?.message ||
+              "Failed to terminate EKS cluster",
             );
           }
 
@@ -248,12 +257,31 @@ export function EksList() {
             value={latestVersion}
             label="K8s version"
           />
-          <StatCard
-            icon={<Clock className="h-4 w-4 text-amber-400" />}
-            iconBg="bg-amber-500/10"
-            value={provisioning}
-            label="Provisioning"
-          />
+          <div className="flex items-center justify-between rounded-lg border border-border/50 bg-card/50 backdrop-blur px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <Monitor className="h-4 w-4 text-primary" />
+              </div>
+
+              <div>
+                <p className="text-2xl font-bold text-foreground leading-tight">
+                  {remainingQuota}
+                </p>
+
+                <p className="text-xs text-muted-foreground">
+                  Quota Remaining
+                </p>
+              </div>
+            </div>
+
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowQuotaDialog(true)}
+            >
+              Request Increase
+            </Button>
+          </div>
         </div>
 
         {/* Search row */}
@@ -280,30 +308,30 @@ export function EksList() {
             <RefreshCw size={14} />
           </Button>
           <Tooltip>
-  <TooltipTrigger asChild>
-    <span>
-      {userHasCluster ? (
-        <Button
-          disabled
-          className="bg-primary/50 text-white gap-1.5 shrink-0 cursor-not-allowed opacity-60"
-        >
-          <Plus size={14} /> Create Cluster
-        </Button>
-      ) : (
-        <Link to="/aws/eks/create">
-          <Button className="bg-primary hover:bg-primary/90 text-white gap-1.5 shrink-0">
-            <Plus size={14} /> Create Cluster
-          </Button>
-        </Link>
-      )}
-    </span>
-  </TooltipTrigger>
-  {userHasCluster && (
-    <TooltipContent side="top">
-      <p>Maximum 1 EKS limit reached.</p>
-    </TooltipContent>
-  )}
-</Tooltip>
+            <TooltipTrigger asChild>
+              <span>
+                {quotaReached ? (
+                  <Button
+                    disabled
+                    className="bg-primary/50 text-white gap-1.5 shrink-0 cursor-not-allowed opacity-60"
+                  >
+                    <Plus size={14} /> Create Cluster
+                  </Button>
+                ) : (
+                  <Link to="/aws/eks/create">
+                    <Button className="bg-primary hover:bg-primary/90 text-white gap-1.5 shrink-0">
+                      <Plus size={14} /> Create Cluster
+                    </Button>
+                  </Link>
+                )}
+              </span>
+            </TooltipTrigger>
+            {quotaReached && (
+              <TooltipContent side="top">
+                <p>Maximum 1 EKS limit reached.</p>
+              </TooltipContent>
+            )}
+          </Tooltip>
 
         </div>
 
@@ -427,13 +455,13 @@ export function EksList() {
                         <td className="px-5 py-4 text-muted-foreground">
                           {v.created_at
                             ? new Date(v.created_at).toLocaleDateString(
-                                "en-GB",
-                                {
-                                  day: "2-digit",
-                                  month: "short",
-                                  year: "numeric",
-                                },
-                              )
+                              "en-GB",
+                              {
+                                day: "2-digit",
+                                month: "short",
+                                year: "numeric",
+                              },
+                            )
                             : "—"}
                         </td>
                         <td className="px-5 py-4">
@@ -441,7 +469,7 @@ export function EksList() {
                         </td>
                         <td className="px-5 py-4 text-right">
                           {(() => {
-                            const deleteDisabled = ["PENDING", "PROVISIONING","TERMINATING"].includes(v.status);
+                            const deleteDisabled = ["PENDING", "PROVISIONING", "TERMINATING"].includes(v.status);
                             return (
                               <Tooltip>
                                 <TooltipTrigger asChild>
@@ -530,6 +558,76 @@ export function EksList() {
           </div>
         </DialogContent>
       </Dialog>
+      <EksQuotaIncreaseDialog
+        open={showQuotaDialog}
+        onOpenChange={setShowQuotaDialog}
+        currentMaxEksClusters={MAX_EKS}
+        usedEksClusters={userClusterCount}
+        requestedquota={requestedQuota}
+        setrequestedquota={setRequestedQuota}
+        reason={reason}
+        setreason={setReason}
+        submitquota={submitQuota}
+        quotaError={quotaError}
+        setQuotaError={setQuotaError}
+        touched={touched}
+        setTouched={setTouched}
+        isMAxREached={false}
+        onSubmit={async (approverEmail) => {
+          try {
+            setSubmitQuota(true);
+
+            const token = localStorage.getItem("token");
+
+            const response = await fetch(
+              `${env.vmRequest}/api/eks-quota/${currentUser?.id}/request`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                  "x-client-ip": (await getClientIp()) || "",
+                },
+                body: JSON.stringify({
+                  requestedQuota: requestedQuota - MAX_EKS,
+                  reason,
+                  approverEmail,
+                }),
+              }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+              throw new Error(
+                data?.message ||
+                data?.error ||
+                "Failed to submit EKS quota request"
+              );
+            }
+
+            alert({
+              title: "EKS quota request submitted successfully",
+              severity: "success",
+            });
+
+            setShowQuotaDialog(false);
+            setRequestedQuota(0);
+            setReason("");
+            setTouched(false);
+            setQuotaError("");
+          } catch (error: any) {
+            alert({
+              title:
+                error?.message ||
+                "Failed to submit EKS quota request",
+              severity: "error",
+            });
+          } finally {
+            setSubmitQuota(false);
+          }
+        }}
+      />
     </div>
   );
 }
@@ -561,4 +659,3 @@ function StatCard({
     </div>
   );
 }
- 

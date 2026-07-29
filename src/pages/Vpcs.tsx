@@ -13,6 +13,7 @@ import {
   Search,
   Trash2,
   Loader2,
+  Monitor
 } from "lucide-react";
 import { useVpcList } from "@/hooks/useVpcList";
 import { useAppStore } from "@/store/appStore";
@@ -30,7 +31,10 @@ import {
 import { Info, RotateCcw } from "lucide-react";
 import { useDialog } from "@/components/ui/dialog-context";
 import { deleteVpcApi } from "@/services/vpcService";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";import { VpcQuotaIncreaseDialog } from "@/components/vpc/VpcQuotaIncreaseDialog";
+import { env } from "@/lib/env";
+import { getClientIp } from "@/utils/getClientIP";
+
 /**
  * VPCs main page. State lives in {@link useVpcList}, mutations go through
  * {@link vpcApi}, and create flows open as standalone routes.
@@ -62,10 +66,21 @@ export default function Vpcs() {
   const currentUser = useAppStore((s) => s.currentUser);
   const navigate = useNavigate();
   const setActiveRequest = useAppStore((s) => s.setActiveRequest);
-  const hasCompletedVpc = !!currentUser && filtered.some((v: any) => Number(v.userId) === Number(currentUser.id) || Number(v.user_id) === Number(currentUser.id));
-  const hasActiveVpc = hasCompletedVpc || hasPending;
+  const MAX_VPCS = currentUser?.maxVpcs ?? 1;
 
-  const totalVpcs = filtered.length;
+  const userVpcCount = filtered.filter(
+    (v: any) =>
+      Number(v.userId) === Number(currentUser?.id) ||
+      Number(v.user_id) === Number(currentUser?.id)
+  ).length;
+
+  const totalVpcs = userVpcCount + pendingCount;
+  const hasReachedQuota = totalVpcs >= MAX_VPCS;
+
+  const remainingQuota = Math.max(
+    0,
+    MAX_VPCS - totalVpcs
+  );
   const activeSubnets = filtered.reduce(
     (total, v) => total + (v.subnetCount ?? 0),
     0,
@@ -75,7 +90,7 @@ export default function Vpcs() {
     0,
   );
   const provisioning = filtered.filter((v: any) => v.status === "provisioning").length + pendingCount;
-  
+
   const [dialog, setDialog] = useState<{
     icon?: "destroy" | "retry" | "info";
     title: string;
@@ -83,6 +98,12 @@ export default function Vpcs() {
     onConfirm?: () => void;
   } | null>(null);
   const [deletingVpcId, setDeletingVpcId] = useState<string | null>(null);
+  const [showQuotaDialog, setShowQuotaDialog] = useState(false);
+  const [requestedQuota, setRequestedQuota] = useState(0);
+  const [reason, setReason] = useState("");
+  const [submitQuota, setSubmitQuota] = useState(false);
+  const [quotaError, setQuotaError] = useState("");
+  const [touched, setTouched] = useState(false);
 
 // const handleDeleteRow = (vpc: any) => {
 //   setDeletingVpcId(vpc.id);
@@ -130,31 +151,31 @@ const handleDeleteRow = (vpc: any) => {
   });
 };
 
-const handleClose = (confirmed: boolean) => {
-  if (confirmed) {
-    dialog?.onConfirm?.();
-  } else {
-    setDeletingVpcId(null);
+  const handleClose = (confirmed: boolean) => {
+    if (confirmed) {
+      dialog?.onConfirm?.();
+    } else {
+      setDeletingVpcId(null);
+    }
+    setDialog(null);
+  };
+
+  const { alert } = useDialog();
+
+  const handleRefresh = async () => {
+    await refresh();
+    try {
+      alert({
+        title: "Refreshed",
+        severity: "success",
+      });
+    } catch (error) {
+      alert({
+        title: `Failed to Refresh`,
+        severity: "error",
+      });
+    }
   }
-  setDialog(null);
-};
-
-const { alert } = useDialog();
-
-const handleRefresh = async () => {
-  await refresh();
-  try {
-    alert({
-      title: "Refreshed",
-      severity: "success",
-    });
-  } catch (error) {
-    alert({
-      title: `Failed to Refresh`,
-      severity: "error",
-    });
-  } 
-}
 
   return (
     <div className="space-y-4">
@@ -185,12 +206,31 @@ const handleRefresh = async () => {
             value={withNat}
             label="With NAT"
           />
-          <StatCard
-            icon={<Clock className="h-4 w-4 text-amber-400" />}
-            iconBg="bg-amber-500/10"
-            value={provisioning}
-            label="Provisioning"
-          />
+          <div className="flex items-center justify-between rounded-lg border border-border/50 bg-card/50 backdrop-blur px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <Monitor className="h-4 w-4 text-primary" />
+              </div>
+
+              <div>
+                <p className="text-2xl font-bold text-foreground leading-tight">
+                  {remainingQuota}
+                </p>
+
+                <p className="text-xs text-muted-foreground">
+                  Quota Remaining
+                </p>
+              </div>
+            </div>
+
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowQuotaDialog(true)}
+            >
+              Request Increase
+            </Button>
+          </div>
         </div>
 
         {/* Search row */}
@@ -217,7 +257,7 @@ const handleRefresh = async () => {
             <RefreshCw size={14} />
           </Button>
           <TooltipProvider>
-            {hasActiveVpc ? (
+            {hasReachedQuota ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <span>
@@ -227,7 +267,9 @@ const handleRefresh = async () => {
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  <p>Maximum 1 VPC limit reached.</p>
+                  <p>
+                    VPC quota reached ({MAX_VPCS}). Request a quota increase.
+                  </p>
                 </TooltipContent>
               </Tooltip>
             ) : (
@@ -242,7 +284,7 @@ const handleRefresh = async () => {
 
         {/* Table */}
         <div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur overflow-hidden">
-         {loading ? (
+          {loading ? (
             <div className="flex items-center justify-center h-64">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
@@ -251,7 +293,7 @@ const handleRefresh = async () => {
               <table className="w-full text-sm min-w-[900px]">
                 <thead>
                   <tr className="text-xs uppercase tracking-wide text-muted-foreground border-b border-border/50">
-                  {/* <th className="px-5 py-3 w-10">
+                    {/* <th className="px-5 py-3 w-10">
                       <Checkbox
                         checked={allChecked}
                         onCheckedChange={() => toggleAll()}
@@ -453,8 +495,79 @@ const handleRefresh = async () => {
 
         </DialogContent>
       </Dialog>
+      <VpcQuotaIncreaseDialog
+        open={showQuotaDialog}
+        onOpenChange={setShowQuotaDialog}
+        currentMaxVpcs={MAX_VPCS}
+        usedVpcs={totalVpcs}
+        requestedquota={requestedQuota}
+        setrequestedquota={setRequestedQuota}
+        reason={reason}
+        setreason={setReason}
+        submitquota={submitQuota}
+        quotaError={quotaError}
+        setQuotaError={setQuotaError}
+        touched={touched}
+        setTouched={setTouched}
+        isMAxREached={false}
+        onSubmit={async (approverEmail) => {
+          try {
+            setSubmitQuota(true);
+
+            const token = localStorage.getItem("token");
+
+            const response = await fetch(
+              `${env.vmRequest}/api/vpc-quota/${currentUser?.id}/request`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                  "x-client-ip": (await getClientIp()) || "",
+                },
+                body: JSON.stringify({
+                  requestedQuota: requestedQuota - MAX_VPCS,
+                  reason,
+                  approverEmail,
+                }),
+              }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+              throw new Error(
+                data?.message ||
+                data?.error ||
+                "Failed to submit VPC quota request"
+              );
+            }
+
+            alert({
+              title: "VPC quota request submitted successfully",
+              severity: "success",
+            });
+
+            setShowQuotaDialog(false);
+            setRequestedQuota(0);
+            setReason("");
+            setTouched(false);
+            setQuotaError("");
+
+          } catch (error: any) {
+            alert({
+              title:
+                error?.message ||
+                "Failed to submit VPC quota request",
+              severity: "error",
+            });
+          } finally {
+            setSubmitQuota(false);
+          }
+        }}
+      />
     </div>
-    
+
   );
 }
 

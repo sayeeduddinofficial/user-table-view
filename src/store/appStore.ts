@@ -18,6 +18,7 @@ interface AppState {
   requestsRefreshKey: number;
   vpcs: any[]; 
   vpcsLoading: boolean;
+  maxVpcs?: number;
 
   // Actions
   setCurrentUser: (

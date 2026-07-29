@@ -24,7 +24,7 @@ import { useEffect } from "react";
 import { useAppStore } from "./store/appStore";
 import SignUp from "./pages/SignUp";
 import ActivateInvitation from "./pages/ActivateInvitation";
-import { isAdmin } from "./utils/roles";
+import { isAdmin, canViewDashboard, canViewAuditLogs, canViewFinOps } from "./utils/roles";
 import Feedback from "./pages/feedback";
 import AdminFeedback from "./pages/AdminFeedback";
 import QuotaRequests from "./pages/QuotaRequests";
@@ -135,6 +135,29 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 
   return <>{children}</>;
 }
+function DashboardRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!canViewDashboard(user.role)) return <Navigate to="/my-vms" replace />;
+  return <>{children}</>;
+}
+
+function AuditRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!canViewAuditLogs(user.role)) return <Navigate to="/my-vms" replace />;
+  return <>{children}</>;
+}
+
+function FinOpsRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!canViewFinOps(user.role)) return <Navigate to="/my-vms" replace />;
+  return <>{children}</>;
+}
 
 // function SuperAdminRoute({ children }: { children: React.ReactNode }) {
 //   const { user, loading } = useAuth();
@@ -177,17 +200,17 @@ function AppRoutes() {
         <Route
           path="/"
           element={
-            <AdminRoute>
+            <DashboardRoute>
               <Index />
-            </AdminRoute>
+            </DashboardRoute>
           }
         />
         <Route
           path="/leadership-billing"
           element={
-            <AdminRoute>
+            <FinOpsRoute>
               <LeadershipBilling />
-            </AdminRoute>
+            </FinOpsRoute>
           }
         />
         <Route
@@ -254,9 +277,9 @@ function AppRoutes() {
         <Route
           path="/auditlogs"
           element={
-            <AdminRoute>
+            <AuditRoute>
               <AuditLogs />
-            </AdminRoute>
+            </AuditRoute>
           }
         />
         <Route path="/feedback" element={<Feedback />} />

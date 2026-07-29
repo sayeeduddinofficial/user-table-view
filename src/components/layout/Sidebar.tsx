@@ -2,7 +2,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAppStore } from '@/store/appStore';
 import { useAuth } from "@/hooks/useLogin";
-import { isAdmin } from "@/utils/roles";
+import { isAdmin, canViewDashboard, canViewAuditLogs, canViewFinOps } from "@/utils/roles";
 import { FinOpsIcon } from "@/components/icons/FinOpsIcon";
 import { EC2Icon, S3Icon, VPCIcon, LBIcon, Route53Icon, RDSIcon, EKSIcon } from "@/components/icons/aws-icons";
 
@@ -16,18 +16,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Zap,
-  Monitor,
   MessageSquarePlus,
   ArrowUpCircle,
   ScrollText,
-  Clock,
-  Network,
-  Database,
-  Waypoints,
-  HardDrive,
-  Route,
-  Boxes,
-  UserCog,
+  Clock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -43,13 +35,14 @@ type NavItem = {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   adminOnly?: boolean;
+  visibleTo?: (role?: string) => boolean;
 };
 
 const navGroups: { label?: string; items: NavItem[] }[] = [
   {
     label: "Workspace",
     items: [
-      { to: "/", icon: LayoutDashboard, label: "Dashboard", adminOnly: true },
+      { to: "/", icon: LayoutDashboard, label: "Dashboard", visibleTo: canViewDashboard },
       { to: "/requests", icon: Server, label: "Requests" }, 
       { to: "/console", icon: Terminal, label: "Live Console" },
     ],
@@ -71,8 +64,8 @@ const navGroups: { label?: string; items: NavItem[] }[] = [
     items: [
       { to: "/users", icon: Users, label: "User Management", adminOnly: true },
       // {to: "/rolesmanagement", icon: UserCog, label: "Role Management", adminOnly: true },
-      { to: "/auditlogs", icon: ScrollText, label: "Audit Logs", adminOnly: true },
-      { to: "/leadership-billing", icon: FinOpsIcon, label: "FinOps", adminOnly: true },
+      { to: "/auditlogs", icon: ScrollText, label: "Audit Logs",visibleTo: canViewAuditLogs },
+      { to: "/leadership-billing", icon: FinOpsIcon, label: "FinOps", visibleTo: canViewFinOps},
       { to: "/admin/runtime-governance", icon: Clock, label: "Runtime Governance", adminOnly: true },
       { to: "/admin/quota-requests", icon: ArrowUpCircle, label: "Quota Requests", adminOnly: true },
       { to: "/admin/feedback", icon: MessageSquarePlus, label: "Feedback Mgmt", adminOnly: true },
@@ -92,7 +85,11 @@ export function Sidebar() {
   const filteredGroups = navGroups
     .map((group) => ({
       ...group,
-      items: group.items.filter((item) => (item.adminOnly ? isAdmin(user?.role) : true)),
+      items: group.items.filter((item) => {
+        if (item.visibleTo) return item.visibleTo(user?.role);
+        if (item.adminOnly) return isAdmin(user?.role);
+        return true;
+      }),
     }))
     .filter((group) => group.items.length > 0);
 

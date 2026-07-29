@@ -21,6 +21,7 @@ export interface QuotaRequest {
   requested_by_role: string;
   manager_email: string;
   expires_at: string;
+  service: string;
 }
 
 export interface QuotaRequestsResponse {

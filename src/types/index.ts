@@ -1,6 +1,4 @@
-import { LoadBalancerCreate } from "@/components/load-balancers/LoadBalancerCreate";
-
-export type Role = "SplunkOps.Admin" | "SplunkOps.User" | "SuperAdmin";
+export type Role = "SplunkOps.Admin" | "SplunkOps.User" | "SuperAdmin" | "SplunkOps.Auditor" | "SplunkOps.Stakeholder";
 
 export interface User {
   id: string;
@@ -10,6 +8,8 @@ export interface User {
   role: Role;
   status: "ACTIVE" | "DEACTIVATED" | "INVITED";
   maxVMs: number;
+  maxBuckets: number;
+  maxVpcs: number;
   currentVMs: number;
   allowedInstanceTypes: string[];
   allowedCategories: CategoryType[];
@@ -23,6 +23,10 @@ export interface User {
   entraObjectId: string;
   activeVMs: number;
   provisioningVMs: number;
+  maxLoadBalancers: number;
+  maxRdsClusters: number;
+  maxEksClusters: number;
+  maxDnsRecords: number;
 }
 
 export interface VMRole {
@@ -492,6 +496,8 @@ export const ROLE_LABELS: Record<string, string> = {
   SuperAdmin: "Super Admin",
   "SplunkOps.Admin": "Admin",
   "SplunkOps.User": "User",
+  "SplunkOps.Auditor": "Auditor",
+  "SplunkOps.Stakeholder": "Stakeholder"
 };
 export const CATEGORY_DISPLAY_LABELS: Record<string, string> = {
   "Auth": "Auth",
@@ -591,6 +597,26 @@ export const ACTION_DISPLAY_LABELS: Record<string, string> = {
   RDS_REQUEST_SUBMITTED: "RDS Request Submitted",
   RDS_PROVISION_FAILED: "RDS Provisioning Failed",
   RDS_DESTROY_FAILED: "RDS Cluster Termination Failed",
+
+  VPC_QUOTA_REQUEST_SUBMITTED: "VPC Quota Increase Request",
+  VPC_QUOTA_REQUEST_APPROVED: "Approved VPC Quota Increase",
+  VPC_QUOTA_REQUEST_REJECTED: "Rejected VPC Quota Increase",
+
+  LB_QUOTA_REQUEST_SUBMITTED: "Load Balancer Quota Increase Request",
+  LB_QUOTA_REQUEST_APPROVED: "Approved Load Balancer Quota Increase",
+  LB_QUOTA_REQUEST_REJECTED: "Rejected Load Balancer Quota Increase",
+
+  RDS_QUOTA_REQUEST_SUBMITTED: "RDS Quota Increase Request",
+  RDS_QUOTA_REQUEST_APPROVED: "Approved RDS Quota Increase",
+  RDS_QUOTA_REQUEST_REJECTED: "Rejected RDS Quota Increase",
+
+  EKS_QUOTA_REQUEST_SUBMITTED: "EKS Quota Increase Request",
+  EKS_QUOTA_REQUEST_APPROVED: "Approved EKS Quota Increase",
+  EKS_QUOTA_REQUEST_REJECTED: "Rejected EKS Quota Increase",
+
+  S3_QUOTA_REQUEST_SUBMITTED: "S3 Bucket Quota Increase Request",
+  S3_QUOTA_REQUEST_APPROVED: "Approved S3 Bucket Quota Increase",
+  S3_QUOTA_REQUEST_REJECTED: "Rejected S3 Bucket Quota Increase",
 
   LB_REQUEST_SUBMITTED: "Submitted LB Request",
   LB_REQUEST_FAILED: "LB Request Failed",

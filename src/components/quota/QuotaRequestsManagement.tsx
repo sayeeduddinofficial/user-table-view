@@ -75,9 +75,8 @@ export function QuotaRequestsManagement() {
     if (deepLinkRejectToken) query.push(`reject_token=${deepLinkRejectToken}`);
     const queryString = query.length ? `?${query.join("&")}` : "";
 
-    const returnUrl = `/admin/quota-requests${queryString}${
-      email ? `&email=${encodeURIComponent(email)}` : ""
-    }${source ? `&source=${encodeURIComponent(source)}` : ""}`;
+    const returnUrl = `/admin/quota-requests${queryString}${email ? `&email=${encodeURIComponent(email)}` : ""
+      }${source ? `&source=${encodeURIComponent(source)}` : ""}`;
 
     if (source === "email") {
       sessionStorage.setItem("postLoginReturnUrl", returnUrl);
@@ -250,6 +249,7 @@ export function QuotaRequestsManagement() {
     <div className="space-y-6">
       <div className="space-y-3">
         {requests.map((req) => {
+          const service = (req.service || "vm").toLowerCase();
           const displayStatus = resolveStatus(req);
           const isPending = displayStatus === "pending";
 
@@ -271,17 +271,24 @@ export function QuotaRequestsManagement() {
                 </p>
 
                 <p className="text-sm text-muted-foreground">
-                  Quota:
+                  {service === "s3" ? "Bucket Quota:" : "VM Quota:"}
+
                   <span className="text-foreground font-medium">
                     {" "}
-                    {req.current_quota}{" "}
+                    {req.current_quota}
                   </span>
+
                   →
+
                   <span className="text-primary font-medium">
                     {" "}
-                    {req.current_quota + req.requested_quota}{" "}
-                  </span>{" "}
-                  VMs
+                    {service === "s3"
+                      ? req.requested_quota
+                      : req.current_quota + req.requested_quota}
+                  </span>
+
+                  {" "}
+                  {service === "s3" ? "Buckets" : "VMs"}
                 </p>
 
                 <p className="text-sm text-muted-foreground">
@@ -353,10 +360,14 @@ export function QuotaRequestsManagement() {
 
             <DialogDescription>
               {reviewDialog.action === "approved"
-                ? `Approve quota increase to ${
-                    (reviewDialog.request?.current_quota || 0) +
-                    (reviewDialog.request?.requested_quota || 0)
-                  } VMs?`
+                ? `Approve quota increase to ${reviewDialog.request?.service === "s3"
+                  ? (reviewDialog.request?.requested_quota || 0)
+                  : (reviewDialog.request?.current_quota || 0) +
+                  (reviewDialog.request?.requested_quota || 0)
+                } ${reviewDialog.request?.service === "s3"
+                  ? "Buckets"
+                  : "VMs"
+                }?`
                 : `Reject quota increase request?`}
             </DialogDescription>
           </DialogHeader>
@@ -386,8 +397,8 @@ export function QuotaRequestsManagement() {
               Cancel
             </Button>
 
-            <Button 
-              onClick={handleReview} 
+            <Button
+              onClick={handleReview}
               disabled={approveRequestMutation.isPending || rejectRequestMutation.isPending}
             >
               {(approveRequestMutation.isPending || rejectRequestMutation.isPending) && (

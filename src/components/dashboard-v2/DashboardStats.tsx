@@ -25,23 +25,32 @@ export function DashboardStats({
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
      <StatCard
-        title="Total Resources"
+        title="Active Resources"
         value={totalResources}
-        subtitle="Across all services"
+        subtitle="Across all services & regions"
+        icon={Server}
+        variant="primary"
+        trend={{
+        value: 12,
+        display: "12%",
+        tooltip: "Compared to last week",
+        positive: true,
+      }}
       />
-      <StatCard
-        title="Active"
-        value={activeResources}
-        subtitle="Healthy & running"
-        variant="success"
-        trend={trend}
-      />
-      <StatCard
-        title="Provisioning"
+       <StatCard
+        title="Running Operations"
         value={provisioningCount}
-        subtitle="Terraform in progress"
+        subtitle="Automation in progress"
         variant="warning"
+        icon={Activity}
       />
+      <StatCard
+        title="Active Users"
+        value={activeResources}
+        subtitle="With active services"
+        variant="success"
+        icon={Users}
+      />     
       <StatCard
         title="Avg. Provision Time"
         value={avgProvisionTime}

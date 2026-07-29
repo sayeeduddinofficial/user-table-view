@@ -12,7 +12,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useDialog } from "@/components/ui/dialog-context";
-import { DataTable, type Column } from "@/components/common/DataTable";
+import { DataTable, type Column, type Pagination } from "@/components/common/DataTable";
+
+const INSTANCES_PAGE_SIZE = 10;
+const TARGETS_PAGE_SIZE = 10;
 
 export type InstanceRow = {
   id: string;
@@ -38,9 +41,11 @@ type Props = {
 export function RegisterTargetsStep({ pendingTargets, onPendingTargetsChange, onCancel, onPrevious, onNext }: Props) {
   const { alert } = useDialog();
   const [instanceFilter, setInstanceFilter] = useState("");
+  const [instancePage, setInstancePage] = useState(1);
   const [selectedInstances, setSelectedInstances] = useState<Set<string>>(new Set());
   const [registerPorts, setRegisterPorts] = useState("80");
   const [targetFilter, setTargetFilter] = useState("");
+  const [targetPage, setTargetPage] = useState(1);
   const [showOnlyPending, setShowOnlyPending] = useState(false);
   const instances: InstanceRow[] = [
     {
@@ -70,11 +75,33 @@ export function RegisterTargetsStep({ pendingTargets, onPendingTargetsChange, on
     return instances.filter((i) => !q || Object.values(i).some((v) => String(v).toLowerCase().includes(q)));
   }, [instances, instanceFilter]);
 
-  const allInstancesSelected = filteredInstances.length > 0 && filteredInstances.every((i) => selectedInstances.has(i.id));
+  const instancesTotalPages = Math.max(1, Math.ceil(filteredInstances.length / INSTANCES_PAGE_SIZE));
+  const currentInstancePage = Math.min(instancePage, instancesTotalPages);
+
+  const paginatedInstances = useMemo(() => {
+    const start = (currentInstancePage - 1) * INSTANCES_PAGE_SIZE;
+    return filteredInstances.slice(start, start + INSTANCES_PAGE_SIZE);
+  }, [filteredInstances, currentInstancePage]);
+
+  const instancesPagination: Pagination = {
+    total: filteredInstances.length,
+    page: currentInstancePage,
+    limit: INSTANCES_PAGE_SIZE,
+    totalPages: instancesTotalPages,
+    hasNext: currentInstancePage < instancesTotalPages,
+    hasPrev: currentInstancePage > 1,
+  };
+
+  const handleInstanceFilterChange = (value: string) => {
+    setInstanceFilter(value);
+    setInstancePage(1);
+  };
+
+  const allInstancesSelected = paginatedInstances.length > 0 && paginatedInstances.every((i) => selectedInstances.has(i.id));
   const toggleAllInstances = () => {
     const next = new Set(selectedInstances);
-    if (allInstancesSelected) filteredInstances.forEach((i) => next.delete(i.id));
-    else filteredInstances.forEach((i) => next.add(i.id));
+    if (allInstancesSelected) paginatedInstances.forEach((i) => next.delete(i.id));
+    else paginatedInstances.forEach((i) => next.add(i.id));
     setSelectedInstances(next);
   };
   const toggleOneInstance = (id: string) => {
@@ -99,7 +126,32 @@ export function RegisterTargetsStep({ pendingTargets, onPendingTargetsChange, on
     return pendingTargets.filter((t) => !q || Object.values(t).some((v) => String(v).toLowerCase().includes(q)));
   }, [pendingTargets, targetFilter]);
 
-  const removeAllPending = () => onPendingTargetsChange([]);
+  const targetsTotalPages = Math.max(1, Math.ceil(visibleTargets.length / TARGETS_PAGE_SIZE));
+  const currentTargetPage = Math.min(targetPage, targetsTotalPages);
+
+  const paginatedTargets = useMemo(() => {
+    const start = (currentTargetPage - 1) * TARGETS_PAGE_SIZE;
+    return visibleTargets.slice(start, start + TARGETS_PAGE_SIZE);
+  }, [visibleTargets, currentTargetPage]);
+
+  const targetsPagination: Pagination = {
+    total: visibleTargets.length,
+    page: currentTargetPage,
+    limit: TARGETS_PAGE_SIZE,
+    totalPages: targetsTotalPages,
+    hasNext: currentTargetPage < targetsTotalPages,
+    hasPrev: currentTargetPage > 1,
+  };
+
+  const handleTargetFilterChange = (value: string) => {
+    setTargetFilter(value);
+    setTargetPage(1);
+  };
+
+  const removeAllPending = () => {
+    onPendingTargetsChange([]);
+    setTargetPage(1);
+  };
 
   const instanceColumns: Column<InstanceRow>[] = [
     {
@@ -176,34 +228,21 @@ export function RegisterTargetsStep({ pendingTargets, onPendingTargetsChange, on
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               value={instanceFilter}
-              onChange={(e) => setInstanceFilter(e.target.value)}
+              onChange={(e) => handleInstanceFilterChange(e.target.value)}
               placeholder="Filter instances"
               className="w-full bg-input/40 border border-border rounded-md pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40"
             />
           </div>
-          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-            <button type="button" className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-border hover:bg-accent/40 disabled:opacity-40" disabled>
-              <ChevronLeft size={14} />
-            </button>
-            <span className="px-1">1</span>
-            <button type="button" className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-border hover:bg-accent/40 disabled:opacity-40" disabled>
-              <ChevronRight size={14} />
-            </button>
-          </div>
-          <button
-            type="button"
-            className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-border hover:bg-accent/40"
-            title="Preferences"
-          >
-            <SettingsIcon size={14} />
-          </button>
+        
         </div>
 
         <DataTable
           columns={instanceColumns}
-          data={filteredInstances}
+          data={paginatedInstances}
           emptyMessage="No instances"
           rowKey={(i) => i.id}
+          pagination={instancesPagination}
+          onPageChange={setInstancePage}
         />
 
         <div className="px-6 py-6 border-t border-border space-y-4">
@@ -248,7 +287,7 @@ export function RegisterTargetsStep({ pendingTargets, onPendingTargetsChange, on
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               value={targetFilter}
-              onChange={(e) => setTargetFilter(e.target.value)}
+              onChange={(e) => handleTargetFilterChange(e.target.value)}
               placeholder="Filter targets"
               className="w-full bg-input/40 border border-border rounded-md pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40"
             />
@@ -257,29 +296,15 @@ export function RegisterTargetsStep({ pendingTargets, onPendingTargetsChange, on
             <Switch checked={showOnlyPending} onCheckedChange={setShowOnlyPending} />
             Show only pending
           </label>
-          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-            <button type="button" className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-border hover:bg-accent/40 disabled:opacity-40" disabled>
-              <ChevronLeft size={14} />
-            </button>
-            <span className="px-1">1</span>
-            <button type="button" className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-border hover:bg-accent/40 disabled:opacity-40" disabled>
-              <ChevronRight size={14} />
-            </button>
-          </div>
-          <button
-            type="button"
-            className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-border hover:bg-accent/40"
-            title="Preferences"
-          >
-            <SettingsIcon size={14} />
-          </button>
         </div>
 
         <DataTable
           columns={targetColumns}
-          data={visibleTargets}
+          data={paginatedTargets}
           emptyMessage="No instances added yet. Specify instances above, or leave the group empty if you prefer to add targets later."
           rowKey={(t) => t.id}
+          pagination={targetsPagination}
+          onPageChange={setTargetPage}
         />
       </section>
 

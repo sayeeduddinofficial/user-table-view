@@ -516,7 +516,7 @@ export default function CreateRecord() {
                     rows={5}
                     value={value}
                     onChange={(e) => setValue(e.target.value)}
-                    placeholder={`3.17.183.49\n\n3.17.183.50`}
+                    placeholder={`3.17.183.49`}
                     className="resize-none"
                   />
 

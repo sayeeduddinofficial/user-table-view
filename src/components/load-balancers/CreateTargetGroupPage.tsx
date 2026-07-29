@@ -360,6 +360,7 @@ export function CreateTargetGroupPage({ isAlb, onCancel, onCreate }: Props) {
                     desc="Each instance has a default network interface (eth0) that is assigned the primary private IPv4 address. The instance's primary private IPv4 address is the one that will be applied to the target."
                   />
                   <RadioRow
+                    disabled={true}
                     checked={ipAddressType === "ipv6"}
                     onChange={() => setIpAddressType("ipv6")}
                     title="IPv6"
@@ -394,12 +395,14 @@ export function CreateTargetGroupPage({ isAlb, onCancel, onCreate }: Props) {
                       desc="Send requests to targets using HTTP/1.1. Supported when the request protocol is HTTP/1.1 or HTTP/2."
                     />
                     <RadioRow
+                      disabled={true}
                       checked={protocolVersion === "HTTP2"}
                       onChange={() => setProtocolVersion("HTTP2")}
                       title="HTTP2"
                       desc="Send requests to targets using HTTP/2. Supported when the request protocol is HTTP/2 or gRPC, but gRPC-specific features are not available."
                     />
                     <RadioRow
+                      disabled={true}
                       checked={protocolVersion === "GRPC"}
                       onChange={() => setProtocolVersion("GRPC")}
                       title="gRPC"
@@ -412,7 +415,6 @@ export function CreateTargetGroupPage({ isAlb, onCancel, onCreate }: Props) {
               {/* Health checks */}
               <section className="glass-panel rounded-xl p-6">
                 <h2 className="text-lg font-semibold text-foreground mb-1 flex items-center gap-2">
-                  <HeartPulse className="h-5 w-5 text-primary" />
                   Health checks
                 </h2>
                 <p className="text-xs text-muted-foreground mb-6">

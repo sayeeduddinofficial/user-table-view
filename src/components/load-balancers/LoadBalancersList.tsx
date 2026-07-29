@@ -6,10 +6,10 @@ import {
   Scale,
   Globe,
   Shield,
-  Clock3,
   RefreshCw,
   Trash2,
   CheckCircle2,
+  Monitor
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/Header";
@@ -19,6 +19,9 @@ import { lbApi, type LbItem, type ExistingLbItem, type ProvisioningLbItem } from
 import { useDialog } from "@/components/ui/dialog-context";
 import { useAppStore } from "@/store/appStore";
 import { LbTypeChooserDialog } from "./LbTypeChooserDialog";
+import { LoadBalancerQuotaIncreaseDialog } from "./LoadBalancerQuotaIncreaseDialog";
+import { env } from "@/lib/env";
+import { getClientIp } from "@/utils/getClientIP";
 
 type LbRow = {
   id: string;
@@ -45,9 +48,21 @@ export function LoadBalancersList() {
   const nav = useNavigate();
   const { alert, confirm } = useDialog();
   const user = useAppStore((s: any) => s.currentUser);
+  const MAX_LBS = user?.maxLoadBalancers ?? 1;
   const [lbs, setLbs] = useState<LbItem[]>([]);
+  const userLoadBalancerCount = lbs.filter(
+    (lb: any) =>
+      Number(lb.user_id) === Number(user?.id) ||
+      Number(lb.userId) === Number(user?.id)
+  ).length;
   const [loading, setLoading] = useState(true);
   const [chooserOpen, setChooserOpen] = useState(false);
+  const [showQuotaDialog, setShowQuotaDialog] = useState(false);
+  const [requestedQuota, setRequestedQuota] = useState(0);
+  const [reason, setReason] = useState("");
+  const [submitQuota, setSubmitQuota] = useState(false);
+  const [quotaError, setQuotaError] = useState("");
+  const [touched, setTouched] = useState(false);
   const [globalFilter, setGlobalFilter] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [provisioningAlb, setProvisioningAlb] = useState<ProvisioningLbItem | null>(null);
@@ -61,6 +76,7 @@ export function LoadBalancersList() {
     if (showLoading) setLoading(true);
     try {
       const res = await lbApi.list();
+      console.log("LB API Response", (res as any).data);
       setLbs((res as any).data ?? []);
     } catch {
       console.error("Failed to fetch load balancers");
@@ -259,8 +275,10 @@ export function LoadBalancersList() {
       created: formatDate(lb.created_at),
     })), [lbs]
   );
-
-
+  const remainingQuota = Math.max(
+    0,
+    MAX_LBS - userLoadBalancerCount
+  );
 
   const filtered = useMemo(() => {
     const g = globalFilter.trim().toLowerCase();
@@ -350,12 +368,31 @@ export function LoadBalancersList() {
             label="NLB"
           />
 
-          <StatCard
-            icon={<Clock3 className="h-4 w-4 text-amber-400" />}
-            iconBg="bg-amber-500/10"
-            value={rows.filter((r) => r.state === "Provisioning").length}
-            label="Provisioning"
-          />
+          <div className="flex items-center justify-between rounded-lg border border-border/50 bg-card/50 backdrop-blur px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <Monitor className="h-4 w-4 text-primary" />
+              </div>
+
+              <div>
+                <p className="text-2xl font-bold text-foreground leading-tight">
+                  {remainingQuota}
+                </p>
+
+                <p className="text-xs text-muted-foreground">
+                  Quota Remaining
+                </p>
+              </div>
+            </div>
+
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowQuotaDialog(true)}
+            >
+              Request Increase
+            </Button>
+          </div>
         </div>
 
         {/* Search */}
@@ -387,7 +424,11 @@ export function LoadBalancersList() {
           <Button
             className="bg-primary hover:bg-primary/90 text-white gap-1.5 shrink-0"
             title={!loading ? createDisabledReason ?? undefined : undefined}
-            tooltip={!loading && createDisabledReason ? "Maximum balancer limit reached." : undefined}
+            tooltip={
+              !loading && createDisabledReason
+                ? createDisabledReason
+                : undefined
+            }
             onClick={() => {
               if (!loading && !isCreateDisabled) {
                 setChooserOpen(true);
@@ -576,6 +617,78 @@ export function LoadBalancersList() {
               ? "You already have a Network Load Balancer."
               : undefined
         }
+      />
+
+      <LoadBalancerQuotaIncreaseDialog
+        open={showQuotaDialog}
+        onOpenChange={setShowQuotaDialog}
+        currentMaxLoadBalancers={MAX_LBS}
+        usedLoadBalancers={userLoadBalancerCount}
+        requestedquota={requestedQuota}
+        setrequestedquota={setRequestedQuota}
+        reason={reason}
+        setreason={setReason}
+        submitquota={submitQuota}
+        quotaError={quotaError}
+        setQuotaError={setQuotaError}
+        touched={touched}
+        setTouched={setTouched}
+        isMAxREached={false}
+        onSubmit={async (approverEmail) => {
+          try {
+            setSubmitQuota(true);
+
+            const token = localStorage.getItem("token");
+
+            const response = await fetch(
+              `${env.vmRequest}/api/lb-quota/${user?.id}/request`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                  "x-client-ip": (await getClientIp()) || "",
+                },
+                body: JSON.stringify({
+                  requestedQuota: requestedQuota - MAX_LBS,
+                  reason,
+                  approverEmail,
+                }),
+              }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+              throw new Error(
+                data?.message ||
+                data?.error ||
+                "Failed to submit LB quota request"
+              );
+            }
+
+            alert({
+              title: "Load Balancer quota request submitted successfully",
+              severity: "success",
+            });
+
+            setShowQuotaDialog(false);
+            setRequestedQuota(0);
+            setReason("");
+            setTouched(false);
+            setQuotaError("");
+
+          } catch (error: any) {
+            alert({
+              title:
+                error?.message ||
+                "Failed to submit LB quota request",
+              severity: "error",
+            });
+          } finally {
+            setSubmitQuota(false);
+          }
+        }}
       />
 
     </div>

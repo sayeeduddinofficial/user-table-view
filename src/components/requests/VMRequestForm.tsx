@@ -611,31 +611,45 @@ export function VMRequestForm({ onSubmit, isSubmitting = false }: Props) {
 
   function handleSubmit() {
     const selectedAmi = getAmiOptions(region).find((option) => option.value === ami);
+    const isCat1 = category === 1;
+    const isGeneral = isCat1 && vmMode === "general";
 
     const payload = {
       category: Number(category),
-      provisionMode: vmMode,
+      ...(isCat1 && { provisionMode: vmMode }),
       environmentTag,
       projectIdentifier,
-      ...(category !== 1 && { splunkVersion }),
-      ...(category === 1 && {
+      ...(!isCat1 && { splunkVersion }),
+      ...(isCat1 && {
         amiId: selectedAmi?.amiId ?? "",
         amiName: selectedAmi?.label ?? "",
-        vmMode,
       }),
       deploymentMode,
       region,
       regions: deploymentMode === "multi-region" ? selectedRegions : [region],
       diskSize,
       sshKeyName: selectedSSHKeyName,
-      roles: roleConfigs,
+      ...(isGeneral
+        ? {
+            vmGroups: roleConfigs.map((r) => ({
+              name: r.roleName,
+              instanceType: r.instanceType,
+              count: r.count,
+            })),
+          }
+        : {
+            roles: roleConfigs.map((r) => ({
+              roleId: r.roleId,
+              roleName: r.roleName,
+              instanceType: r.instanceType,
+              count: r.count,
+            })),
+          }),
       ...(runtimePolicyInfo.show && { runtimeDurationHours: runtimeDuration }),
       justification,
     };
 
-    console.log("Submitting VM request payload:", payload);
-
-    // onSubmit(payload);
+    onSubmit(payload);
   };
 
   const visibleCategories = CATEGORY_OPTIONS.filter((cat) =>

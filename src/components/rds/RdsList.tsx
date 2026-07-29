@@ -3,16 +3,19 @@ import { useNavigate } from "react-router-dom";
 import {
   Search, Plus, RefreshCw, Trash2, Database, Server,
   Camera, Bell, Minus, CheckCircle2,
-  AlertCircle, Clock,
+  AlertCircle, Clock, Monitor
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Header } from "@/components/layout/Header";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useDialog } from "@/components/ui/dialog-context";
-import { useRdsClusters ,useDeleteRdsCluster} from "@/hooks/useRds";
+import { useRdsClusters, useDeleteRdsCluster } from "@/hooks/useRds";
 import { deleteRdsCluster, type RdsClusterApi } from "@/services/rdsService";
 import { useAppStore } from "@/store/appStore";
+import { RdsQuotaIncreaseDialog } from "@/components/rds/RdsQuotaIncreaseDialog";
+import { env } from "@/lib/env";
+import { getClientIp } from "@/utils/getClientIP";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { useResourceAvailability } from "@/hooks/useResourceAvailability";
 
@@ -152,8 +155,20 @@ export function RdsList() {
     () => apiClusters.flatMap(clusterToRows),
     [apiClusters]
   );
-
+  const currentUser = useAppStore((s) => s.currentUser);
+  const MAX_RDS = currentUser?.maxRdsClusters ?? 0;
+  const userClusterCount = apiClusters.filter(
+    (cluster: any) =>
+      Number(cluster.user_id) === Number(currentUser?.id) ||
+      Number(cluster.userId) === Number(currentUser?.id)
+  ).length;
   const [query, setQuery] = useState("");
+  const [showQuotaDialog, setShowQuotaDialog] = useState(false);
+  const [requestedQuota, setRequestedQuota] = useState(0);
+  const [reason, setReason] = useState("");
+  const [submitQuota, setSubmitQuota] = useState(false);
+  const [quotaError, setQuotaError] = useState("");
+  const [touched, setTouched] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const { available } = useResourceAvailability();
   const hasActiveRds = available?.rds?.reached ?? false;
@@ -172,7 +187,6 @@ export function RdsList() {
   const filteredStandalones = useMemo(() => standalones.filter(matchRow), [standalones, q]);
 
   const { setActiveRequest } = useAppStore();
-
   const { remove: removeCluster, isDeleting: isDeletingCluster } = useDeleteRdsCluster();
 
   const toggleExpand = (id: string) =>
@@ -180,22 +194,23 @@ export function RdsList() {
 
 
   const handleDelete = async (row: RdsRow) => {
-  const ok = await confirm({
-    icon: "destroy",
-    title: `Delete ${row.isCluster ? "cluster" : "instance"}?`,
-    description: `"${row.dbIdentifier}" will be permanently deleted. This action cannot be undone.`,
-  });
-  if (!ok) return;
+    const ok = await confirm({
+      icon: "destroy",
+      title: `Delete ${row.isCluster ? "cluster" : "instance"}?`,
+      description: `"${row.dbIdentifier}" will be permanently deleted. This action cannot be undone.`,
+    });
+    if (!ok) return;
 
-  try {
-    if (row.isCluster) {
-      await removeCluster(row.requestId);
+    try {
+      if (row.isCluster) {
+        await removeCluster(row.requestId);
 
-    } else {
-      // instance id is "${requestId}__${instanceIdentifier}" — extract instanceIdentifier
-      // const instanceIdentifier = row.dbIdentifier;
-      // await removeInstance(row.requestId, instanceIdentifier);
-    }
+      } else {
+        // instance id is "${requestId}__${instanceIdentifier}" — extract instanceIdentifier
+        // const instanceIdentifier = row.dbIdentifier;
+        // await removeInstance(row.requestId, instanceIdentifier);
+      }
+  
     setActiveRequest(row.requestId, 'rds-service');
     nav('/console');
     toast.success(`${row.dbIdentifier} deletion initiated`);
@@ -254,11 +269,11 @@ export function RdsList() {
                   <div className="flex items-center justify-center w-6 h-6 rounded-md bg-primary/10">
                     <Database size={14} className="text-primary" />
                   </div>
-                 <button
-                 onClick={() => nav(`/aws/rds/${row.requestId}/instances/${row.dbIdentifier}`)}
-                className="font-medium text-sm hover:underline cursor-pointer text-primary"
-                   >
-                   {row.dbIdentifier}
+                  <button
+                    onClick={() => nav(`/aws/rds/${row.requestId}/instances/${row.dbIdentifier}`)}
+                    className="font-medium text-sm hover:underline cursor-pointer text-primary"
+                  >
+                    {row.dbIdentifier}
                   </button>
                   {row.isCluster && instances.length > 0 && !isOpen && (
                     <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-muted/40 text-muted-foreground border border-border/40">
@@ -294,16 +309,16 @@ export function RdsList() {
           <td className="px-5 py-3.5 text-sm text-muted-foreground">{row.created}</td>
 
           <td className="px-5 py-3.5 text-right">
-      {!isInstance && (
-       <button
-      onClick={() => handleDelete(row)}
-      disabled={isDeletingCluster || row.status === "Deleting"}
-      className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-    >
-      <Trash2 size={15} />
-    </button>
-  )}
-</td>
+            {!isInstance && (
+              <button
+                onClick={() => handleDelete(row)}
+                disabled={isDeletingCluster || row.status === "Deleting"}
+                className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Trash2 size={15} />
+              </button>
+            )}
+          </td>
         </tr>
 
         {row.isCluster && isOpen && instances.map((inst, idx) =>
@@ -315,6 +330,13 @@ export function RdsList() {
 
   const dbClusters = clusters.length;
   const dbInstances = rows.filter((r) => !r.isCluster).length;
+  const remainingQuota = Math.max(
+    0,
+    MAX_RDS - userClusterCount
+  );
+
+  const quotaReached =
+    userClusterCount >= MAX_RDS;
   const snapshots = 3;
   const recentEvents = 7;
 
@@ -332,6 +354,31 @@ export function RdsList() {
           <StatCard icon={<Server className="h-4 w-4 text-cyan-400" />} iconBg="bg-cyan-500/10" value={dbInstances} label="DB Instances" />
           <StatCard icon={<Camera className="h-4 w-4 text-emerald-400" />} iconBg="bg-emerald-500/10" value={snapshots} label="Snapshots" />
           <StatCard icon={<Bell className="h-4 w-4 text-amber-400" />} iconBg="bg-amber-500/10" value={recentEvents} label="Recent Events" />
+          <div className="flex items-center justify-between rounded-lg border border-border/50 bg-card/50 backdrop-blur px-4 py-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                <Monitor className="h-4 w-4 text-primary" />
+              </div>
+
+              <div>
+                <p className="text-2xl font-bold text-foreground leading-tight">
+                  {remainingQuota}
+                </p>
+
+                <p className="text-xs text-muted-foreground">
+                  Quota Remaining
+                </p>
+              </div>
+            </div>
+
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setShowQuotaDialog(true)}
+            >
+              Request Increase
+            </Button>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">
@@ -347,24 +394,13 @@ export function RdsList() {
           <Button variant="outline" size="icon" className="rounded-full shrink-0" onClick={refresh} disabled={loading}>
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           </Button>
-         <Tooltip>
-  <TooltipTrigger asChild>
-    <span>
-      <Button
-        className="bg-primary hover:bg-primary/90 text-white gap-1.5 shrink-0"
-        onClick={() => nav("/aws/rds/create")}
-        disabled={hasActiveRds}
-      >
-        <Plus size={14} /> Create RDS
-      </Button>
-    </span>
-  </TooltipTrigger>
-  {hasActiveRds && (
-    <TooltipContent side="top">
-      <p>Maximum RDS limit of {available?.rds?.limit ?? 1} reached.</p>
-    </TooltipContent>
-  )}
-</Tooltip>
+          <Button
+            disabled={quotaReached}
+            className="bg-primary hover:bg-primary/90 text-white gap-1.5 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={() => nav("/aws/rds/create")}
+          >
+            <Plus size={14} /> Create RDS
+          </Button>
         </div>
 
         <div className="rounded-lg border border-border/50 bg-card/50 backdrop-blur overflow-hidden">
@@ -403,6 +439,76 @@ export function RdsList() {
           </div>
         </div>
       </div>
+      <RdsQuotaIncreaseDialog
+        open={showQuotaDialog}
+        onOpenChange={setShowQuotaDialog}
+        currentMaxRds={MAX_RDS}
+        usedRds={userClusterCount}
+        requestedquota={requestedQuota}
+        setrequestedquota={setRequestedQuota}
+        reason={reason}
+        setreason={setReason}
+        submitquota={submitQuota}
+        quotaError={quotaError}
+        setQuotaError={setQuotaError}
+        touched={touched}
+        setTouched={setTouched}
+        isMAxREached={false}
+        onSubmit={async (approverEmail) => {
+          try {
+            setSubmitQuota(true);
+
+            const token = localStorage.getItem("token");
+
+            const response = await fetch(
+              `${env.vmRequest}/api/rds-quota/${currentUser?.id}/request`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${token}`,
+                  "x-client-ip": (await getClientIp()) || "",
+                },
+                body: JSON.stringify({
+                  requestedQuota: requestedQuota - MAX_RDS,
+                  reason,
+                  approverEmail,
+                }),
+              }
+            );
+
+            const data = await response.json();
+
+            if (!response.ok) {
+              throw new Error(
+                data?.message ||
+                data?.error ||
+                "Failed to submit RDS quota request"
+              );
+            }
+
+            alert({
+              title: "RDS quota request submitted successfully",
+              severity: "success",
+            });
+
+            setShowQuotaDialog(false);
+            setRequestedQuota(0);
+            setReason("");
+            setTouched(false);
+            setQuotaError("");
+          } catch (error: any) {
+            alert({
+              title:
+                error?.message ||
+                "Failed to submit RDS quota request",
+              severity: "error",
+            });
+          } finally {
+            setSubmitQuota(false);
+          }
+        }}
+      />
     </div>
   );
 }
