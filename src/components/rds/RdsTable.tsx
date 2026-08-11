@@ -37,7 +37,7 @@ export function RdsTable({
       return next;
     });
 
-  const renderRow = (row: RdsRow, depth = 0, isLast = false) => {
+  const renderRow = (row: RdsRow, depth = 0, isLast = false): JSX.Element => {
     const instances = row.isCluster ? instancesOf(row.id) : [];
     const isOpen = expanded.has(row.id);
     const isInstance = depth > 0;
