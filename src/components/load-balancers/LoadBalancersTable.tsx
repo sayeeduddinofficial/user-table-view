@@ -6,13 +6,10 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-} from "@/components/ui/dialog";
-import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { AlbIllustration, NlbIllustration } from "./illustrations";
 import { useDialog } from "@/components/ui/dialog-context";
+import { LbTypeChooserDialog } from "./LbTypeChooserDialog";
 
 type LbRow = {
   id: string;
@@ -343,54 +340,15 @@ export function LoadBalancersTable() {
         </div>
       </div>
 
-      <Dialog open={chooserOpen} onOpenChange={setChooserOpen}>
-        <DialogContent 
-          className="max-w-3xl"
-          onInteractOutside={(event) => event.preventDefault()}
-        >
-          <DialogHeader>
-            <DialogTitle>Compare and select load balancer type</DialogTitle>
-          </DialogHeader>
-          <p className="text-xs text-muted-foreground -mt-2">
-            A complete feature-by-feature comparison along with detailed highlights is also available.
-          </p>
-          <div className="grid grid-cols-2 gap-4 mt-2">
-            {[
-              {
-                value: "ALB",
-                label: "Application Load Balancer",
-                description: "Choose an Application Load Balancer when you need a flexible feature set for your applications with HTTP and HTTPS traffic. Operating at the request level, ALBs provide advanced routing and visibility features for microservices and containers.",
-                illustration: <AlbIllustration />,
-              },
-              {
-                value: "NLB",
-                label: "Network Load Balancer",
-                description: "Choose a Network Load Balancer when you need ultra-high performance, TLS offloading at scale, centralized certificate deployment, support for UDP, and static IP addresses. Operating at the connection level, NLBs handle millions of requests per second with ultra-low latency.",
-                illustration: <NlbIllustration />,
-              },
-            ].map((opt) => (
-              <div key={opt.value} className="flex flex-col rounded-lg border border-border bg-card/40 p-4">
-                <div className="font-semibold text-sm mb-3">{opt.label}</div>
-                <div className="flex items-center justify-center h-40 rounded-md bg-muted/20 border border-border/60 mb-3">
-                  {opt.illustration}
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed flex-1">{opt.description}</p>
-                <Button
-                  size="sm"
-                  className="mt-4 w-fit"
-                  onClick={() => {
-                    setChooserOpen(false);
-                    if (opt.value === "ALB") nav("/aws/load-balancers/create/alb");
-                    else nav("/aws/load-balancers/create/nlb");
-                  }}
-                >
-                  Create
-                </Button>
-              </div>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <LbTypeChooserDialog
+        open={chooserOpen}
+        onOpenChange={setChooserOpen}
+        onSelect={(type) => {
+          setChooserOpen(false);
+          nav(`/aws/load-balancers/create/${type}`);
+        }}
+      />
+
     </div>
   );
 }

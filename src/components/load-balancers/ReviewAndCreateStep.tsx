@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight as ChevronRightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTable, type Column } from "@/components/common/DataTable";
-import type { PendingTarget } from "./RegisterTargetsStep";
+import type { PendingTarget } from "./targetGroup.types";
 
 function DetailField({ label, value }: { label: string; value: string }) {
   return (

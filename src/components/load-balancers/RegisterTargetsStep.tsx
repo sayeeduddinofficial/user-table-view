@@ -1,35 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Search,
-  RefreshCw,
-  Settings as SettingsIcon,
-  Target,
-} from "lucide-react";
+import { Search, RefreshCw, Target } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { useDialog } from "@/components/ui/dialog-context";
 import { DataTable, type Column, type Pagination } from "@/components/common/DataTable";
 import { lbApi } from "@/services/lbApi";
+import type { InstanceRow, PendingTarget } from "./targetGroup.types";
 
 const INSTANCES_PAGE_SIZE = 10;
 const TARGETS_PAGE_SIZE = 10;
 
-export type InstanceRow = {
-  id: string;
-  instanceId: string;
-  name: string;
-  state: string;
-  securityGroups: string;
-  zone: string;
-  subnetId: string;
-  privateIpv4: string;
-};
-
-export type PendingTarget = InstanceRow & { port: string; launchTime: string };
+export type { InstanceRow, PendingTarget };
 
 type Props = {
   region: string;
@@ -51,28 +33,6 @@ export function RegisterTargetsStep({ region, vpcId, defaultPort, pendingTargets
   const [targetFilter, setTargetFilter] = useState("");
   const [targetPage, setTargetPage] = useState(1);
   const [showOnlyPending, setShowOnlyPending] = useState(false);
-  // const instances: InstanceRow[] = [
-  //   {
-  //     id: "i-0a1b2c3d4e5f60001",
-  //     instanceId: "i-0a1b2c3d4e5f60001",
-  //     name: "web-server-01",
-  //     state: "running",
-  //     securityGroups: "launch-wizard-1",
-  //     zone: "us-east-1a",
-  //     subnetId: "subnet-0f1e2d3c4b5a6001",
-  //     privateIpv4: "10.0.1.10",
-  //   },
-  //   {
-  //     id: "i-0a1b2c3d4e5f60009",
-  //     instanceId: "i-0a1b2c3d4e5f60001",
-  //     name: "web-server-02",
-  //     state: "running",
-  //     securityGroups: "launch-wizard-1",
-  //     zone: "us-east-1b",
-  //     subnetId: "subnet-0f1e2d3c4b5a6002",
-  //     privateIpv4: "10.0.2.11",
-  //   }
-  // ];
 
   const [instances, setInstances] = useState<InstanceRow[]>([]);
   const [instancesLoading, setInstancesLoading] = useState(false);
@@ -343,10 +303,6 @@ export function RegisterTargetsStep({ region, vpcId, defaultPort, pendingTargets
               className="w-full bg-input/40 border border-border rounded-md pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40"
             />
           </div>
-          <label className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
-            {/* <Switch checked={showOnlyPending} onCheckedChange={setShowOnlyPending} />
-            Show only pending */}
-          </label>
         </div>
 
         <DataTable
