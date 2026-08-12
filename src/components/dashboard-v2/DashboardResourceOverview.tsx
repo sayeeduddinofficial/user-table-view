@@ -55,13 +55,15 @@ export function DashboardResourceOverview({
                   {item.label}
                 </span>
               </div>
-
+              
               <div className="flex-1">
                 <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
                   <div
                     className="h-full rounded-full bg-blue-500 transition-all duration-300"
                     style={{
-                      width: `${Math.min((item.count / max) * 100, 100)}%`,
+                      width: item.count === 0
+                        ? "0%"
+                        : `${Math.min((item.count / max) * 100, 100)}%`,
                     }}
                   />
                 </div>

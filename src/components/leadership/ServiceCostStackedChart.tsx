@@ -56,10 +56,15 @@ function buildChartData(rows: ServiceCostRow[]) {
     return rows
         .sort((a, b) => a.date.localeCompare(b.date))
         .map((row) => {
-            const parsed = parse(row.date, "yyyy-MM-dd", new Date());
+            // Monthly rows have "yyyy-MM", daily rows have "yyyy-MM-dd"
+            const isMonthly = /^\d{4}-\d{2}$/.test(row.date);
+            const parsed = isMonthly
+                ? parse(row.date, "yyyy-MM", new Date())
+                : parse(row.date, "yyyy-MM-dd", new Date());
+            const label = isMonthly ? format(parsed, "MMM yyyy") : format(parsed, "MMM dd");
 
             return {
-                label: format(parsed, "MMM dd"),
+                label,
                 date: row.date,
                 "EC2-Instances": row.ec2,
                 VPC: row.vpc,

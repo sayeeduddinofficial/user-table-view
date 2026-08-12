@@ -14,8 +14,27 @@
  * sets the user, and navigates away — at which point this page disappears.
  */
 import { Loader2 } from "lucide-react";
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useLogin";
 
 export default function MicrosoftRedirect() {
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (user) {
+      const savedReturnUrl = sessionStorage.getItem("postLoginReturnUrl");
+      sessionStorage.removeItem("postLoginReturnUrl");
+      navigate(savedReturnUrl || "/providers", { replace: true });
+      return;
+    }
+
+    navigate("/login", { replace: true });
+  }, [user, loading, navigate]);
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="text-center space-y-4">

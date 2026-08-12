@@ -14,7 +14,7 @@ import {
   fetchRoleCountsApi,
   fetchServiceQuotasApi,
 } from '@/components/dashboard/dashboardApi';
-import { fetchAuditLogs } from '@/services/notificationApi';
+import { fetchVMRequestsApi } from '@/components/requests/vmRequestsApi';
 
 const QUERY_KEYS = {
   awsCounts: ['awsCounts'] as const,
@@ -108,7 +108,7 @@ export function useRoleCounts() {
 export function useDashboardRecentActivity() {
   return useQuery({
     queryKey: QUERY_KEYS.recentActivity,
-    queryFn: () => fetchAuditLogs({ page: 1 }),
+    queryFn: () => fetchVMRequestsApi({ page: 1, limit: 5 }),
     staleTime: 1000 * 15,
     refetchInterval: 15_000,
     gcTime: 1000 * 60 * 5,

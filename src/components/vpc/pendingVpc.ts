@@ -5,6 +5,7 @@
 // the list (meaning provisioning has completed) or is cleared.
 
 const KEY = "pendingVpcByUser";
+const MAX_PENDING_AGE_MS = 6 * 60 * 60 * 1000;
 
 type PendingMap = Record<string, { requestId: string; createdAt: number }>;
 
@@ -33,7 +34,22 @@ export function setPendingVpc(userId: string | number, requestId: string) {
 
 export function getPendingVpc(userId: string | number | undefined | null) {
   if (!userId) return null;
-  return readAll()[String(userId)] ?? null;
+  const key = String(userId);
+  const map = readAll();
+  const pending = map[key] ?? null;
+
+  if (!pending) return null;
+
+  if (
+    typeof pending.createdAt !== "number" ||
+    Date.now() - pending.createdAt > MAX_PENDING_AGE_MS
+  ) {
+    delete map[key];
+    writeAll(map);
+    return null;
+  }
+
+  return pending;
 }
 
 export function clearPendingVpc(userId: string | number) {

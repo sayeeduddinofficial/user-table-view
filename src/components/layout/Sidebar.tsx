@@ -2,7 +2,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { useAppStore } from '@/store/appStore';
 import { useAuth } from "@/hooks/useLogin";
-import { isAdmin, canViewDashboard, canViewAuditLogs, canViewFinOps } from "@/utils/roles";
+import { isAdmin, canViewDashboard, canViewAuditLogs, canViewFinOps, canApproveRequests } from "@/utils/roles";
 import { FinOpsIcon } from "@/components/icons/FinOpsIcon";
 import { EC2Icon, S3Icon, VPCIcon, LBIcon, Route53Icon, RDSIcon, EKSIcon } from "@/components/icons/aws-icons";
 
@@ -27,6 +27,7 @@ import { ROLE_LABELS } from "@/types";
 import {
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 
@@ -66,8 +67,8 @@ const navGroups: { label?: string; items: NavItem[] }[] = [
       // {to: "/rolesmanagement", icon: UserCog, label: "Role Management", adminOnly: true },
       { to: "/auditlogs", icon: ScrollText, label: "Audit Logs",visibleTo: canViewAuditLogs },
       { to: "/leadership-billing", icon: FinOpsIcon, label: "FinOps", visibleTo: canViewFinOps},
-      { to: "/admin/runtime-governance", icon: Clock, label: "Runtime Governance", adminOnly: true },
-      { to: "/admin/quota-requests", icon: ArrowUpCircle, label: "Quota Requests", adminOnly: true },
+      { to: "/admin/runtime-governance", icon: Clock, label: "Runtime Governance", visibleTo: canApproveRequests },
+      { to: "/admin/quota-requests", icon: ArrowUpCircle, label: "Quota Requests", visibleTo: canApproveRequests },
       { to: "/admin/feedback", icon: MessageSquarePlus, label: "Feedback Mgmt", adminOnly: true },
        { to: "/feedback", icon: MessageSquarePlus, label: "Feedback" },
       { to: "/settings", icon: Settings, label: "Settings" },
@@ -97,6 +98,7 @@ export function Sidebar() {
     if (path === "/") return location.pathname === "/";
     if (path === "/requests") return location.pathname === "/requests";
     if (path === "/my-vms") return location.pathname.startsWith("/my-vms") || location.pathname.startsWith("/requests/new");
+    if (path === "/aws/route53") return location.pathname.startsWith("/aws/route53") || location.pathname.startsWith("/aws/hostedzonedetails") || location.pathname.startsWith("/aws/createrecord");
     return location.pathname.startsWith(path);
   };
 
@@ -127,7 +129,7 @@ export function Sidebar() {
             {sidebarOpen && (
               <div className="animate-fade-in">
                 <h1 className="font-semibold text-sidebar-foreground">
-                  SplunkOps
+                  PrudentOps
                 </h1>
                 <p className="text-xs text-muted-foreground">
                   Automation Console
@@ -238,15 +240,24 @@ export function Sidebar() {
               )}
             </div>
             {sidebarOpen && (
-              <Button
-                variant="ghost"
-                size="icon"
-                title="Sign Out"
-                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                onClick={logout}
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
+              <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-white"
+                        onClick={logout}
+                      >
+                        <LogOut className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+
+                    <TooltipContent side="top" align="center">
+                      <p>Sign Out</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
             )}
           </div>
         </div>

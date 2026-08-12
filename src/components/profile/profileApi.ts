@@ -18,12 +18,18 @@ export interface ProfileData {
 export interface UpdateProfilePayload {
   displayName: string;
   imageBase64?: string;
+  timeZone?: string;
+  workStartTime?: string;
+  workEndTime?: string;
 }
 
 export interface UpdateProfileResponse {
   data: {
     display_name: string;
     profile_image: string | null;
+    time_zone?: string | null;
+    work_start_time?: string | null;
+    work_end_time?: string | null;
   };
 }
 

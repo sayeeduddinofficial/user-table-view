@@ -23,6 +23,7 @@ import {
 import { env } from "@/lib/env";
 import axios from "axios";
 import { SERVICE_LABELS } from "@/components/requests/vmRequestsApi";
+import { useAppStore } from "@/store/appStore";
 
 interface Request {
   request_id: string;
@@ -168,7 +169,7 @@ const defaultStatusConfig = {
 
 export function RecentRequests() {
   const fetchRequestsApi = async () => {
-    const res = await axios.get(`${env.vmRequest}/api/requests`);
+    const res = await axios.get(`${env.vmRequest}/api/requests?dashboard=true`);
     return res.data;
   };
   const {
@@ -183,6 +184,8 @@ export function RecentRequests() {
     enabled: !!localStorage.getItem("token"),
   });
   const navigate = useNavigate();
+  const currentUser = useAppStore((s) => s.currentUser);
+  const isStakeholder = currentUser?.role === "SplunkOps.Stakeholder";
 
   const requestItems = Array.isArray(requests?.data)
     ? requests.data
@@ -190,8 +193,7 @@ export function RecentRequests() {
       ? requests.data.data
       : [];
 
-  const recentRequests =
-    requestItems.filter((r: Request) => !r.logs_cleared_at).slice(0, 5) || [];
+  const recentRequests = requestItems.slice(0, 5) || [];
 
   return (
     <div className="glass-panel rounded-xl">
@@ -202,8 +204,12 @@ export function RecentRequests() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => navigate("/requests")}
-          className="text-muted-foreground hover:text-foreground"
+          disabled={isStakeholder}
+          onClick={() => !isStakeholder && navigate("/requests")}
+          className={cn(
+            "text-muted-foreground hover:text-foreground",
+            isStakeholder && "opacity-50 cursor-not-allowed"
+          )}
         >
           View All
           <ArrowRight className="ml-2 h-4 w-4" />
@@ -225,7 +231,7 @@ export function RecentRequests() {
           </div>
         ) : (
           recentRequests.map((request: Request) => (
-            <RequestRow key={request.request_id} request={request} />
+            <RequestRow key={request.request_id} request={request} currentUser={currentUser} />
           ))
         )}
       </div>
@@ -233,7 +239,7 @@ export function RecentRequests() {
   );
 }
 
-function RequestRow({ request }: { request: Request }) {
+function RequestRow({ request, currentUser }: { request: Request; currentUser: any }) {
   const { data: awsConfig } = useAwsConfig();
   const isAwsConnected = awsConfig?.status === "CONNECTED";
   const navigate = useNavigate();
@@ -243,12 +249,24 @@ function RequestRow({ request }: { request: Request }) {
    const serviceLabel =
     SERVICE_LABELS[request.service ?? ""] ?? request.service ?? "Request";
 
+  const isStakeholder = currentUser?.role === "SplunkOps.Stakeholder";
+  const isOwnRequest = request.user_name === currentUser?.name;
+  const logsCleared = !!request.logs_cleared_at;
+
+  // Stakeholder: enabled only for own requests; others: normal logic
+  const canOpenConsole = isStakeholder
+    ? isAwsConnected && !logsCleared && isOwnRequest
+    : isAwsConnected && !logsCleared;
+
   const rowContent = (
     <div
-      onClick={() => isAwsConnected && navigate(`/console?request=${request.request_id}`)}
+      onClick={() =>
+        canOpenConsole &&
+        navigate(`/console?request=${request.request_id}`)
+      }
       className={cn(
         "flex items-center justify-between p-4 transition-colors",
-        isAwsConnected
+        canOpenConsole
           ? "hover:bg-muted/30 cursor-pointer"
           : "opacity-50 cursor-not-allowed"
       )}
@@ -271,7 +289,8 @@ function RequestRow({ request }: { request: Request }) {
              {serviceLabel}
           </p>
           <p className="text-xs text-muted-foreground">
-            {request.user_name} • {request.region}
+            {request.user_name}
+            {request.region?.trim() && <> • {request.region}</>}
           </p>
         </div>
       </div>
@@ -289,9 +308,7 @@ function RequestRow({ request }: { request: Request }) {
         <span className="text-xs text-muted-foreground">
           {formatDistanceToNow(
             parseBackendTimestamp(
-              (request.status === "destroyed" || request.status === "destroying") && request.updated_at
-                ? request.updated_at
-                : request.created_at
+              request.updated_at ?? request.created_at
             ),
             { addSuffix: true }
           )}
@@ -300,12 +317,21 @@ function RequestRow({ request }: { request: Request }) {
     </div>
   );
 
+  if (logsCleared) {
+    return (
+      <Tooltip>
+        <TooltipTrigger asChild>{rowContent}</TooltipTrigger>
+        <TooltipContent>
+          <p>Logs Cleared</p>
+        </TooltipContent>
+      </Tooltip>
+    );
+  }
+
   if (!isAwsConnected) {
     return (
       <Tooltip>
-        <TooltipTrigger asChild>
-          {rowContent}
-        </TooltipTrigger>
+        <TooltipTrigger asChild>{rowContent}</TooltipTrigger>
         <TooltipContent>
           <p>AWS Disconnected</p>
         </TooltipContent>

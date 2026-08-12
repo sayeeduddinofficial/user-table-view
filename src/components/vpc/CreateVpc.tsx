@@ -3,8 +3,7 @@ import { useAppStore } from "@/store/appStore";
 import { useDialog } from "@/components/ui/dialog-context";
 import { Button } from "@/components/ui/button";
 import { useNavigate, Link } from "react-router-dom";
-import { Info, X, ChevronRight, ChevronDown, FileText, Loader2, Layers, XCircle } from "lucide-react";
-import { ConnectorOverlay, type Connection } from "./ConnectorOverlay";
+import { Info, X, ChevronRight, FileText, Loader2, Layers, XCircle } from "lucide-react";
 import { provisionVpcApi, ApiError, type CreateVpcPayload } from "@/services/vpcService";
 import { setPendingVpc } from "@/components/vpc/pendingVpc";
 import { Textarea } from "@/components/ui/textarea";
@@ -27,7 +26,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "../ui/input";
-import { fetchVpcListApi } from "@/services/vpcService";
+import { checkVpcNameApi } from "@/services/vpcService";
+import { Field, RadioRow, SelectCard, Segmented, Collapsible, Divider, cidrSize } from "./VpcFormShared";
+import { PreviewPanel } from "./VpcPreviewPanel";
 
 
 type ResourcesMode = "vpc-only" | "vpc-and-more";
@@ -98,6 +99,7 @@ export function CreateVpc({ onClose }: { onClose?: () => void } = {}) {
   const [exclusions, setExclusions] = useState<string[]>([]);
   const [exclusionsOpen, setExclusionsOpen] = useState(false);
   const exclusionsRef = useRef<HTMLDivElement>(null);
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
 
   // vpc-only
   const [name, setName] = useState("");
@@ -119,27 +121,51 @@ export function CreateVpc({ onClose }: { onClose?: () => void } = {}) {
   const [showPreviewToggle, setShowPreviewToggle] = useState<boolean>(false);
   const [dnsHost, setDnsHost] = useState(true);
   const [dnsRes, setDnsRes] = useState(true);
-  const [tagsOpen, setTagsOpen] = useState(false);
-  const [tags, setTags] = useState<{ key: string; value: string }[]>([]);
+  const [tags] = useState<{ key: string; value: string }[]>([]);
   const [customSubnetCidrs, setCustomSubnetCidrs] = useState<Record<string, string>>({});
   const [businessJustification, setBusinessJustification] = useState("");
   const [businessJustificationError, setBusinessJustificationError] = useState("");
+  const [cidrError, setCidrError] = useState("");
+  const [submitted, setSubmitted] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false); 
-  const [hasActiveVpc, setHasActiveVpc] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [existingVpcs, setExistingVpcs] = useState<Array<{ name: string; region: string }>>([]);
+  const [nameExistsError, setNameExistsError] = useState("");
+  const [nameCheckLoading, setNameCheckLoading] = useState(false);
+  const [hasActiveVpc, setHasActiveVpc] = useState(false);
   const currentUser = useAppStore((s) => s.currentUser);
+  const vpcsFromStore = useAppStore((s) => s.vpcs);
+
+  const REGION_CODE_MAP: Record<string, string> = {
+    "US East (Ohio)": "us-east-2",
+    "US East (N. Virginia)": "us-east-1",
+  };
+
+  useEffect(() => {
+    const rawName = mode === "vpc-only" ? name : autoName;
+    const trimmed = rawName.trim();
+    if (!trimmed) { setNameExistsError(""); return; }
+    const regionCode = REGION_CODE_MAP[region] ?? region;
+    const proposedName = mode === "vpc-only" ? trimmed : `${trimmed}-vpc`;
+    setNameCheckLoading(true);
+    const timer = setTimeout(() => {
+      checkVpcNameApi(proposedName, regionCode)
+        .then(({ exists }) => setNameExistsError(exists ? `A VPC named "${proposedName}" already exists in ${region}.` : ""))
+        .catch(() => setNameExistsError(""))
+        .finally(() => setNameCheckLoading(false));
+    }, 500);
+    return () => { clearTimeout(timer); setNameCheckLoading(false); };
+  }, [name, autoName, mode, region]);
 
 useEffect(() => {
   if (!currentUser) return;
-  fetchVpcListApi()
-    .then((list) => {
-      const mine = list.filter((v) => Number(v.userId) === Number(currentUser.id));
-      setHasActiveVpc(mine.length > 0);
-      setExistingVpcs(list.map((v: any) => ({ name: String(v.name ?? "").trim(), region: String(v.region ?? "").trim() })));
-    })
-    .catch(() => {});
-}, [currentUser]);
+  const mine = vpcsFromStore.filter((v: any) => Number(v.userId) === Number(currentUser.id));
+  setHasActiveVpc(mine.length > 0);
+  setExistingVpcs(vpcsFromStore.map((v: any) => ({
+    name: String(v.name ?? "").trim(),
+    region: String(v.region ?? "").trim()
+  })));
+}, [currentUser, vpcsFromStore]);
 
 
   useEffect(() => {
@@ -340,6 +366,26 @@ useEffect(() => {
     return "";
   };
 
+  const validateNameWithDuplicateCheck = (value: string, currentMode: ResourcesMode = mode) => {
+    const formatError = validateName(value);
+    if (formatError) {
+      return formatError;
+    }
+
+    const trimmed = value.trim();
+    const proposedName = currentMode === "vpc-only" ? trimmed : `${trimmed}-vpc`;
+    const regionCode = (REGION_CODE[region] ?? region).toLowerCase();
+    const duplicate = existingVpcs.some(
+      (v) => v.name.toLowerCase() === proposedName.toLowerCase() && v.region.toLowerCase() === regionCode
+    );
+
+    if (duplicate) {
+      return `A VPC with name "${proposedName}" already exists in ${region}. Names must be unique per region.`;
+    }
+
+    return "";
+  };
+
   const validateBusinessJustification = (value: string) => {
     if (value.trim().length < 20) {
       return `Minimum 20 characters required (${value.trim().length}/20).`;
@@ -350,23 +396,10 @@ useEffect(() => {
   const validateBeforeConfirm = (): boolean => {
     let valid = true;
     const currentName = mode === "vpc-only" ? name : autoName;
-    const nameValidation = validateName(currentName);
+    const nameValidation = validateNameWithDuplicateCheck(currentName, mode);
     setNameError(nameValidation);
-    if (nameValidation) {
+    if (nameValidation || nameExistsError || nameCheckLoading) {
       valid = false;
-    }
-
-    // Uniqueness: VPC name must be unique within the same region (across both modes).
-    if (valid && !nameValidation) {
-      const proposedName = (mode === "vpc-only" ? name : `${autoName}-vpc`).trim().toLowerCase();
-      const regionCode = (REGION_CODE[region] ?? region).toLowerCase();
-      const dup = existingVpcs.some(
-        (v) => v.name.toLowerCase() === proposedName && v.region.toLowerCase() === regionCode
-      );
-      if (dup) {
-        setNameError(`A VPC with name "${proposedName}" already exists in ${region}. Names must be unique per region.`);
-        valid = false;
-      }
     }
 
     // Business Justification validation
@@ -378,21 +411,24 @@ useEffect(() => {
       }
 
     // CIDR validation
-    if (!isCidrPrefixValid(ipv4Cidr)) {
-      alert({
-        title: "Invalid IPv4 CIDR block",
-        description: "CIDR prefix must be between /16 and /28.",
-        severity: "error",
-      });
-      valid = false;
+    const cidrValidation = isCidrPrefixValid(ipv4Cidr) ? "" : "CIDR prefix must be between /16 and /28.";
+    setCidrError(cidrValidation);
+    if (cidrValidation) valid = false;
+
+    // Scroll to first error
+    if (!valid) {
+      setTimeout(() => {
+        if (nameValidation) {
+          nameInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+          nameInputRef.current?.focus();
+        } else if (cidrValidation) {
+          document.getElementById("vpc-settings-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+        } else if (justificationValidation) {
+          document.getElementById("vpc-justification")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      }, 0);
     }
-    if (mode === "vpc-and-more") {
-      const err = validateName(autoName);
-      setNameError(err);
-      if (err) {
-        return false;
-      }
-    }
+
     return valid;
   };
 
@@ -404,7 +440,6 @@ const create = async () => {
   try {
     setIsSubmitting(true);
     const response = await provisionVpcApi(payload);
-    console.log("Provision VPC API response:", response);
     const requestId = response?.data?.requestId ?? response?.data?.request_id;
 
     addVpc({
@@ -462,12 +497,17 @@ const create = async () => {
     value: React.ReactNode;
     className?: string;
   }) => (
-    <div className={`rounded-lg border border-slate-800 bg-slate-900 p-4 ${className}`}>
-      <div className="text-xs text-slate-400">{label}</div>
-      <div className="mt-1 text-sm font-medium text-white break-words">
-        {value || "-"}
-      </div>
-    </div>
+    <div
+  className={`rounded-lg border border-border bg-card p-4 ${className}`}
+>
+  <div className="text-xs text-muted-foreground">
+    {label}
+  </div>
+
+  <div className="mt-1 break-words text-sm font-medium text-foreground">
+    {value || "-"}
+  </div>
+</div>
   );
 
   const selectedAzLabels = azSel
@@ -508,7 +548,7 @@ const create = async () => {
       >
         {/* 2-column grid wrapper (only when preview is on for vpc-and-more) */}
         <div className={(mode === "vpc-and-more" && showPreviewToggle) ? "grid grid-cols-[460px_1fr] gap-6 items-start" : ""}>
-          <section className="glass-panel rounded-xl p-6">       
+          <section id="vpc-settings-section" className="glass-panel rounded-xl p-6">       
         
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-lg font-semibold text-foreground mb-6 flex items-center gap-2">
@@ -562,12 +602,17 @@ const create = async () => {
               <div className="grid grid-cols-2 gap-3">
                 <SelectCard
                   selected={mode === "vpc-only"}
-                  onClick={() => setMode("vpc-only")}
+                  onClick={() => { setMode("vpc-only"); setNameError(""); }}
                   label="VPC only"
                 />
                 <SelectCard
                   selected={mode === "vpc-and-more"}
-                  onClick={() => setMode("vpc-and-more")}
+                  onClick={() => {
+                    setMode("vpc-and-more");
+                    setAutoGen(true);
+                    setAutoName("project");
+                    setNameError("");
+                  }}
                   label="VPC and more"
                 />
               </div>
@@ -583,6 +628,9 @@ const create = async () => {
                 nameError={nameError}
                 setNameError={setNameError}
                 validateName={validateName}
+                nameInputRef={nameInputRef}
+                nameExistsError={nameExistsError}
+                nameCheckLoading={nameCheckLoading}
                 ipv4Mode={ipv4Mode}
                 setIpv4Mode={setIpv4Mode}
                 ipv4Cidr={ipv4Cidr}
@@ -608,6 +656,9 @@ const create = async () => {
                 setExclusionsOpen={setExclusionsOpen}
                 exclusionsRef={exclusionsRef}
                 EXCLUSION_OPTIONS={EXCLUSION_OPTIONS}
+                submitted={submitted}
+                cidrError={cidrError}
+                setCidrError={setCidrError}
               />
             ) : (
               <>
@@ -619,11 +670,17 @@ const create = async () => {
                       id="auto-generate"
                       checked={autoGen}
                       onCheckedChange={(checked) => {
-                      const enabled = checked === true;
-                      setAutoGen(enabled);
-                      setAutoName("");
-                      setNameError("");
-                    }}
+                        const enabled = checked === true;
+                        setAutoGen(enabled);
+
+                        if (enabled) {
+                          setAutoName((prev) => prev.trim() || "project");
+                        } else {
+                          setAutoName("");
+                        }
+
+                        setNameError("");
+                      }}
                     />
                     <Label
                       htmlFor="auto-generate"
@@ -640,11 +697,9 @@ const create = async () => {
                     onChange={(e) => {
                       const value = e.target.value;
                       setAutoName(value);
-                      if (nameError) {
-                        setNameError(validateName(value));
-                      }
+                      setNameError(validateNameWithDuplicateCheck(value, "vpc-and-more"));
                     }}
-                    onBlur={() => setNameError(validateName(autoName))}
+                    onBlur={() => setNameError(validateNameWithDuplicateCheck(autoName, "vpc-and-more"))}
                     className={`bg-muted/50 ${
                       nameError ? "border-red-500" : ""
                     }`}
@@ -655,6 +710,10 @@ const create = async () => {
                     <p className="text-xs text-red-500">
                       {nameError}
                     </p>
+                  ) : nameCheckLoading ? (
+                    <p className="text-xs text-muted-foreground">Checking name availability...</p>
+                  ) : nameExistsError ? (
+                    <p className="text-xs text-red-500">{nameExistsError}</p>
                   ) : (
                     <p className="text-xs text-muted-foreground">
                       Enter a value for the Name tag. This value will be used to auto-generate
@@ -709,6 +768,8 @@ const create = async () => {
                   <p className="text-xs text-destructive">
                     CIDR prefix must be between /16 and /28.
                   </p>
+                ) : submitted && cidrError ? (
+                  <p className="text-xs text-destructive">{cidrError}</p>
                 ) : (
                   <p className="text-xs text-muted-foreground">
                     Determine the starting IP and the size of your VPC using CIDR notation.
@@ -1256,7 +1317,7 @@ const create = async () => {
         </div>
 
         {/* Business Justification - always full width at bottom */}
-        <section className="glass-panel rounded-xl p-6 mt-6">
+        <section id="vpc-justification" className="glass-panel rounded-xl p-6 mt-6">
           <div className="flex items-center gap-2 mb-4">
           <FileText className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-semibold">Business Justification</h2>
@@ -1264,9 +1325,7 @@ const create = async () => {
 
           <div className="relative">
             <Textarea
-              className={`resize-none ${
-                  businessJustificationError ? "border-red-500" : ""
-              }`}
+              className="resize-none"
               placeholder="Provide a brief justification for this VPC request."
               value={businessJustification}
               onChange={(e) => {
@@ -1308,19 +1367,15 @@ const create = async () => {
           Cancel
         </Button>
            <Button
-            onClick={() => { if (validateBeforeConfirm()) setShowConfirm(true); }}
-            disabled={
-              (mode === "vpc-only"
-                ? !name.trim()
-                : autoGen && !autoName.trim()) ||
-              businessJustification.trim().length < 20
-            }
+            onClick={() => { setSubmitted(true); if (validateBeforeConfirm()) setShowConfirm(true); }}
           >Create VPC</Button>
         </div>
       </div>
 
       <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
-        <DialogContent className="max-w-3xl bg-slate-950 border-slate-800">
+        <DialogContent 
+          className="max-w-3xl bg-background border-border"
+          onInteractOutside={(event) => event.preventDefault()}>
           <DialogHeader>
             <DialogTitle>Confirm VPC Creation</DialogTitle>
 
@@ -1393,25 +1448,18 @@ const create = async () => {
   );
 }
 
-function cidrSize(cidr: string) {
-  const m = cidr.match(/\/(\d+)$/);
-  if (!m) return "—";
-  const n = parseInt(m[1], 10);
-  if (isNaN(n) || n < 0 || n > 32) return "—";
-  return (2 ** (32 - n)).toLocaleString();
-}
-
 /* ---------- VPC-only sub-form (extracted to keep parent readable) ---------- */
 function VpcOnlyFields(p: any) {
   const {
-    name, setName, nameError, setNameError, validateName,
+    name, setName, nameError, setNameError, validateName, nameInputRef,
+    nameExistsError, nameCheckLoading,
     ipv4Mode, setIpv4Mode, ipv4Cidr, setIpv4Cidr,ipv4CidrError,
     ipv4IpamPool, setIpv4IpamPool, ipv4IpamNetmask, setIpv4IpamNetmask,
     ipv6Mode, setIpv6Mode, ipv6IpamPool, setIpv6IpamPool,
     ipv6OwnedPool, setIpv6OwnedPool,
     tenancy, setTenancy, encryption, setEncryption,
     exclusions, setExclusions, exclusionsOpen, setExclusionsOpen, exclusionsRef,
-    EXCLUSION_OPTIONS,
+    EXCLUSION_OPTIONS, submitted, cidrError,
   } = p;
   return (
     <>
@@ -1420,6 +1468,7 @@ function VpcOnlyFields(p: any) {
 
           <Input
             id="name-tag"
+            ref={nameInputRef}
             value={name}
             onChange={(e) => {
               setName(e.target.value);
@@ -1436,6 +1485,12 @@ function VpcOnlyFields(p: any) {
           {nameError ? (
             <div className="mt-1 flex items-center gap-1 text-xs text-red-500"><XCircle size={14} className="mt-0.5 shrink-0" />
               <p className="text-xs text-red-500">{nameError}</p>
+            </div>
+          ) : nameCheckLoading ? (
+            <p className="text-xs text-muted-foreground">Checking name availability...</p>
+          ) : nameExistsError ? (
+            <div className="mt-1 flex items-center gap-1 text-xs text-red-500"><XCircle size={14} className="mt-0.5 shrink-0" />
+              <p className="text-xs text-red-500">{nameExistsError}</p>
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
@@ -1477,7 +1532,7 @@ function VpcOnlyFields(p: any) {
               spellCheck={false}
             />
 
-            {ipv4CidrError ? (
+            {ipv4CidrError || (submitted && cidrError) ? (
               <p className="text-xs text-destructive">
                 CIDR prefix must be between /16 and /28.
               </p>
@@ -1631,699 +1686,4 @@ function VpcOnlyFields(p: any) {
       )}
     </>
   );
-}
-
-/* ---------- Preview panel ---------- */
-function PreviewPanel({
-  baseName,
-  azs,
-  publicCount,
-  privateCount,
-  nat,
-  natUpdated,
-  autoGen,
-  mode,
-  endpoints,
-  ipv4Cidr,
-  subnetCidrs,
-  customSubnetCidrs,
-}: {
-  baseName: string;
-  azs: string[];
-  publicCount: number;
-  privateCount: number;
-  nat: NatMode;
-  natUpdated: NatUpdatedMode;
-  autoGen: boolean;
-  mode: ResourcesMode;
-  endpoints: EndpointsMode;
-  ipv4Cidr: string;
-  subnetCidrs: { label: string; cidr: string; kind: "public" | "private" }[];
-  customSubnetCidrs: Record<string, string>;
-}) {
-  const [hoveredItem, setHoveredItem] = useState<string>("none");
-  const diagramRef = useRef<HTMLDivElement>(null);
-  const boxRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const setBoxRef = (key: string) => (el: HTMLDivElement | null) => {
-    boxRefs.current[key] = el;
-  };
-
-  const isVpcOnly = mode === "vpc-only";
-
-  // Build a key→cidr map: order matches parent's subnetCidrs (publics first, then privates).
-  const subnetCidrByKey: Record<string, string> = {};
-  subnetCidrs.forEach((s, i) => {
-    const value = customSubnetCidrs[s.label] ?? s.cidr;
-    const key = i < publicCount ? `public-${i}` : `private-${i - publicCount}`;
-    subnetCidrByKey[key] = value;
-  });
-
-  const natCount = !isVpcOnly && nat === "zonal"
-    ? (natUpdated === "in1az" ? 1 : azs.length)
-    : 0;
-
-  const totalSubnets = isVpcOnly ? 0 : (publicCount + privateCount);
-  const routeTablesCount = isVpcOnly ? 0 : ((publicCount > 0 ? 1 : 0) + privateCount);
-  const networkConnectionsCount = isVpcOnly
-    ? 1
-    : (publicCount > 0 ? 1 : 0) + (endpoints === "s3" ? 1 : 0) + natCount;
-
-  const [vpcCustomName, setVpcCustomName] = useState("");
-  const [subCustomNames, setSubCustomNames] = useState<Record<string, string>>({});
-  const [rtbCustomNames, setRtbCustomNames] = useState<Record<string, string>>({});
-  const [netCustomNames, setNetCustomNames] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    if (autoGen) {
-      setVpcCustomName("");
-      setSubCustomNames({});
-      setRtbCustomNames({});
-      setNetCustomNames({});
-    }
-  }, [autoGen, baseName]);
-
-  // Build the layout array with reliable tracking indices
-  const azLayouts = isVpcOnly ? [] : azs.map((az, azIdx) => {
-    const subnetsInThisAz: { kind: "public" | "private"; label: string; key: string; rtbKey: string }[] = [];
-    
-    if (azIdx < publicCount) {
-      const defaultLabel = `${baseName}-subnet-public${azIdx + 1}`;
-      const subKey = `public-${azIdx}`;
-      subnetsInThisAz.push({ 
-        kind: "public", 
-        label: autoGen ? defaultLabel : (subCustomNames[subKey] || `Public subnet ${azIdx + 1}`),
-        key: subKey,
-        rtbKey: "rtb-public"
-      });
-    }
-    
-    const perAzPrivate = Math.ceil(privateCount / Math.max(1, azs.length));
-    for (let p = 0; p < perAzPrivate; p++) {
-      const currentPrivateIdx = azIdx + 1 + p * azs.length;
-      if (currentPrivateIdx <= privateCount) {
-        const defaultLabel = `${baseName}-subnet-private${currentPrivateIdx}`;
-        const subKey = `private-${currentPrivateIdx - 1}`; // 0-indexed key for unique subnet identification
-        subnetsInThisAz.push({ 
-          kind: "private", 
-          label: autoGen ? defaultLabel : (subCustomNames[subKey] || `Private subnet ${currentPrivateIdx}`),
-          key: subKey,
-          rtbKey: `rtb-private-${currentPrivateIdx - 1}` // Maps explicitly to 1 matching route table index
-        });
-      }
-    }
-
-    return { az, items: subnetsInThisAz };
-  });
-
-  return (
-    <div className="w-full border border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50 dark:bg-neutral-900/50 p-5 overflow-x-auto select-none">
-      <div className="min-w-[900px] border border-neutral-200 dark:border-neutral-800 rounded-md bg-white dark:bg-neutral-950 p-6 shadow-sm space-y-8">
-        
-        {/* DIAGRAM FLOW GRID AREA */}
-        <div ref={diagramRef} className="grid grid-cols-[1fr_1.3fr_1.1fr_1.1fr] gap-6 items-start relative">
-          
-          {/* COLUMN 1: VPC RESOURCE BOX */}
-          <div className="space-y-3 relative z-10">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 font-mono px-1">
-              VPC (1)
-            </div>
-            <div 
-              ref={setBoxRef("vpc")}
-              onMouseEnter={() => setHoveredItem("all")}
-              onMouseLeave={() => setHoveredItem("none")}
-              className={`border-2 rounded-lg p-4 pt-7 relative shadow-sm min-h-[100px] cursor-pointer transition-all duration-200 ${
-                hoveredItem !== "none"
-                  ? "border-blue-500 bg-blue-50/10 dark:bg-blue-500/5 ring-4 ring-blue-500/10 opacity-100 scale-[1.01]"
-                  : "border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 opacity-60 hover:opacity-100"
-              }`}
-            >
-              <div className="absolute top-2 left-3 text-[9px] font-mono font-bold text-blue-600 dark:text-blue-400 truncate max-w-[92%]">
-                {vpcCustomName || `${baseName}-vpc`}
-              </div>
-              <div className="text-xs text-neutral-500 font-mono">{ipv4Cidr || "10.0.0.0/16"}</div>
-            </div>
-          </div>
-
-          {/* COLUMN 2: SUBNETS */}
-          <div className="space-y-3 relative z-10">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 font-mono px-1">
-              Subnets ({totalSubnets})
-            </div>
-
-            {totalSubnets === 0 ? (
-              <div className="text-xs text-neutral-400 italic p-4 border border-dashed border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50/50">
-                No subnets generated
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {azLayouts.map((azBox) => {
-                  if (azBox.items.length === 0) return null;
-                  return (
-                    <div
-                      key={azBox.az}
-                      className="border border-dashed border-neutral-300 dark:border-neutral-700 rounded-lg p-3 pt-6 relative bg-neutral-50 dark:bg-neutral-900/30"
-                    >
-                      <div className="absolute top-1.5 left-3 text-[9px] font-bold text-neutral-400 uppercase tracking-wide">
-                        AZ: {azBox.az}
-                      </div>
-                      
-                      <div className="space-y-2.5">
-                        {azBox.items.map((sub, sIdx) => {
-                          const isPublic = sub.kind === "public";
-                          
-                          // Active logic: checks if item itself or its exact matching route table pair is active
-                          const isCardActive =
-                            hoveredItem === "all" ||
-                            hoveredItem === sub.key ||
-                            hoveredItem === sub.rtbKey ||
-                            (isPublic && hoveredItem === "igw") ||
-                            (!isPublic && hoveredItem === "vpce") ||
-                            (!isPublic && nat === "zonal" && (() => {
-                              const m = sub.key.match(/^private-(\d+)$/);
-                              if (!m) return false;
-                              const idx = parseInt(m[1], 10);
-                              const natIdx = natUpdated === "in1az" ? 0 : (idx % Math.max(1, azs.length));
-                              return hoveredItem === `nat-${natIdx}`;
-                            })());
-
-                          return (
-                            <div
-                              key={sIdx}
-                              ref={setBoxRef(sub.key)}
-                              onMouseEnter={() => setHoveredItem(sub.key)}
-                              onMouseLeave={() => setHoveredItem("none")}
-                              className={`border rounded-lg p-3 pt-5 relative cursor-pointer transition-all duration-150 shadow-sm ${
-                                isPublic
-                                  ? isCardActive
-                                    ? "border-amber-500 bg-amber-50/80 dark:bg-amber-500/10 opacity-100 scale-[1.01]"
-                                    : "border-neutral-300 dark:border-neutral-700 bg-white opacity-40 hover:opacity-80"
-                                  : isCardActive
-                                    ? "border-blue-600 bg-blue-50/80 dark:bg-blue-600/10 opacity-100 scale-[1.01]"
-                                    : "border-neutral-300 dark:border-neutral-700 bg-white opacity-40 hover:opacity-80"
-                              }`}
-                            >
-                              <div className={`absolute top-1 left-2.5 text-[9px] font-mono font-bold tracking-wide ${
-                                isCardActive 
-                                  ? isPublic ? "text-amber-600 dark:text-amber-400" : "text-blue-600 dark:text-blue-400"
-                                  : "text-neutral-400"
-                              }`}>
-                                {sub.label}
-                              </div>
-                              <div className="text-xs text-neutral-400 font-mono">{subnetCidrByKey[sub.key] || "10.0.X.0/24"}</div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* COLUMN 3: ROUTE TABLES */}
-          <div className="space-y-3 relative z-10">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 font-mono px-1">
-              Route Tables ({routeTablesCount})
-            </div>
-
-            {routeTablesCount === 0 ? (
-              <div className="text-xs text-neutral-400 italic p-4 border border-dashed border-neutral-200 dark:border-neutral-800 rounded-lg bg-neutral-50/50">
-                No custom route tables
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {/* Public Route Table */}
-                {!isVpcOnly && publicCount > 0 && (
-                  <div
-                    ref={setBoxRef("rtb-public")}
-                    onMouseEnter={() => setHoveredItem("rtb-public")}
-                    onMouseLeave={() => setHoveredItem("none")}
-                    className={`border rounded-lg p-3 pt-5 relative cursor-pointer transition-all duration-150 shadow-sm ${
-                      hoveredItem === "all" || hoveredItem === "rtb-public" || hoveredItem === "igw" || (hoveredItem.startsWith("public-"))
-                        ? "border-amber-500 bg-amber-50/80 dark:bg-amber-500/10 opacity-100 scale-[1.01]"
-                        : "border-neutral-300 dark:border-neutral-700 bg-white opacity-40 hover:opacity-80"
-                    }`}
-                  >
-                    <div className="absolute top-1 left-2.5 text-[9px] font-mono font-bold text-neutral-400">
-                      {rtbCustomNames["public"] || `${baseName}-rtb-public`}
-                    </div>
-                    <div className="text-xs text-neutral-500 font-medium">1 local, 1 IGW route</div>
-                  </div>
-                )}
-
-                {/* Private Route Tables */}
-                {!isVpcOnly && Array.from({ length: privateCount }).map((_, i) => {
-                  const currentRtbKey = `rtb-private-${i}`;
-                  const matchingSubnetKey = `private-${i}`;
-                  
-                  const isRtbActive =
-                    hoveredItem === "all" ||
-                    hoveredItem === currentRtbKey ||
-                    hoveredItem === matchingSubnetKey ||
-                    hoveredItem === "vpce" ||
-                    (nat === "zonal" && (() => {
-                      const natIdx = natUpdated === "in1az" ? 0 : (i % Math.max(1, azs.length));
-                      return hoveredItem === `nat-${natIdx}`;
-                    })());
-
-                  return (
-                    <div
-                      key={i}
-                      ref={setBoxRef(currentRtbKey)}
-                      onMouseEnter={() => setHoveredItem(currentRtbKey)}
-                      onMouseLeave={() => setHoveredItem("none")}
-                      className={`border rounded-lg p-3 pt-5 relative cursor-pointer transition-all duration-150 shadow-sm ${
-                        isRtbActive
-                          ? "border-blue-600 bg-blue-50/80 dark:bg-blue-600/10 opacity-100 scale-[1.01]"
-                          : "border-neutral-300 dark:border-neutral-700 bg-white opacity-40 hover:opacity-80"
-                      }`}
-                    >
-                      <div className="absolute top-1 left-2.5 text-[9px] font-mono font-bold text-neutral-400 truncate max-w-[92%]">
-                        {rtbCustomNames[`private-${i}`] || `${baseName}-rtb-private${i + 1}`}
-                      </div>
-                      <div className="text-xs text-neutral-500 font-medium">
-                        {nat !== "none" ? "1 local, 1 NAT route" : "1 local route"}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* COLUMN 4: NETWORK CONNECTIONS */}
-          <div className="space-y-3 relative z-10">
-            <div className="text-[11px] font-bold uppercase tracking-wider text-neutral-400 font-mono px-1">
-              Network Connections ({networkConnectionsCount})
-            </div>
-
-            <div className="space-y-3">
-              {/* Internet Gateway */}
-              {!isVpcOnly && publicCount > 0 && (
-                <div
-                  ref={setBoxRef("igw")}
-                  onMouseEnter={() => setHoveredItem("igw")}
-                  onMouseLeave={() => setHoveredItem("none")}
-                  className={`border rounded-lg p-3 pt-5 relative cursor-pointer transition-all duration-150 shadow-sm ${
-                    hoveredItem === "all" || hoveredItem === "igw" || hoveredItem === "rtb-public" || hoveredItem.startsWith("public-")
-                      ? "border-purple-600 bg-purple-50 text-purple-700 dark:text-purple-400 opacity-100 scale-[1.01]"
-                      : "border-neutral-300 dark:border-neutral-700 bg-white opacity-40 hover:opacity-80"
-                  }`}
-                >
-                  <div className="absolute top-1 left-2.5 text-[9px] font-mono font-bold text-neutral-400">
-                    {netCustomNames["igw"] || `${baseName}-igw`}
-                  </div>
-                  <div className="text-xs font-semibold">Internet Gateway</div>
-                </div>
-              )}
-
-              {/* Wrap the S3 Gateway box with a condition so it only displays if enabled */}
-              {endpoints === "s3" && (
-                <div
-                  ref={setBoxRef("vpce")}
-                  onMouseEnter={() => setHoveredItem("vpce")}
-                  onMouseLeave={() => setHoveredItem("none")}
-                  className={`border rounded-lg p-3 pt-5 relative bg-white transition-all duration-150 shadow-sm cursor-pointer ${
-                    hoveredItem === "all" || hoveredItem === "vpce" || hoveredItem.startsWith("rtb-private-") || hoveredItem.startsWith("private-")
-                      ? "border-neutral-700 text-neutral-800 dark:text-neutral-200 opacity-100 scale-[1.01]"
-                      : "border-neutral-300 dark:border-neutral-700 opacity-40 hover:opacity-80"
-                  }`}
-                >
-                  <div className="absolute top-1 left-2.5 text-[9px] font-mono font-bold text-neutral-400">
-                    {netCustomNames["vpce"] || "S3 Gateway Endpoint"}
-                  </div>
-                  <div className="text-xs font-medium text-neutral-500">VPC endpoint</div>
-                </div>
-              )}
-
-              {/* NAT gateways */}
-              {!isVpcOnly && nat === "zonal" && Array.from({ length: natCount }).map((_, i) => {
-                const natKey = `nat-${i}`;
-                const azLabel = azs[i] ?? azs[0];
-                const natName = `${baseName}-nat-public${i + 1}-${azLabel}`;
-                const isActive =
-                  hoveredItem === "all" ||
-                  hoveredItem === natKey ||
-                  (natUpdated === "in1az" && (hoveredItem.startsWith("rtb-private-") || hoveredItem.startsWith("private-"))) ||
-                  (natUpdated === "oneperaz" && (() => {
-                    // active when hovering any private rtb/subnet whose AZ index === i
-                    const m = hoveredItem.match(/^(?:rtb-)?private-(\d+)$/);
-                    if (!m) return false;
-                    const idx = parseInt(m[1], 10);
-                    return idx % Math.max(1, azs.length) === i;
-                  })());
-                return (
-                  <div
-                    key={natKey}
-                    ref={setBoxRef(natKey)}
-                    onMouseEnter={() => setHoveredItem(natKey)}
-                    onMouseLeave={() => setHoveredItem("none")}
-                    className={`border rounded-lg p-3 pt-5 relative cursor-pointer transition-all duration-150 shadow-sm ${
-                      isActive
-                        ? "border-blue-600 bg-blue-50/80 dark:bg-blue-600/10 opacity-100 scale-[1.01]"
-                        : "border-neutral-300 dark:border-neutral-700 bg-white opacity-40 hover:opacity-80"
-                    }`}
-                  >
-                    <div className="absolute top-1 left-2.5 text-[9px] font-mono font-bold text-neutral-400 truncate max-w-[92%]">
-                      {natName}
-                    </div>
-                    <div className="text-xs font-medium text-neutral-500">NAT Gateway</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Connector lines overlay */}
-          <ConnectorOverlay
-            containerRef={diagramRef}
-            boxRefs={boxRefs}
-            hovered={hoveredItem === "none" ? null : hoveredItem}
-            connections={(() => {
-              const conns: Connection[] = [];
-              const allSubs = azLayouts.flatMap((a) => a.items);
-              const natIdxFor = (i: number) =>
-                natUpdated === "in1az" ? 0 : (i % Math.max(1, azs.length));
-              for (const s of allSubs) {
-                const extraKeys: string[] = [];
-                if (s.kind === "public") extraKeys.push("igw", "rtb-public");
-                else {
-                  const m = s.key.match(/^private-(\d+)$/);
-                  if (m) {
-                    const idx = parseInt(m[1], 10);
-                    if (endpoints === "s3") extraKeys.push("vpce");
-                    if (nat === "zonal" && natCount > 0) extraKeys.push(`nat-${natIdxFor(idx)}`);
-                  }
-                }
-                conns.push({ from: "vpc", to: s.key, keys: ["all", s.key, s.rtbKey, ...extraKeys] });
-                conns.push({
-                  from: s.key,
-                  to: s.rtbKey,
-                  keys: ["all", s.key, s.rtbKey, ...extraKeys],
-                });
-              }
-              if (!isVpcOnly && publicCount > 0) {
-                conns.push({
-                  from: "rtb-public",
-                  to: "igw",
-                  keys: ["all", "rtb-public", "igw", ...allSubs.filter((s) => s.kind === "public").map((s) => s.key)],
-                });
-              }
-              if (endpoints === "s3") {
-                for (let i = 0; i < privateCount; i++) {
-                  conns.push({
-                    from: `rtb-private-${i}`,
-                    to: "vpce",
-                    keys: ["all", `private-${i}`, `rtb-private-${i}`, "vpce"],
-                  });
-                }
-              }
-              if (!isVpcOnly && nat === "zonal" && natCount > 0) {
-                for (let i = 0; i < privateCount; i++) {
-                  const natIdx = natIdxFor(i);
-                  conns.push({
-                    from: `rtb-private-${i}`,
-                    to: `nat-${natIdx}`,
-                    keys: ["all", `private-${i}`, `rtb-private-${i}`, `nat-${natIdx}`],
-                  });
-                }
-              }
-              return conns;
-            })()}
-            deps={[azLayouts.length, publicCount, privateCount, endpoints, isVpcOnly, autoGen, nat, natUpdated, natCount]}
-          />
-
-          {/* Connector lines overlay */}
-          <ConnectorOverlay
-            containerRef={diagramRef}
-            boxRefs={boxRefs}
-            hovered={hoveredItem === "none" ? null : hoveredItem}
-            connections={(() => {
-              const conns: Connection[] = [];
-              const allSubs = azLayouts.flatMap((a) => a.items);
-              const natIdxFor = (i: number) =>
-                natUpdated === "in1az" ? 0 : (i % Math.max(1, azs.length));
-              for (const s of allSubs) {
-                const extraKeys: string[] = [];
-                if (s.kind === "public") extraKeys.push("igw", "rtb-public");
-                else {
-                  const m = s.key.match(/^private-(\d+)$/);
-                  if (m) {
-                    const idx = parseInt(m[1], 10);
-                    if (endpoints === "s3") extraKeys.push("vpce");
-                    if (nat === "zonal" && natCount > 0) extraKeys.push(`nat-${natIdxFor(idx)}`);
-                  }
-                }
-                conns.push({ from: "vpc", to: s.key, keys: ["all", s.key, s.rtbKey, ...extraKeys] });
-                conns.push({
-                  from: s.key,
-                  to: s.rtbKey,
-                  keys: ["all", s.key, s.rtbKey, ...extraKeys],
-                });
-              }
-              if (!isVpcOnly && publicCount > 0) {
-                conns.push({
-                  from: "rtb-public",
-                  to: "igw",
-                  keys: ["all", "rtb-public", "igw", ...allSubs.filter((s) => s.kind === "public").map((s) => s.key)],
-                });
-              }
-              if (endpoints === "s3") {
-                for (let i = 0; i < privateCount; i++) {
-                  conns.push({
-                    from: `rtb-private-${i}`,
-                    to: "vpce",
-                    keys: ["all", `private-${i}`, `rtb-private-${i}`, "vpce"],
-                  });
-                }
-              }
-              if (!isVpcOnly && nat === "zonal" && natCount > 0) {
-                for (let i = 0; i < privateCount; i++) {
-                  const natIdx = natIdxFor(i);
-                  conns.push({
-                    from: `rtb-private-${i}`,
-                    to: `nat-${natIdx}`,
-                    keys: ["all", `private-${i}`, `rtb-private-${i}`, `nat-${natIdx}`],
-                  });
-                }
-              }
-              return conns;
-            })()}
-            deps={[azLayouts.length, publicCount, privateCount, endpoints, isVpcOnly, autoGen, nat, natUpdated, natCount]}
-          />
-
-        </div>
-
-        {/* INPUT LAYOUT GROUP */}
-        {!autoGen && (
-          <div className="pt-6 border-t border-neutral-200 dark:border-neutral-800 grid grid-cols-4 gap-6">
-            
-            {/* VPC INPUT */}
-            <div className="space-y-2">
-              <label className="text-[11px] font-bold text-neutral-400 uppercase font-mono tracking-wider">VPC Name</label>
-              <input
-                type="text"
-                value={vpcCustomName}
-                placeholder={`${baseName}-vpc`}
-                onChange={(e) => setVpcCustomName(e.target.value)}
-                className="w-full text-xs font-mono bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded p-2 focus:outline-none focus:border-blue-500 text-neutral-900 dark:text-neutral-50"
-              />
-            </div>
-
-            {/* SUBNET INPUTS */}
-            <div className="space-y-3">
-              <label className="text-[11px] font-bold text-neutral-400 uppercase font-mono tracking-wider block">Subnet Names</label>
-              {azLayouts.flatMap(azBox => azBox.items).map((sub) => (
-                <div key={sub.key} className="space-y-1">
-                  <span className="text-[10px] text-neutral-500 font-mono block">
-                    {sub.key.startsWith("public") ? "Public" : "Private"} Subnet
-                  </span>
-                  <input
-                    type="text"
-                    value={subCustomNames[sub.key] || ""}
-                    placeholder={sub.label}
-                    onChange={(e) => setSubCustomNames(prev => ({ ...prev, [sub.key]: e.target.value }))}
-                    className="w-full text-xs font-mono bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded p-1.5 focus:outline-none focus:border-blue-500 text-neutral-900 dark:text-neutral-50"
-                  />
-                </div>
-              ))}
-            </div>
-
-            {/* ROUTE TABLE INPUTS */}
-            <div className="space-y-3">
-              <label className="text-[11px] font-bold text-neutral-400 uppercase font-mono tracking-wider block">Route Tables</label>
-              {!isVpcOnly && publicCount > 0 && (
-                <div className="space-y-1">
-                  <span className="text-[10px] text-neutral-500 font-mono block">Public Route Table</span>
-                  <input
-                    type="text"
-                    value={rtbCustomNames["public"] || ""}
-                    placeholder="rtb-public"
-                    onChange={(e) => setRtbCustomNames(prev => ({ ...prev, public: e.target.value }))}
-                    className="w-full text-xs font-mono bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded p-1.5 focus:outline-none focus:border-blue-500 text-neutral-900 dark:text-neutral-50"
-                  />
-                </div>
-              )}
-              {!isVpcOnly && Array.from({ length: privateCount }).map((_, i) => (
-                <div key={i} className="space-y-1">
-                  <span className="text-[10px] text-neutral-500 font-mono block">{`Private RT ${i + 1}`}</span>
-                  <input
-                    type="text"
-                    value={rtbCustomNames[`private-${i}`] || ""}
-                    placeholder={`rtb-private-${i + 1}`}
-                    onChange={(e) => setRtbCustomNames(prev => ({ ...prev, [`private-${i}`]: e.target.value }))}
-                    className="w-full text-xs font-mono bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded p-1.5 focus:outline-none focus:border-blue-500 text-neutral-900 dark:text-neutral-50"
-                  />
-                </div>
-              ))}
-            </div>
-
-            {/* NETWORK CONNECTION INPUTS */}
-            <div className="space-y-3">
-              <label className="text-[11px] font-bold text-neutral-400 uppercase font-mono tracking-wider block">Connections</label>
-              {!isVpcOnly && publicCount > 0 && (
-                <div className="space-y-1">
-                  <span className="text-[10px] text-neutral-500 font-mono block">Internet Gateway</span>
-                  <input
-                    type="text"
-                    value={netCustomNames["igw"] || ""}
-                    placeholder="igw-default"
-                    onChange={(e) => setNetCustomNames(prev => ({ ...prev, igw: e.target.value }))}
-                    className="w-full text-xs font-mono bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded p-1.5 focus:outline-none focus:border-blue-500 text-neutral-900 dark:text-neutral-50"
-                  />
-                </div>
-              )}
-              <div className="space-y-1">
-                <span className="text-[10px] text-neutral-500 font-mono block">S3 Gateway Endpoint</span>
-                <input
-                  type="text"
-                  value={netCustomNames["vpce"] || ""}
-                  placeholder="S3 Gateway Endpoint"
-                  onChange={(e) => setNetCustomNames(prev => ({ ...prev, vpce: e.target.value }))}
-                  className="w-full text-xs font-mono bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded p-1.5 focus:outline-none focus:border-blue-500 text-neutral-900 dark:text-neutral-50"
-                />
-              </div>
-            </div>
-
-          </div>
-        )}
-
-      </div>
-    </div>
-  );
-}
-
-
-function Field({ label, hint, optional, children }: {
-  label: string; hint?: string; info?: boolean; optional?: boolean; children: React.ReactNode;
-}) {
-  return (
-    <div className="mb-5">
-      <div className="flex items-center gap-2 mb-1">
-        <label className="text-sm font-medium">
-          {label}
-          {optional && <span className="text-muted-foreground font-normal italic ml-1">- optional</span>}
-        </label>
-      </div>
-      {hint && <div className="text-xs text-muted-foreground mb-2">{hint}</div>}
-      {children}
-    </div>
-  );
-}
-
-function RadioRow({ name, value, onChange, options }: {
-  name: string; value: string; onChange: (v: string) => void;
-  options: { value: string; label: string; disabled?: boolean }[];
-}) {
-  return (
-    <div className="space-y-2">
-      {options.map((o) => (
-        <label key={o.value} className="flex items-center gap-2 cursor-pointer text-sm">
-          <input type="radio" name={name} checked={value === o.value} disabled={o.disabled} onChange={() => onChange(o.value)} className="h-4 w-4 accent-primary" />
-          {o.label}
-        </label>
-      ))}
-    </div>
-  );
-}
-
-function SelectCard({ selected, onClick, label, description, disabled}: {
-  selected: boolean; onClick: () => void; label: string; description?: string; disabled?: boolean;
-}) {
-  return (
-    <button type="button" onClick={onClick} disabled={disabled}
-      className={`text-left rounded-md border px-4 py-3 transition ${
-        disabled ? "opacity-50 cursor-not-allowed bg-muted" :
-        selected ? "border-primary bg-primary/10 ring-1 ring-primary/40" : "border-border bg-card hover:bg-accent/30"
-      }`}>
-      <div className="flex items-center gap-2">
-        <span className={`h-4 w-4 rounded-full border grid place-items-center ${selected ? "border-primary" : "border-muted-foreground"}`}>
-          {selected && <span className="h-2 w-2 rounded-full bg-primary" />}
-        </span>
-        <span className="text-sm font-medium">{label}</span>
-      </div>
-      {description && <div className="text-xs text-muted-foreground mt-2 leading-relaxed">{description}</div>}
-    </button>
-  );
-}
-
-function Segmented<T extends string | number>({ 
-  value, 
-  options, 
-  onChange, 
-  labels,
-  disabledOptions = [] // <-- Add this new prop
-}: {
-  value: T; 
-  options: T[]; 
-  onChange: (v: T) => void; 
-  labels?: Record<string, string>;
-  disabledOptions?: T[]; // <-- Add this type definition
-}) {
-  return (
-    <div className="inline-flex rounded-md border border-border overflow-hidden">
-      {options.map((o, i) => {
-        const active = o === value;
-        const isDisabled = disabledOptions.includes(o); // <-- Check if option is disabled
-        
-        return (
-          <button 
-            key={String(o)} 
-            type="button" 
-            disabled={isDisabled} // <-- Disable HTML button
-            onClick={() => !isDisabled && onChange(o)} // <-- Prevent state changes
-            className={`px-4 py-1.5 text-sm transition-colors ${
-              active 
-                ? "bg-primary text-primary-foreground" 
-                : isDisabled
-                  ? "bg-muted text-muted-foreground/50 cursor-not-allowed opacity-60" // <-- Disabled styles
-                  : "bg-card hover:bg-accent/30"
-            } ${i > 0 ? "border-l border-border" : ""}`}
-          >
-            {labels?.[String(o)] ?? String(o)}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function Collapsible({ open, setOpen, label, optional, children }: {
-  open: boolean; setOpen: (v: boolean) => void; label: string; optional?: boolean; children: React.ReactNode;
-}) {
-  return (
-    <div className="mb-5">
-      <button type="button" onClick={() => setOpen(!open)} className="flex items-center gap-1 text-sm font-medium">
-        {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-        {label}
-        {optional && <span className="text-muted-foreground font-normal italic ml-1">- optional</span>}
-      </button>
-      {open && <div className="mt-3 pl-5">{children}</div>}
-    </div>
-  );
-}
-
-function Divider() {
-  return <div className="border-t border-border my-5" />;
 }

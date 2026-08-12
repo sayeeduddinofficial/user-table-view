@@ -28,6 +28,13 @@ export function BillingDetailDialog({ open, onOpenChange, title, subtitle, color
 
   // Fetch daily MTD spend from aws_billing_history table (development only)
   useEffect(() => {
+    if (!open) {
+      setDateRange({ from: monthStart, to: today });
+      return;
+    }
+  }, [open]);
+
+  useEffect(() => {
     const fetchDBData = async () => {
       try {
         setLoading(true);
@@ -95,7 +102,7 @@ export function BillingDetailDialog({ open, onOpenChange, title, subtitle, color
             <div className="flex-1">
               <DialogTitle className="text-xl font-semibold">{title}</DialogTitle>
               <p className="text-sm text-muted-foreground mt-1.5">
-                Total: ${Number(totalCost).toFixed(2)} · {subtitle}
+                Total: ${Number(totalCost).toFixed(2)}
               </p>
             </div>
             <div className="flex items-center gap-2 pt-1 shrink-0">

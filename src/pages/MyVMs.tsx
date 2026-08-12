@@ -99,7 +99,7 @@ export default function MyVMs() {
         showSearch={false}
       />
 
-      <div className="p-6">
+      <div className="space-y-4 p-6">
         {/* <div className="mb-4 flex justify-end">
   <Button
     variant="outline"

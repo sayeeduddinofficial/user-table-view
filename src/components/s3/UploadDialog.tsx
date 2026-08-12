@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useDialog } from "@/components/ui/dialog-context";
 
 export interface FileEntry {
   file: File;
@@ -75,6 +76,32 @@ const collectEntry = async (entry: FileSystemEntry, path: string): Promise<Objec
   return [];
 };
 
+interface DirectoryPickerFileHandle {
+  kind: "file";
+  name: string;
+  getFile: () => Promise<File>;
+}
+
+interface DirectoryPickerDirectoryHandle {
+  kind: "directory";
+  name: string;
+  values: () => AsyncIterable<DirectoryPickerFileHandle | DirectoryPickerDirectoryHandle>;
+}
+
+type DirectoryPickerHandle = DirectoryPickerFileHandle | DirectoryPickerDirectoryHandle;
+
+const collectDirectoryHandle = async (handle: DirectoryPickerHandle, path: string): Promise<ObjectsUpload[]> => {
+  if (handle.kind === "file") {
+    const file = await handle.getFile();
+    return [{ file, relativePath: `${path}${handle.name}` }];
+  }
+  const children: ObjectsUpload[] = [];
+  for await (const entry of handle.values()) {
+    children.push(...(await collectDirectoryHandle(entry, `${path}${handle.name}/`)));
+  }
+  return children;
+};
+
 const localFilesAndFoldersFromDataTransfer = async (dataTransfer: DataTransfer): Promise<ObjectsUpload[]> => {
   const items = dataTransfer.items;
   if (items && items.length > 0 && typeof items[0]?.webkitGetAsEntry === "function") {
@@ -106,6 +133,7 @@ export function UploadDialog({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  const { confirm } = useDialog();
 
   const reset = () => {
     setFiles([]);
@@ -158,6 +186,36 @@ export function UploadDialog({
     setUploadWarning(messages.length ? messages.join(" ") : null);
 
     setFiles((prev) => [...prev, ...accepted]);
+  };
+
+  const handleAddFolder = async () => {
+    const showDirectoryPicker = (window as unknown as {
+      showDirectoryPicker?: () => Promise<DirectoryPickerDirectoryHandle>;
+    }).showDirectoryPicker;
+
+    if (!showDirectoryPicker) {
+      folderInputRef.current?.click();
+      return;
+    }
+
+    let dirHandle: DirectoryPickerDirectoryHandle;
+    try {
+      dirHandle = await showDirectoryPicker();
+    } catch {
+      return;
+    }
+
+    const collected = await collectDirectoryHandle(dirHandle, "");
+    if (collected.length === 0) return;
+
+    const ok = await confirm({
+      title: `Upload ${collected.length} file${collected.length === 1 ? "" : "s"} to this site?`,
+      description: `This will upload all files from "${dirHandle.name}". Only do this if you trust the site.`,
+      icon: "info",
+    });
+    if (!ok) return;
+
+    addFiles(collected);
   };
 
   const toggle = (relativePath: string) =>
@@ -250,7 +308,7 @@ export function UploadDialog({
           Drag and drop files and folders you want to upload here, or choose{" "}
           <button type="button" className="text-primary hover:underline font-medium" onClick={() => fileInputRef.current?.click()}>Add files</button>
           {" "}or{" "}
-          <button type="button" className="text-primary hover:underline font-medium" onClick={() => folderInputRef.current?.click()}>Add folder</button>.
+          <button type="button" className="text-primary hover:underline font-medium" onClick={handleAddFolder}>Add folder</button>.
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto space-y-3">
@@ -258,9 +316,9 @@ export function UploadDialog({
             <div className="flex items-start justify-between gap-4 flex-wrap mb-3">
               <h2 className="font-semibold">Files and folders ({files.length})</h2>
               <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" disabled={selected.length === 0} onClick={removeSelected}>Remove</Button>
+                <Button variant="outline" size="sm" disabled={selected.length === 0 || isSubmitting} onClick={removeSelected}>Remove</Button>
                 <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>Add files</Button>
-                <Button variant="outline" size="sm" onClick={() => folderInputRef.current?.click()}>Add folder</Button>
+                <Button variant="outline" size="sm" onClick={handleAddFolder}>Add folder</Button>
               </div>
             </div>
             <p className="text-xs text-muted-foreground mb-3">All files and folders in this table will be uploaded.</p>

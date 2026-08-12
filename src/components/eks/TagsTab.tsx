@@ -1,25 +1,29 @@
-import { CLUSTER } from "./eksData";
+import { TableEmptyState, TableHead } from "./eksShared";
 
-export function TagsTab() {
-  const tags = Object.entries(CLUSTER.tags);
+export function TagsTab({ tags = {} }: { tags?: Record<string, string> }) {
+  const entries = Object.entries(tags);
+
   return (
     <div className="bg-card border border-border rounded-lg p-5">
-      <h2 className="text-sm font-semibold mb-4">Tags ({tags.length})</h2>
+      <h2 className="text-sm font-semibold mb-4">Tags ({entries.length})</h2>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
-          <thead>
-            <tr className="text-xs uppercase tracking-wide text-muted-foreground border-b border-border">
-              <th className="px-4 py-2 text-left font-medium">Key</th>
-              <th className="px-4 py-2 text-left font-medium">Value</th>
-            </tr>
-          </thead>
+          <TableHead columns={["Key", "Value"]} />
           <tbody>
-            {tags.map(([k, v]) => (
-              <tr key={k} className="border-b border-border/40 last:border-0">
-                <td className="px-4 py-3 font-mono">{k}</td>
-                <td className="px-4 py-3">{v}</td>
-              </tr>
-            ))}
+            {entries.length === 0 ? (
+              <TableEmptyState
+                colSpan={2}
+                title="No tags"
+                description="This cluster does not have any tags."
+              />
+            ) : (
+              entries.map(([key, value]) => (
+                <tr key={key} className="border-b border-border/40 last:border-0">
+                  <td className="px-4 py-3 font-mono">{key}</td>
+                  <td className="px-4 py-3">{value}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </div>

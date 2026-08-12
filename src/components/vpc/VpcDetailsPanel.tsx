@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronRight, Settings as SettingsIcon } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { VpcDetails } from "./VpcDetails";
 
 type Props = {

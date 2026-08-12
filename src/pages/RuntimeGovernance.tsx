@@ -88,7 +88,6 @@ export default function RuntimeGovernance() {
     const matchesSearch =
       !q ||
       req.request_id.toLowerCase().includes(q) ||
-      (req.request_type === 'INSTANCE' && req.instance_id.toLowerCase().includes(q)) ||
       (req.vm_name ?? '').toLowerCase().includes(q) ||
       req.requester_email.toLowerCase().includes(q) ||
       (req.manager_email ?? '').toLowerCase().includes(q) ||

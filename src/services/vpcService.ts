@@ -46,6 +46,7 @@ export interface VpcListItemRaw {
   request_id: string;
    user_id: number; 
   user_name: string;
+  request_status: string; 
   region: string;
   vpc_status: string;
   created_at: string;
@@ -115,7 +116,7 @@ export function mapVpcListItem(r: VpcListItemRaw) {
   return {
     id: r.request_id,
     name: r.vpc_name,
-    status: r.vpc_status,
+    status: r.vpc_status ?? r.request_status,
      userId: r.user_id,
     cidr: r.cidr_block ?? "—",
     subnetCount: Number(r.subnet_count),
@@ -148,6 +149,16 @@ export async function fetchVpcDetailsApi(requestId: string) {
 
 export async function deleteVpcApi(requestId: string): Promise<void> {
   await apiClient.delete<ApiResponse<void>>(VPC_BASE_URL, `/vpc/${requestId}`);
+}
+
+export async function checkVpcNameApi(
+  name: string,
+  region: string
+): Promise<{ exists: boolean }> {
+  return apiClient.get<{ exists: boolean }>(
+    VPC_BASE_URL,
+    `/check-name?name=${encodeURIComponent(name)}&region=${encodeURIComponent(region)}`
+  );
 }
 
 export { ApiError };

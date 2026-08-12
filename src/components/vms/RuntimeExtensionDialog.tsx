@@ -98,7 +98,7 @@ export default function RuntimeExtensionDialog({
   // const [managerOptions, setManagerOptions] = useState<ManagerOption[]>([]);
   // const [managersLoading, setManagersLoading] = useState(false);
 
-  const { manager: myManager, superAdmins, hasActiveManager, loading: managerLoading, error: managerError } = useMyManager();
+  const { manager: myManager, superAdmins, hasActiveManager, loading: managerLoading, error: managerError } = useMyManager(open);
   const [selectedSuperAdmin, setSelectedSuperAdmin] = useState('');
   
   // Determine which email to use for submission
@@ -647,7 +647,7 @@ export default function RuntimeExtensionDialog({
           {/* ── Reason ───────────────────────────────────────────────────── */}
           <div className="space-y-2">
             <Label>
-              Reason for Extension <span className="text-destructive">*</span>
+              Reason for Extension 
             </Label>
             <Textarea
               placeholder="Explain why you need more time..."

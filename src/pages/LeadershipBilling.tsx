@@ -61,6 +61,7 @@ export default function Leadership() {
   const [regionFilters, setRegionFilters] = useState<string[]>([]);
   const [serviceFilters, setServiceFilters] = useState<string[]>([]);
   const [rangeDays] = useState<RangeDays>(30);
+  const [granularity, setGranularity] = useState<'daily' | 'monthly'>('daily');
   const [openKpi, setOpenKpi] = useState<null | 'running' | 'launches' | 'spend' | 'totals'>(null);
 
   const chartsRef = useRef<HTMLDivElement>(null);
@@ -191,7 +192,7 @@ export default function Leadership() {
       const params = new URLSearchParams();
       params.append('startDate', startDate);
       params.append('endDate', endDate);
-      
+
       if (selectedUserIds && selectedUserIds.length > 0) {
         selectedUserIds.forEach(id => params.append('userId', id.toString()));
       }
@@ -212,15 +213,45 @@ export default function Leadership() {
         headers: { Authorization: `Bearer ${token}` }
       });
 
-      if (!response.ok) {
-        throw new Error('Failed to export CSV');
+      if (!response.ok) throw new Error('Failed to export CSV');
+
+      const text = await response.text();
+
+      let csvContent = text;
+
+      if (granularity === 'monthly') {
+        const lines = text.trim().split('\n');
+        const headers = lines[0];
+        // Date col=0, User=1, Service=2, Region=3, Shape=4, Active=5, Created=6, Terminated=7, Spend=8
+        type AggKey = string;
+        const map = new Map<AggKey, { month: string; user: string; service: string; region: string; shape: string; active: number; created: number; terminated: number; spend: number }>();
+        for (let i = 1; i < lines.length; i++) {
+          const cols = lines[i].split(',').map(c => c.replace(/^"|"$/g, ''));
+          if (cols.length < 9) continue;
+          const month = cols[0].slice(0, 7); // yyyy-MM
+          const key = `${month}|${cols[1]}|${cols[2]}|${cols[3]}|${cols[4]}`;
+          const existing = map.get(key);
+          if (!existing) {
+            map.set(key, { month, user: cols[1], service: cols[2], region: cols[3], shape: cols[4], active: Number(cols[5]) || 0, created: Number(cols[6]) || 0, terminated: Number(cols[7]) || 0, spend: parseFloat(cols[8]) || 0 });
+          } else {
+            existing.active += Number(cols[5]) || 0;
+            existing.created += Number(cols[6]) || 0;
+            existing.terminated += Number(cols[7]) || 0;
+            existing.spend += parseFloat(cols[8]) || 0;
+          }
+        }
+        const aggRows = Array.from(map.values()).sort((a, b) => b.month.localeCompare(a.month) || a.user.localeCompare(b.user));
+        csvContent = [
+          headers,
+          ...aggRows.map(r => [r.month, r.user, r.service, r.region, r.shape, r.active, r.created, r.terminated, r.spend.toFixed(2)].map(c => `"${c}"`).join(','))
+        ].join('\n');
       }
 
-      const blob = await response.blob();
+      const blob = new Blob([csvContent], { type: 'text/csv' });
       const downloadUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = downloadUrl;
-      a.download = `leadership-billing-${startDate}-to-${endDate}.csv`;
+      a.download = `leadership-billing-${granularity}-${startDate}-to-${endDate}.csv`;
       a.click();
       URL.revokeObjectURL(downloadUrl);
       toast.success('CSV downloaded');
@@ -298,7 +329,7 @@ export default function Leadership() {
     },
     {
       key: 'launches' as const,
-      label: 'VMs launched today', value: kpis.launchedToday.toLocaleString(),
+      label: 'VMs launched', value: kpis.launchedToday.toLocaleString(),
       sub: `vs ${kpis.launchedYesterday} yesterday`,
       icon: Cpu, color: 'text-sky-400',
       trend: kpis.launchTrend,
@@ -313,7 +344,7 @@ export default function Leadership() {
     },
     {
       key: 'totals' as const,
-      label: 'Total Resources (window)', value: kpis.totalResources.toLocaleString(),
+      label: 'Total Resources', value: kpis.totalResources.toLocaleString(),
       sub: '', icon: Activity, color: 'text-violet-400',
       trend: undefined,
       series: kpiSeries?.totals || [], chartColor: '#8a7bb0', variant: 'area' as const,
@@ -474,7 +505,7 @@ export default function Leadership() {
               {/* Export dropdown - pushed to right */}
               <div className="lg:ml-auto">
                 <Select value="" onValueChange={onExport} disabled={loading}>
-                  <SelectTrigger className="w-[130px] focus:ring-0 focus:ring-offset-0 cursor-pointer">
+                  <SelectTrigger className="w-[130px] focus:ring-0 focus:ring-offset-0 cursor-pointer hover:bg-accent hover:text-accent-foreground">
                     <Download className="mr-2 h-4 w-4" />
                     <SelectValue placeholder="Export" />
                   </SelectTrigger>
@@ -498,7 +529,7 @@ export default function Leadership() {
           <div className="flex items-center justify-center py-20 text-muted-foreground text-sm">Loading billing data…</div>
         ) : (
           <>
-            <LeadershipCharts ref={chartsRef} data={unifiedData} rangeDays={rangeDays} />
+            <LeadershipCharts ref={chartsRef} data={unifiedData} rangeDays={rangeDays} granularity={granularity} onGranularityChange={setGranularity} />
           </>
         )}
       </div>
@@ -507,7 +538,6 @@ export default function Leadership() {
         open={!!openKpi && openKpi !== 'spend'}
         onOpenChange={(o) => !o && setOpenKpi(null)}
         title={activeKpi?.label || ''}
-        subtitle={activeKpi ? `${activeKpi.value} · ${activeKpi.sub}` : ''}
         data={activeKpi?.series || []}
         variant={activeKpi?.variant || 'bar'}
         color={activeKpi?.chartColor || ''}
@@ -557,10 +587,12 @@ export default function Leadership() {
           </div>
 
           {/* Reuse actual UI components */}
-          <LeadershipCharts 
-            data={unifiedData} 
+          <LeadershipCharts
+            data={unifiedData}
             rangeDays={rangeDays}
             exportMode={true}
+            granularity={granularity}
+            onGranularityChange={setGranularity}
           />
         </div>
       </div>

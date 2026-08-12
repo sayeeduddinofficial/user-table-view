@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ChevronLeft,
   ChevronRight,
@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useDialog } from "@/components/ui/dialog-context";
 import { DataTable, type Column, type Pagination } from "@/components/common/DataTable";
+import { lbApi } from "@/services/lbApi";
 
 const INSTANCES_PAGE_SIZE = 10;
 const TARGETS_PAGE_SIZE = 10;
@@ -31,6 +32,9 @@ export type InstanceRow = {
 export type PendingTarget = InstanceRow & { port: string; launchTime: string };
 
 type Props = {
+  region: string;
+  vpcId: string;
+  defaultPort: string;
   pendingTargets: PendingTarget[];
   onPendingTargetsChange: (targets: PendingTarget[]) => void;
   onCancel: () => void;
@@ -38,42 +42,71 @@ type Props = {
   onNext: () => void;
 };
 
-export function RegisterTargetsStep({ pendingTargets, onPendingTargetsChange, onCancel, onPrevious, onNext }: Props) {
+export function RegisterTargetsStep({ region, vpcId, defaultPort, pendingTargets, onPendingTargetsChange, onCancel, onPrevious, onNext }: Props) {
   const { alert } = useDialog();
   const [instanceFilter, setInstanceFilter] = useState("");
   const [instancePage, setInstancePage] = useState(1);
   const [selectedInstances, setSelectedInstances] = useState<Set<string>>(new Set());
-  const [registerPorts, setRegisterPorts] = useState("80");
+  const [registerPorts, setRegisterPorts] = useState(defaultPort || "80");
   const [targetFilter, setTargetFilter] = useState("");
   const [targetPage, setTargetPage] = useState(1);
   const [showOnlyPending, setShowOnlyPending] = useState(false);
-  const instances: InstanceRow[] = [
-    {
-      id: "i-0a1b2c3d4e5f60001",
-      instanceId: "i-0a1b2c3d4e5f60001",
-      name: "web-server-01",
-      state: "running",
-      securityGroups: "launch-wizard-1",
-      zone: "us-east-1a",
-      subnetId: "subnet-0f1e2d3c4b5a6001",
-      privateIpv4: "10.0.1.10",
-    },
-    {
-      id: "i-0a1b2c3d4e5f60009",
-      instanceId: "i-0a1b2c3d4e5f60001",
-      name: "web-server-02",
-      state: "running",
-      securityGroups: "launch-wizard-1",
-      zone: "us-east-1b",
-      subnetId: "subnet-0f1e2d3c4b5a6002",
-      privateIpv4: "10.0.2.11",
-    }
-  ];
+  // const instances: InstanceRow[] = [
+  //   {
+  //     id: "i-0a1b2c3d4e5f60001",
+  //     instanceId: "i-0a1b2c3d4e5f60001",
+  //     name: "web-server-01",
+  //     state: "running",
+  //     securityGroups: "launch-wizard-1",
+  //     zone: "us-east-1a",
+  //     subnetId: "subnet-0f1e2d3c4b5a6001",
+  //     privateIpv4: "10.0.1.10",
+  //   },
+  //   {
+  //     id: "i-0a1b2c3d4e5f60009",
+  //     instanceId: "i-0a1b2c3d4e5f60001",
+  //     name: "web-server-02",
+  //     state: "running",
+  //     securityGroups: "launch-wizard-1",
+  //     zone: "us-east-1b",
+  //     subnetId: "subnet-0f1e2d3c4b5a6002",
+  //     privateIpv4: "10.0.2.11",
+  //   }
+  // ];
+
+  const [instances, setInstances] = useState<InstanceRow[]>([]);
+  const [instancesLoading, setInstancesLoading] = useState(false);
+
+  const loadInstances = () => {
+    if (!region || !vpcId) return;
+    setInstancesLoading(true);
+    lbApi.instances(region, vpcId)
+      .then((res) => setInstances(res.instances))
+      .catch(() => {
+        setInstances([]);
+        alert({ title: "Failed to load instances", severity: "error" });
+      })
+      .finally(() => setInstancesLoading(false));
+  };
+
+  useEffect(() => {
+    loadInstances();
+  }, [region, vpcId]);
+
+  // Instance IDs that are already included as pending targets — these should
+  // disappear from the "Available instances" table until removed from pending.
+  const pendingInstanceIds = useMemo(
+    () => new Set(pendingTargets.map((t) => t.instanceId)),
+    [pendingTargets]
+  );
 
   const filteredInstances = useMemo(() => {
     const q = instanceFilter.trim().toLowerCase();
-    return instances.filter((i) => !q || Object.values(i).some((v) => String(v).toLowerCase().includes(q)));
-  }, [instances, instanceFilter]);
+    return instances.filter((i) => {
+      if (pendingInstanceIds.has(i.instanceId)) return false;
+      return !q || Object.values(i).some((v) => String(v).toLowerCase().includes(q));
+    });
+  }, [instances, instanceFilter, pendingInstanceIds]);
 
   const instancesTotalPages = Math.max(1, Math.ceil(filteredInstances.length / INSTANCES_PAGE_SIZE));
   const currentInstancePage = Math.min(instancePage, instancesTotalPages);
@@ -110,21 +143,39 @@ export function RegisterTargetsStep({ pendingTargets, onPendingTargetsChange, on
     setSelectedInstances(next);
   };
 
-  const includeAsPending = () => {
+  const includeAsPending = (): boolean => {
+    const portNum = Number(registerPorts);
+    if (!registerPorts || portNum < 1 || portNum > 65535) {
+      alert({ title: "Enter a valid port (1-65535) before including instances.", severity: "error" });
+      return false;
+    }
     const picked = instances.filter((i) => selectedInstances.has(i.id));
-    const additions: PendingTarget[] = picked.map((i) => ({
-      ...i,
-      port: registerPorts,
-      launchTime: new Date().toISOString(),
-    }));
+    const additions: PendingTarget[] = picked
+      .filter((i) => !pendingTargets.some((p) => p.instanceId === i.instanceId && p.port === registerPorts))
+      .map((i) => ({
+        ...i,
+        id: `${i.id}-${registerPorts}`,
+        port: registerPorts,
+        launchTime: new Date().toISOString(),
+      }));
     onPendingTargetsChange([...pendingTargets, ...additions]);
     setSelectedInstances(new Set());
+    return true;
+  };
+
+  const handleNext = () => {
+    // Do not implicitly include selected instances when advancing.
+    // Users must click "Include as pending below" to add instances.
+    onNext();
   };
 
   const visibleTargets = useMemo(() => {
     const q = targetFilter.trim().toLowerCase();
-    return pendingTargets.filter((t) => !q || Object.values(t).some((v) => String(v).toLowerCase().includes(q)));
-  }, [pendingTargets, targetFilter]);
+    return pendingTargets.filter((t) => {
+      if (showOnlyPending && t.state !== "pending") return false; // adjust condition to whatever "pending" means in your data model
+      return !q || Object.values(t).some((v) => String(v).toLowerCase().includes(q));
+    });
+  }, [pendingTargets, targetFilter, showOnlyPending]);
 
   const targetsTotalPages = Math.max(1, Math.ceil(visibleTargets.length / TARGETS_PAGE_SIZE));
   const currentTargetPage = Math.min(targetPage, targetsTotalPages);
@@ -215,11 +266,11 @@ export function RegisterTargetsStep({ pendingTargets, onPendingTargetsChange, on
           </div>
           <button
             type="button"
-            onClick={() => alert({ title: "Refreshing instances...", severity: "loading" })}
+            onClick={loadInstances}
             className="h-8 w-8 inline-flex items-center justify-center rounded-md border border-border hover:bg-accent/40"
             title="Refresh"
           >
-            <RefreshCw size={14} />
+            <RefreshCw size={14} className={instancesLoading ? "animate-spin" : ""} />
           </button>
         </div>
 
@@ -233,13 +284,13 @@ export function RegisterTargetsStep({ pendingTargets, onPendingTargetsChange, on
               className="w-full bg-input/40 border border-border rounded-md pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40"
             />
           </div>
-        
+
         </div>
 
         <DataTable
           columns={instanceColumns}
           data={paginatedInstances}
-          emptyMessage="No instances"
+          emptyMessage={instancesLoading ? "Loading instances..." : "No instances found in this region"}
           rowKey={(i) => i.id}
           pagination={instancesPagination}
           onPageChange={setInstancePage}
@@ -254,7 +305,7 @@ export function RegisterTargetsStep({ pendingTargets, onPendingTargetsChange, on
             <Input
               id="register-ports"
               value={registerPorts}
-              onChange={(e) => setRegisterPorts(e.target.value)}
+              onChange={(e) => setRegisterPorts(e.target.value.replace(/[^0-9]/g, ""))}
               className="bg-muted/50"
             />
             <p className="text-xs text-muted-foreground">1-65535 (separate multiple ports with commas)</p>
@@ -293,8 +344,8 @@ export function RegisterTargetsStep({ pendingTargets, onPendingTargetsChange, on
             />
           </div>
           <label className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
-            <Switch checked={showOnlyPending} onCheckedChange={setShowOnlyPending} />
-            Show only pending
+            {/* <Switch checked={showOnlyPending} onCheckedChange={setShowOnlyPending} />
+            Show only pending */}
           </label>
         </div>
 
@@ -317,7 +368,7 @@ export function RegisterTargetsStep({ pendingTargets, onPendingTargetsChange, on
           <Button variant="outline" onClick={onPrevious}>
             Previous
           </Button>
-          <Button onClick={onNext} className="min-w-[100px]">
+          <Button onClick={handleNext} className="min-w-[100px]">
             Next
           </Button>
         </div>

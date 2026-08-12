@@ -7,10 +7,10 @@ interface StatCardProps {
   subtitle?: string;
   icon: LucideIcon;
   trend?: {
-    value: number;
-    display: string,
-    tooltip: string,
-    positive: boolean,
+    value?: number;
+    display?: string;
+    tooltip?: string;
+    positive: boolean;
     showTooltip?: boolean;
   };
   variant?: 'default' | 'primary' | 'success' | 'warning' | 'destructive';
@@ -78,6 +78,22 @@ export function StatCard({
     destructive: 'text-destructive bg-destructive/10',
   };
 
+  const trendInfo = trend
+  ? (() => {
+      const normalizedValue = Number(trend.value ?? 0);
+      const absValue = Math.abs(normalizedValue);
+      const overHundred = absValue > 100;
+
+      return {
+        displayText: overHundred
+          ? "100%+"
+          : `${absValue.toFixed(2)}%`,
+        tooltipText: `${absValue.toFixed(2)}%`,
+        showTooltip: overHundred,
+      };
+    })()
+  : null;
+
   return (
     <div
  className={cn(
@@ -123,34 +139,24 @@ export function StatCard({
             {subtitle}
           </p>
           )}
-          {/* {trend && (
-            <p
-              className={cn(
-                'mt-2 text-sm font-medium',
-                trend.positive ? 'text-success' : 'text-destructive'
-              )}
-            >
-              {trend.positive ? '↑' : '↓'} {Math.abs(trend.value)}% from last week
-            </p>
-          )} */}
-          {trend && (
+          {trendInfo && (
             <div className="relative group inline-block">
               <p className='mt-2 text-sm font-medium text-muted-foreground'>
-              <span
-                className={cn(
-                  " cursor-default",
-                  trend.positive ? "text-success" : "text-destructive"
-                )}
-              >
-                {trend.positive ? "↑" : "↓"} {trend.display} 
-              </span>
-              <span>{" "}from last 7 days</span>
+                <span
+                  className={cn(
+                    " cursor-default",
+                    trend!.positive ? "text-success" : "text-destructive"
+                  )}
+                >
+                  {trend!.positive ? "↓" : "↑"} {trendInfo.displayText}
+                </span>
+                <span> from last 7 days</span>
               </p>
 
-              {trend.showTooltip && (
-                <div className="absolute left-1/2 top-full -translate-x-1/2 mt-2 hidden group-hover:block z-50">
-                  <div className="bg-[#1f2937] text-white text-xs px-3 py-1.5 rounded-lg shadow-lg border border-white/10 whitespace-nowrap">
-                    {trend.tooltip}
+              {trendInfo.showTooltip && (
+                <div className="absolute left-1/2 bottom-full -translate-x-1/2 mb-2 hidden group-hover:block z-50 pointer-events-none">
+                  <div className="rounded-md border border-slate-200/70 bg-white/90 px-2.5 py-1.5 text-xs text-slate-700 shadow-sm whitespace-nowrap dark:border-slate-700/70 dark:bg-slate-800/90 dark:text-slate-100">
+                    {trendInfo.tooltipText}
                   </div>
                 </div>
               )}

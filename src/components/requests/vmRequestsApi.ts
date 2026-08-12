@@ -40,6 +40,9 @@ export interface VMRequest {
   last_operation?: string;
   justification?: string;
   service?: string;
+  provision_retry_count?: number;
+  terminate_retry_count?: number;
+  has_terminating_vms?: boolean;
 }
 
 const categoryLabels: Record<number, string> = {
@@ -168,6 +171,13 @@ export async function retryVMRequestApi(requestId: string): Promise<void> {
   );
 }
 
+export async function retryVpcRequestApi(requestId: string): Promise<void> {
+  await apiClient.post<ApiResponse<void>>(
+    env.vpcService,
+    `/requests/${requestId}/retry`
+  );
+}
+
 // ── Retry terminate VM request ───────────────────────────────────────────────
 export async function retryTerminateVMRequestApi(requestId: string): Promise<void> {
   await apiClient.post<ApiResponse<void>>(
@@ -176,6 +186,57 @@ export async function retryTerminateVMRequestApi(requestId: string): Promise<voi
   );
 }
 
+// ── Retry S3 bucket provision ────────────────────────────────────────────────
+export async function retryBucketProvisionApi(requestId: string): Promise<void> {
+  await apiClient.post<ApiResponse<void>>(
+    env.bucketService,
+    `buckets/${encodeURIComponent(requestId)}/retry`
+  );
+}
+
+export async function retryBucketDestroyApi(requestId: string): Promise<void> {
+  await apiClient.post<ApiResponse<void>>(
+    env.bucketService,
+    `buckets/${encodeURIComponent(requestId)}/retry-destroy`
+  );
+}
+
+// ── Retry LB provision ────────────────────────────────────────────────────────
+export async function retryLbProvisionApi(requestId: string): Promise<void> {
+  await apiClient.post<ApiResponse<void>>(
+    env.lbService,
+    `/load-balancers/by-request/${requestId}/retry`
+  );
+}
+
+// ── Retry LB terminate ────────────────────────────────────────────────────────
+export async function retryLbTerminateApi(requestId: string): Promise<void> {
+  await apiClient.post<ApiResponse<void>>(
+    env.lbService,
+    `/load-balancers/by-request/${requestId}/retry-terminate`
+  );
+}
+
+export async function retryTerminateVpcRequestApi(requestId: string): Promise<void> {
+  await apiClient.post<ApiResponse<void>>(
+    env.vpcService,
+    `/requests/${requestId}/retry-terminate`
+  );
+}
+
+export async function retryEKSProvisionApi(requestId: string ): Promise<void> {
+  await apiClient.post<ApiResponse<void>>(
+    env.eksClusterService,
+    `/eks/${requestId}/retry`
+  );
+}
+
+export async function retryEKSTerminateApi(requestId: string ): Promise<void> {
+  await apiClient.post<ApiResponse<void>>(
+    env.eksClusterService,
+    `/eks/${requestId}/retry-terminate`
+  );
+}
 // ── Delete VM request ────────────────────────────────────────────────────────
 export async function deleteVMRequestApi(requestId: string): Promise<ApiResponse<void>> {
   return await apiClient.delete<ApiResponse<void>>(
@@ -194,6 +255,21 @@ export async function fetchVpcRequestApi(requestId: string): Promise<VMRequest> 
     ...d,
     request_id: d.request_id,
     service: "vpc-service",
+    total_vms: null,
+    vm_count: 0,
+  });
+}
+
+export async function fetchEksRequestApi(requestId: string): Promise<VMRequest> {
+  const response = await apiClient.get<ApiResponse<any>>(
+    env.eksClusterService,
+    `/eks/request/${encodeURIComponent(requestId)}`
+  );
+  const d = response.data;
+  return normalizeVMRequest({
+    ...d,
+    request_id: d.request_id,
+    service: "eks-cluster-service",
     total_vms: null,
     vm_count: 0,
   });
@@ -231,6 +307,60 @@ export async function deleteRdsRequestApi(requestId: string): Promise<void> {
     `/clusters/${encodeURIComponent(requestId)}`
   );
 }
+
+export async function retryRdsProvisionApi(requestId: string): Promise<void> {
+  await apiClient.post<ApiResponse<void>>(
+    env.rds,
+    `/clusters/${encodeURIComponent(requestId)}/retry`
+  );
+} 
+
+
+export async function retryRdsTerminateApi(requestId: string): Promise<void> {
+  await apiClient.post<ApiResponse<void>>(
+    env.rds,
+    `/clusters/${encodeURIComponent(requestId)}/retry-terminate`
+  );
+}
+
+export async function retryRoute53ProvisionApi(requestId: string): Promise<void> {
+  await apiClient.post<ApiResponse<void>>(
+    env.route53Service,
+    `/records/${requestId}/retry`
+  );
+} 
+export async function retryRoute53TerminateApi(requestId: string): Promise<void> {
+  await apiClient.post<ApiResponse<void>>(
+    env.route53Service,
+    `/records/${requestId}/retry-terminate`
+  );
+}
+
+
+
+// vmRequestsApi.ts — add at the bottom
+
+export type RetryApiFn = (requestId: string) => Promise<void>;
+
+export const RETRY_PROVISION_API: Record<string, RetryApiFn> = {
+  'rds-service': retryRdsProvisionApi,
+  's3-service': retryBucketProvisionApi,
+ 'lb-service': retryLbProvisionApi,
+ 'vpc-service': retryVpcRequestApi,
+'route53-service': retryRoute53ProvisionApi,
+ "eks-cluster-service": retryEKSProvisionApi,
+};
+
+export const RETRY_TERMINATE_API: Record<string, RetryApiFn> = {
+  'rds-service': retryRdsTerminateApi,
+  'lb-service': retryLbTerminateApi,
+  'vpc-service': retryTerminateVpcRequestApi,
+  'route53-service': retryRoute53TerminateApi,
+  "eks-cluster-service": retryEKSTerminateApi,
+  's3-service': retryBucketDestroyApi,
+};
+
+
 
 
 

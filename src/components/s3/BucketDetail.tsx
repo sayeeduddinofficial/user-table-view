@@ -333,8 +333,8 @@ export function BucketDetail({ bucket, onBack }: { bucket: S3Bucket; onBack: () 
   return (
     <>
       <Header
-        title={bucket.name}
-        subtitle={`Amazon S3 bucket · ${regionLabel(bucket.region)}`}
+        title="S3 Buckets"
+        subtitle="Storage resources for objects and files."
         showSearch={false}
       />
       <div className="p-6">
@@ -342,8 +342,6 @@ export function BucketDetail({ bucket, onBack }: { bucket: S3Bucket; onBack: () 
           {/* Breadcrumb */}
           <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
             <span className="text-primary cursor-pointer hover:underline" onClick={onBack}>S3 Buckets</span>
-            <ChevronRight size={14} />
-            <span className="text-primary cursor-pointer hover:underline" onClick={onBack}>Buckets</span>
             <ChevronRight size={14} />
             <span
               className={path.length === 0 ? "text-foreground" : "text-primary cursor-pointer hover:underline"}
@@ -454,7 +452,7 @@ export function BucketDetail({ bucket, onBack }: { bucket: S3Bucket; onBack: () 
 
           {tab === "Properties" && path.length > 0 && (
             <DetailCard title="Folder overview">
-              <div className="grid grid-cols-3 gap-x-8 gap-y-4 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5 text-sm">
                 <DetailField label="AWS Region" value={regionLabel(bucket.region)} />
                 <DetailField label="S3 URI" value={`s3://${bucket.name}/${prefixKey}`} mono copy />
                 <DetailField label="Amazon Resource Name (ARN)" value={`arn:aws:s3:::${bucket.name}/${prefixKey}`} mono copy />
@@ -464,7 +462,7 @@ export function BucketDetail({ bucket, onBack }: { bucket: S3Bucket; onBack: () 
 
           {tab === "Properties" && path.length === 0 && (
             <DetailCard title="Bucket overview">
-              <div className="grid grid-cols-3 gap-x-8 gap-y-4 text-sm">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-5 text-sm">
                 <DetailField label="AWS Region" value={regionLabel(bucket.region)} />
                 <DetailField label="S3 URI" value={`s3://${bucket.name}`} mono copy />
                 <DetailField label="Amazon Resource Name (ARN)" value={`arn:aws:s3:::${bucket.name}`} mono copy />

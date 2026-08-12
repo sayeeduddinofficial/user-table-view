@@ -1,7 +1,7 @@
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
-import { PublicClientApplication,AuthenticationResult} from "@azure/msal-browser";
+import { PublicClientApplication, AuthenticationResult } from "@azure/msal-browser";
 import { MsalProvider } from "@azure/msal-react";
 import { msalConfig } from "./auth/msalConfig.tsx";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -36,16 +36,30 @@ async function bootstrap() {
     const msalInstance = new PublicClientApplication(msalConfig);
     await msalInstance.initialize();
     let redirectResult: AuthenticationResult | null = null;
+    let redirectError: string | null = null;
+    const msalRedirectResponseDetected =
+      window.location.hash.includes("code=") ||
+      window.location.hash.includes("error=") ||
+      window.location.search.includes("code=") ||
+      window.location.search.includes("error=") ||
+      window.location.search.includes("state=");
+
     try {
       redirectResult = await msalInstance.handleRedirectPromise();
-    } catch (redirectErr) {
+    } catch (redirectErr: any) {
       console.error("MSAL handleRedirectPromise error:", redirectErr);
+      redirectError = redirectErr?.message || "Microsoft sign-in could not be completed.";
     }
     root.render(
       
       <QueryClientProvider client={queryClient}>
         <MsalProvider instance={msalInstance}>
-          <App msalEnabled={true} redirectResult={redirectResult}/>
+          <App
+            msalEnabled={true}
+            redirectResult={redirectResult}
+            msalRedirectResponseDetected={msalRedirectResponseDetected}
+            msalRedirectError={redirectError}
+          />
         </MsalProvider>
       </QueryClientProvider>
     );
@@ -56,5 +70,3 @@ async function bootstrap() {
 }
 
 bootstrap();
-
-

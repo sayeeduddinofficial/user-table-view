@@ -2,7 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useDialog } from "@/components/ui/dialog-context";
 import { useAppStore } from "@/store/appStore";
-import { fetchVpcListApi, ApiError } from "@/services/vpcService";
+import {
+  fetchVpcListApi,
+  fetchVpcDetailsApi,
+  ApiError,
+} from "@/services/vpcService";
 import { getPendingVpc, clearPendingVpc } from "@/components/vpc/pendingVpc";
 
 type Tab = "vpcs" | "encryption";
@@ -21,18 +25,23 @@ export function useVpcList() {
   const [loading, setLoading] = useState(false);
   const { alert } = useDialog();
 
-  const loadVpcs = useCallback(async () => {
-    setLoading(true);
+  const loadVpcs = useCallback(async (showLoader = true) => {
+    if (showLoader) {
+      setLoading(true);
+    }
+
     try {
       const list = await fetchVpcListApi();
       setVpcs(list);
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : "Failed to load VPCs";
-        alert({ title: msg, severity: "error" });
+      alert({ title: msg, severity: "error" });
     } finally {
-      setLoading(false);
+      if (showLoader) {
+        setLoading(false);
+      }
     }
-  }, [setVpcs]);
+  }, [setVpcs, alert]);
 
   useEffect(() => {
     loadVpcs();
@@ -88,11 +97,50 @@ export function useVpcList() {
   }, [vpcs, currentUser?.id]);
 
   useEffect(() => {
+    const pending = getPendingVpc(currentUser?.id);
+    if (!currentUser?.id || !pending) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const details = await fetchVpcDetailsApi(pending.requestId);
+        const status = String(details?.status ?? "").toUpperCase();
+
+        if (
+          !cancelled &&
+          [
+            "SUCCESS",
+            "FAILED",
+            "DESTROYING",
+            "DESTROYED",
+            "RETRYING_TERMINATE",
+          ].includes(status)
+        ) {
+          clearPendingVpc(currentUser.id);
+          setPendingCount(0);
+          void loadVpcs();
+        }
+      } catch (err) {
+        if (!cancelled && err instanceof ApiError && err.status === 404) {
+          clearPendingVpc(currentUser.id);
+          setPendingCount(0);
+          void loadVpcs();
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id]);
+
+  useEffect(() => {
     if (!currentUser?.id || pendingCount === 0) return;
 
     const interval = window.setInterval(() => {
-      void loadVpcs();
-    }, 10000);
+      void loadVpcs(false);
+    }, 15_000);
 
     return () => window.clearInterval(interval);
   }, [currentUser?.id, pendingCount, loadVpcs]);
@@ -104,6 +152,7 @@ export function useVpcList() {
     setQuery,
     encQuery,
     setEncQuery,
+    allVpcs: vpcs,
     filtered,
     selected,
     allChecked,

@@ -42,6 +42,12 @@ export interface UserFormValues {
   role: Role;
   maxVMs: number;
   currentVMs: number;
+  maxBuckets: number;
+  maxVpcs: number;
+  maxLoadBalancers: number;
+  maxEksClusters: number;
+  maxDnsRecords: number;
+  maxRdsClusters: number;
   allowedInstanceTypes: string[];
   allowedCategories: CategoryType[];
   timeZone: string;
@@ -61,6 +67,9 @@ const ROLE_LABELS: Record<string, string> = {
   SuperAdmin: "Super Admin",
   "SplunkOps.Admin": "Admin",
   "SplunkOps.User": "User",
+  "SplunkOps.Auditor": "Auditor",
+  "SplunkOps.Stakeholder": "Stakeholder",
+  "SplunkOps.Approver": "Approver",
 };
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -78,6 +87,12 @@ export function UserForm({ user, onSubmit, onCancel }: UserFormProps) {
   const [email, setEmail] = useState(user?.email ?? "");
   const [role, setRole] = useState<Role>(user?.role ?? "SplunkOps.User");
   const [maxVMs, setMaxVMs] = useState(user?.maxVMs ?? 13);
+  const [maxBuckets, setMaxBuckets] = useState(user?.maxBuckets ?? 5);
+  const [maxVpcs, setMaxVpcs] = useState(user?.maxVpcs ?? 5);
+  const [maxLoadBalancers, setMaxLoadBalancers] = useState(user?.maxLoadBalancers ?? 5);
+  const [maxEksClusters, setMaxEksClusters] = useState(user?.maxEksClusters ?? 5);
+  const [maxDnsRecords, setMaxDnsRecords] = useState(user?.maxDnsRecords ?? 5);
+  const [maxRdsClusters, setMaxRdsClusters] = useState(user?.maxRdsClusters ?? 5);
   const [allowedTypes, setAllowedTypes] = useState<string[]>(
     user?.allowedInstanceTypes ?? ["t3.micro", "t3.small", "t3.medium", "t3.large"],
   );
@@ -111,6 +126,12 @@ export function UserForm({ user, onSubmit, onCancel }: UserFormProps) {
     setEmail(user.email ?? "");
     setRole(user.role ?? "SplunkOps.User");
     setMaxVMs(user.maxVMs ?? 13);
+    setMaxBuckets(user.maxBuckets ?? 5);
+    setMaxVpcs(user.maxVpcs ?? 5);
+    setMaxLoadBalancers(user.maxLoadBalancers ?? 5);
+    setMaxEksClusters(user.maxEksClusters ?? 5);
+    setMaxDnsRecords(user.maxDnsRecords ?? 5);
+    setMaxRdsClusters(user.maxRdsClusters ?? 5);
     setAllowedTypes(Array.isArray(user.allowedInstanceTypes) ? user.allowedInstanceTypes : []);
     setAllowedCategories(
       Array.isArray(user.allowedCategories)
@@ -194,6 +215,12 @@ export function UserForm({ user, onSubmit, onCancel }: UserFormProps) {
         role,
         maxVMs,
         currentVMs: user?.currentVMs ?? 0,
+        maxBuckets,
+        maxVpcs,
+        maxLoadBalancers,
+        maxEksClusters,
+        maxDnsRecords,
+        maxRdsClusters,
         allowedInstanceTypes: Array.from(new Set(allowedTypes)),
         allowedCategories: Array.from(new Set(allowedCategories)) as CategoryType[],
         timeZone,
@@ -302,20 +329,40 @@ export function UserForm({ user, onSubmit, onCancel }: UserFormProps) {
         Instances will automatically stop at End of Day based on the user's timezone.
       </p>
 
-      {/* Max VMs */}
-      <div className="space-y-2">
-        <Label>Maximum VMs: {maxVMs}</Label>
-        <Slider
-          value={[maxVMs]}
-          onValueChange={([v]) => { if (isAdminAccess) setMaxVMs(v); }}
-          min={1}
-          max={50}
-          step={1}
-          className="py-4"
-        />
-        <div className="flex justify-between text-xs text-muted-foreground">
-          <span>1</span>
-          <span>50</span>
+      {/* Service Quotas */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <Label>Service Quotas</Label>
+          <span className="text-xs text-muted-foreground">Per-service caps for this user</span>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          {[
+            { label: "EC2", value: maxVMs, setValue: setMaxVMs, min: 1, max: 50, unit: "VMs" },
+            { label: "S3 Buckets", value: maxBuckets, setValue: setMaxBuckets, min: 1, max: 10, unit: "buckets" },
+            { label: "VPC", value: maxVpcs, setValue: setMaxVpcs, min: 1, max: 10, unit: "VPCs" },
+            { label: "Load Balancers", value: maxLoadBalancers, setValue: setMaxLoadBalancers, min: 1, max: 10, unit: "LBs" },
+            { label: "EKS Clusters", value: maxEksClusters, setValue: setMaxEksClusters, min: 1, max: 10, unit: "clusters" },
+            { label: "Route53 Records", value: maxDnsRecords, setValue: setMaxDnsRecords, min: 1, max: 10, unit: "records" },
+            { label: "RDS Databases", value: maxRdsClusters, setValue: setMaxRdsClusters, min: 1, max: 10, unit: "databases" },
+          ].map((q) => (
+            <div key={q.label} className="rounded-lg border border-border p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm">{q.label}</Label>
+                <span className="text-sm font-semibold text-primary">{q.value}</span>
+              </div>
+              <Slider
+                value={[q.value]}
+                onValueChange={([v]) => { if (isAdminAccess) q.setValue(v); }}
+                min={q.min}
+                max={q.max}
+                step={1}
+              />
+              <div className="flex justify-between text-xs text-muted-foreground">
+          <span>{q.min}</span>
+          <span>{q.max}</span>
+        </div>
+            </div>
+          ))}
         </div>
       </div>
 

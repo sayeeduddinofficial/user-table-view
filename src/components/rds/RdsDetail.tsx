@@ -1,9 +1,8 @@
 import { Header } from "@/components/layout/Header";
 import { useParams, Link } from "react-router-dom";
-import { ChevronRight, Copy, CheckCircle2, Info } from "lucide-react";
+import { ChevronRight, Copy, Check, CheckCircle2, Info } from "lucide-react";
 import { useRdsCluster } from "@/hooks/useRds";
-import { useState } from "react";
-import { toast } from "sonner";
+import { useState, useRef } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -18,6 +17,8 @@ export function RdsDetail() {
   const [psqlPlatform, setPsqlPlatform] = useState<"macos" | "linux" | "windows">("macos");
   // const [connectTo, setConnectTo] = useState("Writer");
   const [showTokenDialog, setShowTokenDialog] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   if (loading) {
     return (
@@ -79,9 +80,11 @@ export function RdsDetail() {
     { name: cluster.reader_endpoint ?? "", status: "Available", type: "Reader", port: cluster.port ?? 5432 },
   ].filter((ep) => ep.name);
 
-  const copyToClipboard = (text: string, label: string) => {
+  const copyToClipboard = (text: string, key: string) => {
     navigator.clipboard.writeText(text);
-    toast.success(`${label} copied`);
+    setCopiedKey(key);
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => setCopiedKey(null), 2000);
   };
 
   const mockToken = `${connectivityData.endpoint}:${connectivityData.port}/?Action=connect&DBUser=${connectivityData.masterUsername}&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE&X-Amz-Date=20260707T000000Z&X-Amz-Expires=900&X-Amz-SignedHeaders=host&X-Amz-Signature=abcdef1234567890abcdef1234567890abcdef12`;
@@ -89,8 +92,8 @@ export function RdsDetail() {
   return (
     <div className="space-y-4">
       <Header
-        title={`RDS ${dbIdentifier}`}
-        subtitle={`Details for ${dbIdentifier}`}
+        title="Amazon RDS"
+        subtitle="Managed relational database service — clusters, instances"
       />
 
       <Dialog open={showTokenDialog} onOpenChange={setShowTokenDialog}>
@@ -105,11 +108,10 @@ export function RdsDetail() {
             <p className="text-xs text-muted-foreground mb-4">
               Choose the authentication option that aligns with the policy
               attached to your IAM identity. Copy the authentication token and
-              provide it as the password when you connect to your cluster. To
-              learn more, see{" "}
-              <a href="#" className="text-primary hover:underline">
+              provide it as the password when you connect to your cluster.
+              {/* <a href="#" className="text-primary hover:underline">
                 Understanding authentication and authorization ↗
-              </a>
+              </a> */}
             </p>
             <div className="flex items-start gap-2 bg-blue-500/10 border border-blue-500/20 rounded-md px-4 py-3 mb-4 text-xs text-blue-400">
               <Info size={14} className="shrink-0 mt-0.5" />
@@ -126,10 +128,10 @@ export function RdsDetail() {
                   {mockToken}
                 </span>
                 <button
-                  onClick={() => copyToClipboard(mockToken, "Token")}
+                  onClick={() => copyToClipboard(mockToken, "token")}
                   className="shrink-0 p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
                 >
-                  <Copy size={14} />
+                  {copiedKey === "token" ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
                 </button>
               </div>
             </div>
@@ -137,27 +139,14 @@ export function RdsDetail() {
         </DialogContent>
       </Dialog>
 
-      <div className="space-y-4 p-6">
+      <div className="space-y-4 px-6 pb-6 pt-2">
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Link to="/aws/rds" className="text-primary hover:underline">
             RDS
           </Link>
           <ChevronRight size={14} />
-          {isInstance ? (
-            <>
-              <Link
-                to={`/aws/rds/${cluster.request_id}`}
-                className="text-primary hover:underline"
-              >
-                {cluster.cluster_identifier}
-              </Link>
-              <ChevronRight size={14} />
-              <span>{dbIdentifier}</span>
-            </>
-          ) : (
-            <span>{dbIdentifier}</span>
-          )}
+          <span>{dbIdentifier}</span>
         </div>
 
         {/* Tabs */}
@@ -188,9 +177,6 @@ export function RdsDetail() {
             <div className="bg-card border border-border rounded-lg p-5">
               <div className="flex items-center gap-2 mb-4">
                 <h2 className="text-base font-semibold">Connect using</h2>
-                <span className="text-xs bg-blue-500/10 text-blue-400 px-2 py-1 rounded">
-                  Info
-                </span>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <label
@@ -335,11 +321,11 @@ export function RdsDetail() {
                             </p>
                             <button
                               onClick={() =>
-                                copyToClipboard(step.code, step.label)
+                                copyToClipboard(step.code, `step-${idx}`)
                               }
                               className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                             >
-                              <Copy size={14} />
+                              {copiedKey === `step-${idx}` ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
                             </button>
                           </div>
                           <pre className="bg-muted/20 border border-border rounded p-3 font-mono text-xs text-foreground overflow-x-auto whitespace-pre-wrap">
@@ -424,13 +410,10 @@ export function RdsDetail() {
                           >
                             <td className="px-5 py-3">
                               <div className="flex items-center gap-2">
-                                <Copy
-                                  size={14}
-                                  className="text-muted-foreground cursor-pointer hover:text-primary shrink-0"
-                                  onClick={() =>
-                                    copyToClipboard(ep.name, "Endpoint")
-                                  }
-                                />
+                                {copiedKey === `ep-${idx}`
+                                  ? <Check size={14} className="text-green-500 shrink-0" />
+                                  : <Copy size={14} className="text-muted-foreground cursor-pointer hover:text-primary shrink-0" onClick={() => copyToClipboard(ep.name, `ep-${idx}`)} />
+                                }
                                 <span className="font-mono text-xs text-primary">
                                   {ep.name}
                                 </span>
@@ -494,7 +477,7 @@ export function RdsDetail() {
                       <ConfigField
                         label="Option groups"
                         value={
-                          <span className="text-primary text-xs">
+                          <span className="text-xs">
                             default.aurora-postgresql17
                           </span>
                         }
@@ -503,17 +486,11 @@ export function RdsDetail() {
                         label="Amazon Resource Name (ARN)"
                         value={
                           <div className="flex items-start gap-1">
-                            <Copy
-                              size={12}
-                              className="text-muted-foreground cursor-pointer hover:text-primary mt-0.5 shrink-0"
-                              onClick={() =>
-                                copyToClipboard(
-                                  instance.instance_arn ?? "",
-                                  "ARN",
-                                )
-                              }
-                            />
-                            <span className="text-xs text-primary break-all">
+                            {copiedKey === "instance-arn"
+                              ? <Check size={12} className="text-green-500 mt-0.5 shrink-0" />
+                              : <Copy size={12} className="text-muted-foreground cursor-pointer hover:text-primary mt-0.5 shrink-0" onClick={() => copyToClipboard(instance.instance_arn ?? "", "instance-arn")} />
+                            }
+                            <span className="text-xs  break-all">
                               {instance.instance_arn ?? "—"}
                             </span>
                           </div>
@@ -534,7 +511,7 @@ export function RdsDetail() {
                       <ConfigField
                         label="DB instance parameter group"
                         value={
-                          <span className="text-primary text-xs">
+                          <span className="text-xs">
                             default.aurora-postgresql17{" "}
                             <span className="text-emerald-400">✓ In sync</span>
                           </span>
@@ -543,7 +520,7 @@ export function RdsDetail() {
                       <ConfigField
                         label="DB cluster parameter group"
                         value={
-                          <span className="text-primary text-xs">
+                          <span className="text-xs">
                             default.aurora-postgresql17{" "}
                             <span className="text-emerald-400">✓ In sync</span>
                           </span>
@@ -580,17 +557,11 @@ export function RdsDetail() {
                         label="Amazon Resource Name (ARN)"
                         value={
                           <div className="flex items-start gap-1">
-                            <Copy
-                              size={12}
-                              className="text-muted-foreground cursor-pointer hover:text-primary mt-0.5 shrink-0"
-                              onClick={() =>
-                                copyToClipboard(
-                                  cluster.cluster_arn ?? "",
-                                  "ARN",
-                                )
-                              }
-                            />
-                            <span className="text-xs text-primary break-all">
+                            {copiedKey === "cluster-arn"
+                              ? <Check size={12} className="text-green-500 mt-0.5 shrink-0" />
+                              : <Copy size={12} className="text-muted-foreground cursor-pointer hover:text-primary mt-0.5 shrink-0" onClick={() => copyToClipboard(cluster.cluster_arn ?? "", "cluster-arn")} />
+                            }
+                            <span className="text-xs break-all">
                               {cluster.cluster_arn ?? "—"}
                             </span>
                           </div>
@@ -675,7 +646,7 @@ export function RdsDetail() {
                       <ConfigField
                         label="DB cluster parameter group"
                         value={
-                          <span className="text-primary text-xs">
+                          <span className="text-xs">
                             {cluster.parameter_group ??
                               "default.aurora-postgresql17"}
                           </span>
@@ -805,12 +776,20 @@ export function RdsDetail() {
 }
 
 function FieldWithCopy({ label, value }: { label: string; value: string }) {
-  const handleCopy = () => { navigator.clipboard.writeText(value); toast.success(`${label} copied`); };
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(value);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
   return (
     <div>
       <div className="text-xs text-muted-foreground mb-1">{label}</div>
       <div className="flex items-center gap-2">
-        <Copy size={14} className="text-muted-foreground cursor-pointer hover:text-primary transition-colors" onClick={handleCopy} />
+        {copied
+          ? <Check size={14} className="text-green-500" />
+          : <Copy size={14} className="text-muted-foreground cursor-pointer hover:text-primary transition-colors" onClick={handleCopy} />
+        }
         <span className="text-sm font-mono break-all">{value}</span>
       </div>
     </div>
@@ -822,9 +801,10 @@ function AdditionalConfigurations({
   copyToClipboard,
 }: {
   connectivityData: { endpoint: string; port: number; availabilityZone: string; subnets: string[]; certificateAuthority: string; certificateAuthorityDate: string };
-  copyToClipboard: (text: string, label: string) => void;
+  copyToClipboard: (text: string, key: string) => void;
 }) {
   const [open, setOpen] = useState(true);
+  const [copiedEndpoint, setCopiedEndpoint] = useState(false);
   return (
     <div className="bg-card border border-border rounded-lg overflow-hidden">
       <button onClick={() => setOpen((v) => !v)} className="w-full flex items-center gap-2 px-5 py-4 text-sm font-semibold text-foreground hover:bg-muted/20 transition-colors">
@@ -840,7 +820,10 @@ function AdditionalConfigurations({
               <div className="mb-3">
                 <div className="text-xs text-muted-foreground mb-1">Endpoint</div>
                 <div className="flex items-center gap-1.5">
-                  <Copy size={13} className="text-muted-foreground cursor-pointer hover:text-primary shrink-0" onClick={() => copyToClipboard(connectivityData.endpoint, "Endpoint")} />
+                  {copiedEndpoint
+                    ? <Check size={13} className="text-green-500 shrink-0" />
+                    : <Copy size={13} className="text-muted-foreground cursor-pointer hover:text-primary shrink-0" onClick={() => { navigator.clipboard.writeText(connectivityData.endpoint); setCopiedEndpoint(true); setTimeout(() => setCopiedEndpoint(false), 2000); }} />
+                  }
                   <span className="font-mono text-xs text-primary break-all">{connectivityData.endpoint || "—"}</span>
                 </div>
               </div>

@@ -40,7 +40,7 @@ import {
   Network,
   Boxes,
 } from "lucide-react";
-import { CATEGORY_DISPLAY_LABELS, ACTION_DISPLAY_LABELS } from "@/types";
+import { AUDIT_CATEGORIES, CATEGORY_DISPLAY_LABELS, ACTION_DISPLAY_LABELS } from "@/types";
 import {
   useAuditLogs,
   useAuditFilters,
@@ -70,24 +70,24 @@ const CATEGORY_BADGE_CONFIG: Record<
     className: string;
   }
 > = {
-  Auth: {
+  [AUDIT_CATEGORIES.AUTH]: {
     icon: Shield,
     className: "bg-blue-500/15 text-blue-400 border border-blue-500/25",
   },
-  "AWS Ops": {
+  [AUDIT_CATEGORIES.AWS_OPS]: {
     icon: Server,
     className:
       "bg-emerald-500/15 text-emerald-400 border border-emerald-500/25",
   },
-  "User Mgmt": {
+  [AUDIT_CATEGORIES.USER_MGMT]: {
     icon: Users,
     className: "bg-pink-500/15 text-pink-400 border border-pink-500/25",
   },
-  Settings: {
+  [AUDIT_CATEGORIES.SETTINGS]: {
     icon: Settings,
     className: "bg-orange-500/15 text-orange-400 border border-orange-500/25",
   },
-  Requests: {
+  [AUDIT_CATEGORIES.REQUESTS]: {
     icon: FileText,
     className: "bg-indigo-500/15 text-indigo-400 border border-indigo-500/25",
   },
@@ -190,36 +190,36 @@ const getUniqueAwsServices = () => {
 // ─── Category config for stat cards ──────────────────────────────────────────
 const CATEGORY_CONFIG = [
   {
-    key: "Auth",
-    label: "Auth",
+    key: AUDIT_CATEGORIES.AUTH,
+    label: AUDIT_CATEGORIES.AUTH,
     icon: Shield,
     color: "text-blue-400",
     bg: "bg-blue-500/10",
   },
   {
-    key: "AWS Ops",
-    label: "AWS Ops",
+    key: AUDIT_CATEGORIES.AWS_OPS,
+    label: AUDIT_CATEGORIES.AWS_OPS,
     icon: Server,
     color: "text-emerald-400",
     bg: "bg-emerald-500/10",
   },
   {
-    key: "User Mgmt",
-    label: "User Mgmt",
+    key: AUDIT_CATEGORIES.USER_MGMT,
+    label: AUDIT_CATEGORIES.USER_MGMT,
     icon: Users,
     color: "text-pink-400",
     bg: "bg-pink-500/10",
   },
   {
-    key: "Settings",
-    label: "Settings",
+    key: AUDIT_CATEGORIES.SETTINGS,
+    label: AUDIT_CATEGORIES.SETTINGS,
     icon: Settings,
     color: "text-orange-400",
     bg: "bg-orange-500/10",
   },
   {
-    key: "Requests",
-    label: "Requests",
+    key: AUDIT_CATEGORIES.REQUESTS,
+    label: AUDIT_CATEGORIES.REQUESTS,
     icon: FileText,
     color: "text-indigo-400",
     bg: "bg-indigo-500/10",
@@ -381,7 +381,7 @@ export default function AuditLogs() {
             .join("\n") || "—";
 
         const showTooltip =
-          description.length > 50 ||
+          description.length > 48 ||
           justification.length > 40;
 
         return (
@@ -541,7 +541,7 @@ export default function AuditLogs() {
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-sm font-bold mb-3">
               <Database className="h-4 w-4" />
-              AWS Services <span className="text-muted-foreground text-xs font-normal">activity across your infrastructure</span>
+              AWS Services
             </div>
             <div className="flex flex-wrap gap-2">
               {getUniqueAwsServices().map(([serviceKey, config]) => {
@@ -634,7 +634,7 @@ export default function AuditLogs() {
               <div className="relative flex-1 w-full">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  placeholder="Search by user name, action, target..."
+                  placeholder="Search by user, action, target..."
                   className="pl-9 w-full"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
@@ -873,7 +873,7 @@ export default function AuditLogs() {
               else if (v === "png") handleExportPNG();
               else if (v === "pdf") handleExportPDF();
             }}>
-              <SelectTrigger className="w-[130px] focus:ring-0 focus:ring-offset-0 cursor-pointer">
+              <SelectTrigger className="w-[130px] focus:ring-0 focus:ring-offset-0 cursor-pointer hover:bg-accent hover:text-accent-foreground">
                 <Download className="mr-2 h-4 w-4" />
                 <SelectValue placeholder="Export" />
               </SelectTrigger>

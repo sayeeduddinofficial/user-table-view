@@ -67,7 +67,7 @@ export function buildCreateBucketRequest(form: BucketForm, bucketName: string): 
   const payload: CreateBucketRequest = {
     region: form.region,
     bucketType: form.bucketType === 'directory' ? 'DIRECTORY' : 'GENERAL',
-    bucketName: isRegional ? undefined : bucketName,
+    bucketName: bucketName,
     bucketNamespace: isRegional ? 'ACCOUNT_REGIONAL' : 'GLOBAL',
     bucketNamePrefix: isRegional ? form.namePrefix : undefined,
     aclEnabled,
@@ -107,3 +107,15 @@ export async function deleteBucketApi(requestId: string): Promise<DeleteBucketRe
   return apiClient.delete<DeleteBucketResponse>(env.bucketService, `buckets/${encodeURIComponent(requestId)}`);
 }
 
+export async function checkBucketNameApi(
+  bucketName: string,
+  region: string,
+  namespace: string
+): Promise<{ exists: boolean }> {
+  return apiClient.get<{ exists: boolean }>(
+    env.bucketService,
+    `check-name?bucketName=${encodeURIComponent(
+      bucketName
+    )}&region=${region}&namespace=${namespace}`
+  );
+}

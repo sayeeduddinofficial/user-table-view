@@ -10,8 +10,8 @@
     --background: 220 25% 7%;
     --foreground: 210 40% 98%;
 
-    --card: 233 13% 14%;       /* #1E1F27 */
-    --card-foreground: 210 40% 98%;
+       --card: 220 25% 9%;
+     --card-foreground: 210 40% 98%;
 
     --popover: 220 25% 11%;
     --popover-foreground: 210 40% 98%;
@@ -109,7 +109,7 @@
   }
 
 .dark {
-  --background: 225 11% 10%;
+  --background: 220 25% 7%;
   --foreground: 210 40% 98%;
   --surface: 233 12% 14%; /* #202129 */
 }
@@ -195,6 +195,9 @@
 @layer components {
   .glass-panel {
     @apply bg-card/50 backdrop-blur-xl border border-border/50;
+  }
+  .bg-card {
+    @apply bg-card/50 backdrop-blur-xl border border-border/50 !important;
   }
 
   .glow-border {

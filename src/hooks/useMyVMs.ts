@@ -146,14 +146,13 @@ export function useMyVMs() {
             return vm;
           })
         );
-        await fetchAWSCounts();
         setPollingActive(true);
       }
     } catch (err) {
       console.error("Polling error:", err);
       setPollingActive(false);
     }
-  }, [fetchAWSCounts]);
+  }, []);
 
   const silentRefresh = useCallback(async () => {
     try { await Promise.all([fetchVMList(), fetchAWSCounts()]); }
@@ -285,7 +284,7 @@ export function useMyVMs() {
       setActiveRequest(targetVM.requestId, "ec2-service");
       // ✅ ADD THIS: Navigate to Console to view live logs
       // await new Promise(resolve => setTimeout(resolve, 100));
-      navigate("/console");
+      // navigate("/console");
     }
 
       await refreshCurrentUser();
@@ -298,7 +297,7 @@ export function useMyVMs() {
     } finally {
       setOperatingVMs((prev) => { const s = new Set(prev); s.delete(instanceId); return s; });
     }
-  }, [isAwsConnected, operatingVMs, alert, confirm, watchVM, refreshCurrentUser]);
+  }, [isAwsConnected, operatingVMs, vms, alert, confirm, watchVM, refreshCurrentUser]);
 
   const startAllVMs = useCallback(async (requestId: string) => {
     const stoppedVMs = vms.filter((vm) => vm.requestId === requestId && vm.status === "stopped");
@@ -384,75 +383,43 @@ export function useMyVMs() {
     Promise.all([fetchAWSCounts(), fetchVMList()])
       .then(() => pollStatusUpdates())
       .finally(() => setLoading(false));
-    return () => {
-      Object.values(watchers.current).forEach(clearTimeout);
-      watchers.current = {};
-      if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+
+    const startPolling = () => {
+      if (pollingIntervalRef.current) return;
+      pollingIntervalRef.current = setInterval(() => {
+        if (document.visibilityState === "visible") pollStatusUpdates();
+      }, 15000);
     };
-  }, []);
 
-//   useEffect(() => {
-//   const load = async () => {
-//     try {
-//       setLoading(true);
+    startPolling();
 
-//       await refreshCurrentUser();
-
-//       // Import tagged AWS VMs
-//       await syncExistingVMsApi();
-
-//       await Promise.all([
-//         fetchAWSCounts(),
-//         fetchVMList()
-//       ]);
-
-//       await pollStatusUpdates();
-//     } catch (err) {
-//       console.error("VM load failed:", err);
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   load();
-
-//   return () => {
-//     Object.values(watchers.current).forEach(clearTimeout);
-//     watchers.current = {};
-//     if (pollingIntervalRef.current) {
-//       clearInterval(pollingIntervalRef.current);
-//     }
-//   };
-// }, []);
-
-  useEffect(() => {
-    pollingIntervalRef.current = setInterval(() => {
-      if (document.visibilityState === "visible") pollStatusUpdates();
-    }, 15000);
-    return () => { if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current); };
-  }, []);
-
-  useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") {
         Object.values(watchers.current).forEach(clearTimeout);
         watchers.current = {};
         if (pollingIntervalRef.current) { clearInterval(pollingIntervalRef.current); pollingIntervalRef.current = null; }
       } else {
-        vms.forEach((vm) => {
-          if (["starting", "stopping", "terminating"].includes(vm.status)) watchVM(vm.instanceId,vm.name);
+        setVMs((prev) => {
+          prev.forEach((vm) => {
+            if (["starting", "stopping", "terminating"].includes(vm.status)) watchVM(vm.instanceId, vm.name);
+          });
+          return prev;
         });
-        if (!pollingIntervalRef.current) {
-          pollingIntervalRef.current = setInterval(() => {
-            if (document.visibilityState === "visible") pollStatusUpdates();
-          }, 15000);
-          pollStatusUpdates();
-        }
+        startPolling();
+        pollStatusUpdates();
       }
     };
+
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [vms, watchVM, pollStatusUpdates]);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      Object.values(watchers.current).forEach(clearTimeout);
+      watchers.current = {};
+      if (pollingIntervalRef.current) { clearInterval(pollingIntervalRef.current); pollingIntervalRef.current = null; }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return {
     vms, summary, loading, operatingVMs, copiedIp, pollingActive, deletingRequest,

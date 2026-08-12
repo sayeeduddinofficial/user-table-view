@@ -23,27 +23,38 @@ const QUERY_KEYS = {
 };
 
 // ── My Feedbacks ─────────────────────────────────────────────────────────────
-export function useMyFeedback() {
+export function useMyFeedback(enabled = true) {
   return useQuery({
     queryKey: QUERY_KEYS.myFeedback,
     queryFn: fetchMyFeedbackApi,
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 }
 
 // ── All Feedbacks (admin) ────────────────────────────────────────────────────
-export function useAllFeedback() {
+export function useAllFeedback(enabled = true) {
   return useQuery({
     queryKey: QUERY_KEYS.allFeedback,
     queryFn: fetchAllFeedbackApi,
+    enabled,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 }
 
 // ── Attachments ──────────────────────────────────────────────────────────────
-export function useAttachments(feedbackId: string | null) {
+export function useAttachments(feedbackId: string | null, enabled = true) {
   return useQuery({
     queryKey: QUERY_KEYS.attachments(feedbackId ?? ""),
     queryFn: () => fetchAttachmentsApi(feedbackId!),
-    enabled: !!feedbackId,
+    enabled: enabled && !!feedbackId,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   });
 }
 

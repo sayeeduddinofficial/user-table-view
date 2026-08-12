@@ -64,7 +64,7 @@ export default function S3() {
     <div>
       <Header
         title="S3 Buckets"
-        subtitle="Object storage buckets provisioned via Terraform"
+        subtitle="Storage resources for objects and files."
         showSearch={false}
       />
       <div className="p-6">

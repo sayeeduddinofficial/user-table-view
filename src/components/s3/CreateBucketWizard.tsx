@@ -1,7 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { AlertTriangle, FileText, GitBranch, Settings, Shield, ShieldBan, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useDialog } from "@/components/ui/dialog-context";
 import { Section, FieldRow, RadioCard, RadioRow } from "./shared";
 import { AZS, BucketForm, REGIONS, initialForm, regionalSuffix } from "@/utils/s3.utils";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,16 +20,28 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { checkBucketNameApi } from "@/services/bucketService";
+import { Label } from "../ui/label";
 
 export function CreateBucketWizard({ onCancel, onSubmit }: {
   onCancel: () => void;
   onSubmit: (form: BucketForm) => void | Promise<void>;
 }) {
-  const { alert } = useDialog();
   const [form, setForm] = useState<BucketForm>(initialForm);
+  const [bucketNameCheckLoading, setBucketNameCheckLoading] =
+    useState(false);
+
+  const [bucketNameExists, setBucketNameExists] =
+    useState(false);
+
+  const [bucketNameCheckError, setBucketNameCheckError] =
+    useState<string | null>(null);
+  const bucketNameCheckTimer =
+    useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [justificationTouched, setJustificationTouched] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const set = <K extends keyof BucketForm>(k: K, v: BucketForm[K]) => setForm((f) => ({ ...f, [k]: v }));
   const isDirectory = form.bucketType === "directory";
   const isRegional = !isDirectory && form.namespace === "regional";
@@ -47,6 +58,67 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
     : isRegional
       ? regionalFullName
       : form.name;
+
+  useEffect(() => {
+    if (bucketNameCheckTimer.current) {
+      clearTimeout(bucketNameCheckTimer.current);
+    }
+
+    setBucketNameExists(false);
+    setBucketNameCheckError(null);
+
+    if (
+      isDirectory ||
+      !fullBucketName ||
+      !nameValid
+    ) {
+      setBucketNameCheckLoading(false);
+      return;
+    }
+
+    setBucketNameCheckLoading(true);
+
+    bucketNameCheckTimer.current = setTimeout(() => {
+      console.log("Bucket Check", {
+        fullBucketName,
+        region: form.region,
+      });
+      checkBucketNameApi(
+        isRegional
+          ? form.namePrefix
+          : fullBucketName,
+        form.region,
+        isRegional
+          ? "ACCOUNT_REGIONAL"
+          : "GLOBAL"
+      )
+        .then((res) => {
+          setBucketNameExists(!!res.exists);
+          setBucketNameCheckError(null);
+        })
+        .catch(() => {
+          setBucketNameExists(false);
+          setBucketNameCheckError(
+            "Unable to verify bucket availability. Please try again."
+          );
+        })
+        .finally(() => {
+          setBucketNameCheckLoading(false);
+        });
+    }, 500);
+
+    return () => {
+      if (bucketNameCheckTimer.current) {
+        clearTimeout(bucketNameCheckTimer.current);
+      }
+    };
+  }, [
+    fullBucketName,
+    form.region,
+    isDirectory,
+    isRegional,
+    nameValid,
+  ]);
 
   const validateBucketName = (): { title: string; description: string } | null => {
     if (isDirectory) return null;
@@ -83,8 +155,13 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
     return null;
   };
 
-  const runValidation = (): { title: string; description: string } | null =>
-    validateBucketName() ?? validateJustification();
+  const bucketNameError = submitted ? validateBucketName() : null;
+  const justificationError = submitted || justificationTouched ? validateJustification() : null;
+  const bucketNameInputRef = useRef<HTMLInputElement | null>(null);
+
+  const blockAllPublicOff = !isDirectory && !(form.blockNewAcls && form.blockAnyAcls && form.blockNewPolicies && form.blockCrossAccountPolicies);
+  const publicAccessRiskUnacknowledged = blockAllPublicOff && !form.acknowledgeBlockPublic;
+  const publicAccessAckError = submitted && publicAccessRiskUnacknowledged;
 
   return (
     <div className="bg-background min-h-full">
@@ -115,7 +192,7 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
           </FieldRow>
 
           <FieldRow label="Bucket Type">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3">
               <RadioCard
                 checked={form.bucketType === "general"}
                 onChange={() => {
@@ -127,13 +204,13 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
                 title="General purpose"
                 desc="Recommended for most use cases and access patterns. General purpose buckets are the original S3 bucket type. They allow a mix of storage classes that redundantly store objects across multiple Availability Zones."
               />
-              <RadioCard
+              {/* <RadioCard
                 checked={form.bucketType === "directory"}
                 onChange={() => { }}
                 disabled
                 title="Directory"
                 desc="Recommended for low-latency use cases. These buckets use only the S3 Express One Zone storage class, which provides faster processing of data within a single Availability Zone."
-              />
+              /> */}
             </div>
           </FieldRow>
 
@@ -201,7 +278,7 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
                 </p>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-sm font-medium block mb-1">Base name</label>
+                    <Label className="text-sm font-medium block mb-1">Base name</Label>
                     <Input
                       value={form.baseName}
                       onChange={(e) => {
@@ -238,12 +315,24 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-sm font-medium block mb-1">Bucket name prefix</label>
-                    <input
+                    <Input
+                      ref={bucketNameInputRef}
                       value={form.namePrefix}
                       onChange={(e) => set("namePrefix", e.target.value.toLowerCase().replace(/[^a-z0-9.-]/g, "-"))}
                       placeholder="amzn-s3-demo-bucket"
-                      className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm font-mono"
+                      className={`w-full bg-input/40 border rounded-md px-3 py-2 text-sm font-mono ${bucketNameError || bucketNameExists ? "border-red-500 ring-1 ring-red-200" : "border-border"}`}
                     />
+                    {bucketNameCheckLoading ? (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Checking bucket prefix availability...
+                      </p>
+                    ) : bucketNameExists ? (
+                      <div className="text-xs text-red-600 mt-1">
+                        Bucket prefix already exists in this region. Choose a different prefix.
+                      </div>
+                    ) : bucketNameError ? (
+                      <div className="text-xs text-red-600 mt-1">{bucketNameError.description}</div>
+                    ) : null}
                     <p className="text-xs text-muted-foreground mt-1">
                       The bucket name prefix and the account Regional suffix combined must be between 3 and 63 characters long. The specified bucket name prefix must be unique within your account Regional namespace and follow the bucket naming rules.
                     </p>
@@ -264,12 +353,28 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
               </>
             ) : (
               <>
-                <input
+                <Input
+                  ref={bucketNameInputRef}
                   value={form.name}
                   onChange={(e) => set("name", e.target.value.toLowerCase().replace(/[^a-z0-9.-]/g, "-"))}
                   placeholder="amzn-s3-demo-bucket"
-                  className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm font-mono"
+                  className={`w-full bg-input/40 border rounded-md px-3 py-2 text-sm font-mono ${bucketNameExists || bucketNameError ? "border-red-500 ring-1 ring-red-200" : "border-border"}`}
                 />
+                {bucketNameCheckLoading ? (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Checking bucket availability...
+                  </p>
+                ) : bucketNameCheckError ? (
+                  <div className="text-xs text-red-600 mt-1">
+                    {bucketNameCheckError}
+                  </div>
+                ) : bucketNameExists ? (
+                  <div className="text-xs text-red-600 mt-1">
+                    Bucket name already exists globally. Choose a different name.
+                  </div>
+                ) : bucketNameError ? (
+                  <div className="text-xs text-red-600 mt-1">{bucketNameError.description}</div>
+                ) : null}
                 <p className="text-xs text-muted-foreground mt-1">
                   3–63 characters, unique in the global namespace. Letters, numbers, periods, hyphens.
                 </p>
@@ -348,7 +453,7 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
         </Section>
 
         {/* Block Public Access */}
-        <Section title="Block Public Access settings for this bucket" icon={<ShieldBan className="h-5 w-5 text-primary" />}>
+        <Section id="bucket-public-access" title="Block Public Access settings for this bucket" icon={<ShieldBan className="h-5 w-5 text-primary" />}>
           <p className="text-xs text-muted-foreground -mt-2 mb-3">
             {isDirectory
               ? "The settings specified here apply only to this directory bucket. These settings can't be edited. "
@@ -416,8 +521,8 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
                   </label>
                 ))}
               </div>
-              {!(form.blockNewAcls && form.blockAnyAcls && form.blockNewPolicies && form.blockCrossAccountPolicies) && (
-                <div className="bg-warning/10 border border-warning/40 rounded-md p-3 mt-4">
+              {blockAllPublicOff && (
+                <div className={`bg-warning/10 border rounded-md p-3 mt-4 ${publicAccessAckError ? "border-red-500 ring-1 ring-red-200" : "border-warning/40"}`}>
                   <div className="flex items-start gap-2">
                     <AlertTriangle size={16} className="text-warning mt-0.5 shrink-0" />
                     <div className="text-xs">
@@ -436,6 +541,9 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
                     />
                     <span className="text-xs">I acknowledge that the current settings might result in this bucket and the objects within becoming public.</span>
                   </label>
+                  {publicAccessAckError && (
+                    <div className="text-xs text-red-600 mt-2 ml-6">You must acknowledge this before creating the bucket.</div>
+                  )}
                 </div>
               )}
             </>
@@ -489,12 +597,12 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
               onChange={() => set("bucketKey", true)}
               title="Enable"
             />
-            
-       
+
+
           </div>
         </Section>
 
-        <section className="glass-panel rounded-xl p-6">
+        <section id="bucket-justification" className="glass-panel rounded-xl p-6">
           <div className="flex items-center gap-2 mb-4">
             <FileText className="h-5 w-5 text-primary" />
             <h2 className="text-lg font-semibold">Business Justification</h2>
@@ -503,7 +611,7 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
           <div className="space-y-3">
             <Textarea
               id="justification"
-              className={`resize-none overflow-y-auto ${justificationTouched && form.justification.trim().length > 0 && form.justification.trim().length < 20 ? "border-red-500 ring-1 ring-red-200" : ""}`}
+              className="resize-none overflow-y-auto"
               placeholder="Provide a brief justification for this bucket request."
               value={form.justification}
               onChange={(e) => set("justification", e.target.value)}
@@ -512,10 +620,8 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
               maxLength={250}
             />
             <div className="flex justify-between items-center">
-              {justificationTouched && form.justification.trim().length > 0 && form.justification.trim().length < 20 ? (
-                <div className="text-xs text-red-600">
-                  Business justification must contain at least 20 characters.
-                </div>
+              {justificationError ? (
+                <div className="text-xs text-red-600">{justificationError.description}</div>
               ) : <span />}
               <p className="text-xs text-muted-foreground">{form.justification.length}/250</p>
             </div>
@@ -528,15 +634,35 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
           </Button>
           <Button
             size="sm"
-            disabled={
-              !nameValid ||
-              form.justification.trim().length < 20
-            }
-            onClick={() => {
-              const error = runValidation();
-              if (error) {
-                alert({ title: error.title, description: error.description, severity: "error" });
+            onClick={async () => {
+              setSubmitted(true);
+              const nameErr = validateBucketName();
+              const justErr = validateJustification();
+              if (nameErr || bucketNameExists || bucketNameCheckLoading || bucketNameCheckError) {
+                bucketNameInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                bucketNameInputRef.current?.focus();
                 return;
+              }
+              if (justErr) {
+                document.getElementById("bucket-justification")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                return;
+              }
+              if (publicAccessRiskUnacknowledged) {
+                document.getElementById("bucket-public-access")?.scrollIntoView({ behavior: "smooth", block: "center" });
+                return;
+              }
+              if (!isDirectory) {
+                try {
+                  const res = await checkBucketNameApi(
+                    isRegional ? form.namePrefix : fullBucketName,
+                    form.region,
+                    isRegional ? "ACCOUNT_REGIONAL" : "GLOBAL"
+                  );
+                  if (res.exists) { setBucketNameExists(true); return; }
+                } catch (err) {
+                    console.error(err);
+                    return;
+                }
               }
               setIsConfirmOpen(true);
             }}
@@ -547,7 +673,9 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
       </div>
 
       <Dialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
+        <DialogContent 
+          className="sm:max-w-lg max-h-[85vh] flex flex-col" 
+          onInteractOutside={(event) => event.preventDefault()}>
           <div className="p-4 pb-4 border-b">
             <DialogHeader className="text-center items-center">
               <DialogTitle className="text-xl font-semibold text-foreground">

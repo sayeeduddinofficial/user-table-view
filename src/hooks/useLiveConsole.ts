@@ -29,13 +29,16 @@ const TERMINAL_REQUEST_STATUSES = new Set([
   'destroyed',
 ]);
 
+// For these services 'completed' is transient — keep polling until 'destroyed'.
+const TRANSIENT_COMPLETED_SERVICES = new Set(['vpc-terminate-service', 'ec2-service']);
+
 // ── Fetch Active Requests ────────────────────────────────────────────────────
 export function useActiveRequests() {
   return useQuery({
     queryKey: QUERY_KEYS.activeRequests,
     queryFn: fetchActiveRequestsApi,
-    staleTime: 5_000,
-    refetchInterval: 10_000,
+    staleTime: 2_000,
+    refetchInterval: 3_000,
   });
 }
 
@@ -45,11 +48,15 @@ export function useRequestDetails(requestId: string | null, service?: string) {
     queryKey: QUERY_KEYS.requestDetails(requestId || '', service),
     queryFn: () => fetchRequestDetailsApi(requestId!, service),
     enabled: !!requestId,
-    staleTime: 3_000,
-    refetchInterval: (query) =>
-      query.state.data && TERMINAL_REQUEST_STATUSES.has(query.state.data.status)
-        ? false
-        : 3_000,
+    staleTime: 2_000,
+    refetchInterval: (query) => {
+      if (!query.state.data) return 3_000;
+      const isTerminal = TERMINAL_REQUEST_STATUSES.has(query.state.data.status);
+      // Keep polling for ec2-service so LiveConsole can detect the destroying
+      // window and connect to SSE before the status flips to destroyed.
+      if (isTerminal && TRANSIENT_COMPLETED_SERVICES.has(service ?? '')) return 3_000;
+      return isTerminal ? false : 3_000;
+    },
   });
 }
 
@@ -68,10 +75,10 @@ export function useRequestLogs(requestId: string | null, service?: string) {
 export function useClearRequestLogs() {
   const queryClient = useQueryClient();
   const { alert } = useDialog();
-  const { setActiveRequest, triggerRequestsRefresh } = useAppStore();
+  const { setActiveRequest, triggerRequestsRefresh, activeService } = useAppStore();
 
   return useMutation({
-    mutationFn: clearRequestLogsApi,
+    mutationFn: (requestId: string) => clearRequestLogsApi(requestId, activeService ?? undefined),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QUERY_KEYS.activeRequests });
       setActiveRequest(null);

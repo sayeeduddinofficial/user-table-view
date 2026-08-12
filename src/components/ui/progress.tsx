@@ -3,10 +3,14 @@ import * as ProgressPrimitive from "@radix-ui/react-progress";
 
 import { cn } from "@/lib/utils";
 
+type ProgressProps = React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root> & {
+  indicatorClassName?: string;
+};
+
 const Progress = React.forwardRef<
   React.ElementRef<typeof ProgressPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root>
->(({ className, value, ...props }, ref) => {
+  ProgressProps
+>(({ className, indicatorClassName, value, ...props }, ref) => {
   const safeValue = Number.isFinite(value)
     ? Math.min(Math.max(value ?? 0, 0), 100)
     : 0;
@@ -21,7 +25,11 @@ const Progress = React.forwardRef<
       {...props}
     >
       <ProgressPrimitive.Indicator
-        className="h-full w-full flex-1 bg-primary transition-all"
+        className={cn(
+          "h-full w-full flex-1 transition-all",
+          "bg-primary",
+          indicatorClassName
+        )}
         style={{
           transform: `translateX(-${100 - safeValue}%)`,
         }}

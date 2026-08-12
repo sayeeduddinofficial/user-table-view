@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
     Dialog, DialogContent, DialogDescription, DialogFooter,
     DialogHeader, DialogTitle,
@@ -9,10 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useMyManager } from "@/hooks/useMyManager";
 import { ManagerDisplay } from "@/components/common/ManagerDisplay";
-// import {
-//   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-// } from "@/components/ui/select";
-// import { ManagerOption } from "@/utils/myVMs.utils";
 
 interface Props {
     open: boolean;
@@ -38,7 +34,7 @@ interface Props {
 
     onSubmit: (approverEmail: string) => void;
 }
-
+const MAX_RDS_QUOTA = 10;
 export function RdsQuotaIncreaseDialog({
     open, onOpenChange, currentMaxRds, usedRds,
     requestedquota, setrequestedquota, reason, setreason,
@@ -48,17 +44,61 @@ export function RdsQuotaIncreaseDialog({
     // Use the new manager hook that handles both active managers and Super Admin fallback
     const { manager, superAdmins, hasActiveManager, loading: managerLoading, error: managerError } = useMyManager();
     const [selectedSuperAdmin, setSelectedSuperAdmin] = useState('');
+    const [quotaTouched, setQuotaTouched] = useState(false);
+    const [reasonTouched, setReasonTouched] = useState(false);
+    const [submitTouched, setSubmitTouched] = useState(false);
 
-    // Determine which email to use for submission
+    useEffect(() => {
+        if (!open) {
+            setQuotaTouched(false);
+            setReasonTouched(false);
+            setSubmitTouched(false);
+        }
+    }, [open]);
+
     const managerEmail = hasActiveManager && manager?.email
         ? manager.email
         : selectedSuperAdmin;
 
-    // Submit is blocked if manager hasn't resolved yet or no email selected
-    const canSubmit = !isMAxREached && !submitquota && !managerLoading && !!managerEmail.trim();
+    const newLimitError = quotaTouched
+        ? requestedquota === 0
+            ? "New limit is required"
+            : quotaError
+        : "";
+    const reasonError = reasonTouched
+        ? !reason.trim()
+            ? "Reason is required"
+            : submitTouched && reason.trim().length < 10
+            ? "Reason must be at least 10 characters"
+            : ""
+        : submitTouched && reason.trim().length < 10
+        ? "Reason must be at least 10 characters"
+        : "";
+    const managerError2 = submitTouched && !managerLoading && !managerEmail.trim() ? "Please select an approver" : "";
+
+    const resetForm = () => {
+        setrequestedquota(0);
+        setreason("");
+        setQuotaError("");
+        setTouched(false);
+        setSelectedSuperAdmin("");
+        setQuotaTouched(false);
+        setReasonTouched(false);
+        setSubmitTouched(false);
+    };
     return (
-        <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-md">
+        <Dialog
+            open={open}
+            onOpenChange={(open) => {
+                if (!open) {
+                    resetForm();
+                }
+                onOpenChange(open);
+            }}
+        >
+            <DialogContent 
+                className="sm:max-w-md"
+                onInteractOutside={(event) => event.preventDefault()}>
                 <DialogHeader>
                     <DialogTitle>Request RDS Quota Increase</DialogTitle>
                     <DialogDescription>
@@ -69,7 +109,10 @@ export function RdsQuotaIncreaseDialog({
                 <div className="space-y-4 py-2">
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <Label className="text-muted-foreground text-xs">Current Quota</Label>
+                            <Label className="text-muted-foreground text-xs">
+                                Current Quota
+                            </Label>
+
                             <p className="text-lg font-semibold">
                                 {currentMaxRds} RDS Databases
                             </p>
@@ -77,20 +120,25 @@ export function RdsQuotaIncreaseDialog({
                             <p className="text-xs text-muted-foreground">
                                 {usedRds} RDS Database(s) in use
                             </p>
-                        </div>
 
+                            {isMAxREached && (
+                                <p className="text-sm text-red-500 mt-1">
+                                    {`Maximum RDS quota limit (${MAX_RDS_QUOTA}) already reached.`}
+                                </p>
+                            )}
+                        </div>
                         <div className="space-y-1">
                             <Label htmlFor="requested-quota">New limit</Label>
                             <Input
                                 id="requested-quota"
                                 type="number"
-                                className={quotaError ? "border-red-500" : ""}
-                                min="0"
-                                max="50"
+                                min={currentMaxRds + 1}
+                                max={MAX_RDS_QUOTA}
+                                className={newLimitError ? "border-red-500" : ""}
                                 value={requestedquota === 0 ? "" : requestedquota}
                                 onChange={(e) => {
                                     const value = e.target.value;
-                                    setTouched(true);
+                                    setQuotaTouched(true);
                                     if (value === "") {
                                         setrequestedquota(0);
                                         setQuotaError("");
@@ -101,28 +149,53 @@ export function RdsQuotaIncreaseDialog({
                                         numericValue = Number(value.replace(/^0+/, ""));
                                     }
                                     setrequestedquota(numericValue);
-                                    if (currentMaxRds >= 50) {
-                                        setQuotaError("Maximum RDS quota limit (50) already reached");
+                                    if (currentMaxRds >= MAX_RDS_QUOTA) {
+                                        setQuotaError(
+                                            `Maximum RDS quota limit (${MAX_RDS_QUOTA}) already reached`
+                                        );
                                         return;
                                     }
-                                    setQuotaError(numericValue <= currentMaxRds ? `New limit must be greater than ${currentMaxRds}` : "");
+
+                                    if (numericValue <= currentMaxRds) {
+                                        setQuotaError(
+                                            `New limit must be greater than ${currentMaxRds}`
+                                        );
+                                        return;
+                                    }
+
+                                    if (numericValue > MAX_RDS_QUOTA) {
+                                        setQuotaError(
+                                            `Maximum allowed quota is ${MAX_RDS_QUOTA}`
+                                        );
+                                        return;
+                                    }
+
+                                    setQuotaError("");
                                 }}
                             />
-                            {touched && quotaError && <p className="text-sm text-red-500">{quotaError}</p>}
+                            {newLimitError && <p className="text-sm text-red-500">{newLimitError}</p>}
                         </div>
                     </div>
 
                     <div className="space-y-1">
                         <Label htmlFor="reason">
-                            Reason / Justification <span className="text-destructive">*</span>
+                            Reason / Justification
                         </Label>
                         <Textarea
                             id="reason"
                             rows={3}
                             placeholder="Explain why you need additional RDS quota..."
                             value={reason}
-                            onChange={(e) => setreason(e.target.value)}
+                            onChange={(e) => {
+                                setReasonTouched(true);
+                                setreason(e.target.value);
+                            }}
                         />
+                        {reasonError && (
+                            <p className="text-sm text-red-500">
+                                {reasonError}
+                            </p>
+                        )}
                     </div>
 
                     <ManagerDisplay
@@ -135,13 +208,35 @@ export function RdsQuotaIncreaseDialog({
                         onEmailChange={setSelectedSuperAdmin}
                         label="Manager (Approver)"
                     />
+                    {managerError2 && (
+                        <p className="text-sm text-red-500">{managerError2}</p>
+                    )}
                 </div>
 
                 <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
                     <Button
-                        onClick={() => onSubmit(managerEmail)}
-                        disabled={!canSubmit}
+                        variant="outline"
+                        onClick={() => {
+                            resetForm();
+                            onOpenChange(false);
+                        }}
+                    >
+                        Cancel
+                    </Button>
+                    <Button
+                        onClick={() => {
+                            setTouched(true);
+                            setQuotaTouched(true);
+                            setReasonTouched(true);
+                            setSubmitTouched(true);
+                            if (requestedquota === 0 || quotaError) return;
+                            if (requestedquota <= currentMaxRds) return;
+                            if (requestedquota > MAX_RDS_QUOTA) return;
+                            if (!reason.trim() || reason.trim().length < 10) return;
+                            if (!managerEmail.trim()) return;
+                            onSubmit(managerEmail);
+                        }}
+                        disabled={isMAxREached || submitquota}
                     >
                         {submitquota ? "Submitting..." : "Submit Request"}
                     </Button>

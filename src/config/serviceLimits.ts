@@ -4,6 +4,7 @@ const serviceLimits = {
   lb: 1,
   rds: 1,
   eks: 1,
+  route53: 1,
 };
 
 export default serviceLimits;

@@ -29,14 +29,15 @@ function formatTimestamp(value?: string) {
 export function DashboardRecentActivity({
   activities,
 }: Props) {
+   const visibleActivities = activities.slice(0, 5);
   return (
     <div className="glass-panel rounded-xl p-6 h-full">
       <h2 className="text-lg font-semibold mb-6">
-        Recent Activity
+        Recent Requests
       </h2>
 
       <div className="space-y-5">
-        {activities.map((activity) => {
+        {visibleActivities.map((activity) => {
           const statusTone = activity.status?.toLowerCase().includes("fail") || activity.status?.toLowerCase().includes("error")
             ? "bg-red-500/10 text-red-600"
             : activity.status?.toLowerCase().includes("provision") || activity.status?.toLowerCase().includes("create")

@@ -4,7 +4,7 @@ export async function getVpcQuotaRequests() {
   const token = localStorage.getItem("token");
 
   const response = await fetch(
-    `${env.vmRequest}/api/vpc-quota/requests`,
+    `${env.vpcService}/vpc-quota/requests`,
     {
       headers: {
         Authorization: `Bearer ${token}`,

@@ -1,4 +1,4 @@
-export type Role = "SplunkOps.Admin" | "SplunkOps.User" | "SuperAdmin" | "SplunkOps.Auditor" | "SplunkOps.Stakeholder";
+export type Role = "SplunkOps.Admin" | "SplunkOps.User" | "SuperAdmin" | "SplunkOps.Auditor" | "SplunkOps.Stakeholder" | "SplunkOps.Approver";
 
 export interface User {
   id: string;
@@ -27,6 +27,12 @@ export interface User {
   maxRdsClusters: number;
   maxEksClusters: number;
   maxDnsRecords: number;
+  currentBuckets: number;
+  currentVpcs: number;
+  currentLoadBalancers: number;
+  currentRdsClusters: number;
+  currentEksClusters: number;
+  currentDnsRecords: number;
 }
 
 export interface VMRole {
@@ -241,7 +247,7 @@ export const INSTANCE_TYPES: InstanceTypeOption[] = [
     memory: "32 GB",
     category: "memory",
   },
-   {
+  {
     value: "mac2.metal",
     label: "mac2.metal",
     vcpu: 12,
@@ -497,15 +503,20 @@ export const ROLE_LABELS: Record<string, string> = {
   "SplunkOps.Admin": "Admin",
   "SplunkOps.User": "User",
   "SplunkOps.Auditor": "Auditor",
-  "SplunkOps.Stakeholder": "Stakeholder"
+  "SplunkOps.Stakeholder": "Stakeholder",
+  "SplunkOps.Approver": "Approver"
 };
-export const CATEGORY_DISPLAY_LABELS: Record<string, string> = {
-  "Auth": "Auth",
-  "AWS Ops": "AWS Ops",
-  "User Mgmt": "User Mgmt",
-  Settings: "Settings",
-  Requests: "Requests",
-};
+export const AUDIT_CATEGORIES = {
+  AUTH: "Auth",
+  AWS_OPS: "AWS Ops",
+  USER_MGMT: "User Mgmt",
+  SETTINGS: "Settings",
+  REQUESTS: "Requests",
+} as const;
+
+export const CATEGORY_DISPLAY_LABELS: Record<string, string> = Object.fromEntries(
+  Object.values(AUDIT_CATEGORIES).map((v) => [v, v])
+);
 
 export const ACTION_DISPLAY_LABELS: Record<string, string> = {
   USER_LOGIN: "Login",
@@ -564,7 +575,8 @@ export const ACTION_DISPLAY_LABELS: Record<string, string> = {
   VPC_DESTROY_REQUESTED: "Requested VPC Deletion",
   VPC_DESTROYED: "VPC Terminated",
   VPC_DESTROYED_FAILED: "VPC Termination Failed",
-
+  VPC_RETRY_REQUESTED: "Retried VPC Request",
+  VPC_TERMINATE_RETRY_REQUESTED: "Retried VPC Terminate",
 
   FOLDER_CREATED: "Created Folder in S3 Bucket",
   FOLDER_CREATE_FAILED: "Folder Creation Failed",
@@ -580,6 +592,10 @@ export const ACTION_DISPLAY_LABELS: Record<string, string> = {
   BUCKET_DELETE_FAILED: "Bucket Termination Failed ",
   BUCKET_REQUEST_SUBMITTED: "Submitted Bucket Request",
   BUCKET_DESTROY_REQUESTED: "Requested Bucket Destroy",
+  BUCKET_RETRY_REQUESTED: "Retried Bucket Provision Requested",
+  BUCKET_RETRY_FAILED: "Bucket Provision Retry Failed",
+  BUCKET_RETRY_DESTROY_REQUESTED: "Retried Bucket Destroy Requested",
+  BUCKET_RETRY_DESTROY_FAILED: "Bucket Destroy Retry Failed",
 
   LOAD_BALANCER_CREATED: "Created Load Balancer",
   LOAD_BALANCER_DELETED: "Deleted Load Balancer",
@@ -590,6 +606,10 @@ export const ACTION_DISPLAY_LABELS: Record<string, string> = {
   EKS_CLUSTER_REQUEST_SUBMITTED: "Submitted EKS Cluster Request",
   EKS_CLUSTER_DESTROY_REQUESTED: "Requested EKS Cluster Termination",
   EKS_CLUSTER_CREATION_FAILED: "EKS Cluster Creation Failed",
+  EKS_CLUSTER_RETRY_REQUESTED: "EKS Cluster Retry Requested",
+  EKS_CLUSTER_TERMINATE_RETRY_REQUESTED:"EKS Cluster Terminate Retry Requested",
+  EKS_CLUSTER_RETRY_FAILED:"EkS Cluster Retry Failed",
+  EKS_CLUSTER_RETRY_TERMINATE_FAILED:"EKS Cluster Retry Terminate Failed",
 
   RDS_DESTROY_COMPLETED: "RDS Cluster Terminated",
   RDS_DESTROY_REQUESTED: "Requested RDS Cluster Termination",
@@ -609,6 +629,9 @@ export const ACTION_DISPLAY_LABELS: Record<string, string> = {
   RDS_QUOTA_REQUEST_SUBMITTED: "RDS Quota Increase Request",
   RDS_QUOTA_REQUEST_APPROVED: "Approved RDS Quota Increase",
   RDS_QUOTA_REQUEST_REJECTED: "Rejected RDS Quota Increase",
+  RDS_RETRY_REQUESTED:  'Retried RDS Request',
+  RDS_RETRY_COMPLETED:  'RDS Retry Completed',
+  RDS_RETRY_FAILED:     'RDS Retry Failed',
 
   EKS_QUOTA_REQUEST_SUBMITTED: "EKS Quota Increase Request",
   EKS_QUOTA_REQUEST_APPROVED: "Approved EKS Quota Increase",
@@ -618,6 +641,10 @@ export const ACTION_DISPLAY_LABELS: Record<string, string> = {
   S3_QUOTA_REQUEST_APPROVED: "Approved S3 Bucket Quota Increase",
   S3_QUOTA_REQUEST_REJECTED: "Rejected S3 Bucket Quota Increase",
 
+  ROUTE53_QUOTA_REQUEST_SUBMITTED: "Route53 Quota Increase Request",
+  ROUTE53_QUOTA_REQUEST_APPROVED: "Approved Route53 Quota Increase",
+  ROUTE53_QUOTA_REQUEST_REJECTED: "Rejected Route53 Quota Increase",
+
   LB_REQUEST_SUBMITTED: "Submitted LB Request",
   LB_REQUEST_FAILED: "LB Request Failed",
   LB_CREATED: "Provisioned Load Balancer",
@@ -625,6 +652,8 @@ export const ACTION_DISPLAY_LABELS: Record<string, string> = {
   LB_DESTROY_REQUESTED: "Requested LB Destroy",
   LB_DESTROYED: "Destroyed Load Balancer",
   LB_DESTROYED_FAILED: "LB Destroy Failed",
+  LB_RETRY_PROVISION_REQUESTED: "Requested LB Provision Retry",
+  LB_RETRY_TERMINATE_REQUESTED: "Requested LB Terminate Retry",
 
   DNS_RECORD_CREATED: "DNS Provisioned",
   DNS_RECORD_DELETED: "DNS Terminated",
@@ -632,7 +661,15 @@ export const ACTION_DISPLAY_LABELS: Record<string, string> = {
   DNS_REQUEST_SUBMITTED: "Submitted DNS Request",
   DNS_DESTROY_FAILED: "DNS Termination Failed",
   DNS_CREATION_FAILED: "DNS  Creation Failed",
+  DNS_RETRY_REQUESTED: 'Retried DNS Request',
+  DNS_RETRY_FAILED: 'DNS Retry Failed',
+  DNS_TERMINATE_RETRY_REQUESTED:'DNS Terminate Requested',
+  DNS_TERMINATE_RETRY_FAILED: 'DNS Terminate Failed',
 
+  TG_CREATED: "Created Target Group",
+  TG_DELETED: "Deleted Target Group",
+  TG_DELETE_FAILED: "Target Group Deletion Failed",
+  TG_CREATED_FAILED: "Target Group Creation Failed",
 };
 
 export const ROLE_NAMES = [
@@ -672,6 +709,13 @@ export type AmiOption = {
   value: string;
   label: string;
   amiId: string;
+   osType:
+    | "amazon"
+    | "ubuntu"
+    | "redhat"
+    | "suse"
+    | "debian"
+    | "windows";
   arch: string;
   virtualization: string;
   rootDevice: string;
@@ -682,35 +726,35 @@ export type AmiOption = {
 };
 
 export const OHIO_AMI_OPTIONS: AmiOption[] = [
-  { value: "al2023-kernel-6-18", label: "Amazon Linux 2023 kernel-6.18 AMI", amiId: "ami-078fe7ff43e10cf8c", arch: "64-bit (x86), uefi-preferred", virtualization: "hvm", rootDevice: "ebs",  minimumDiskSize: 10,
+  { value: "al2023-kernel-6-18", label: "Amazon Linux 2023 kernel-6.18 AMI", amiId: "ami-078fe7ff43e10cf8c",osType:'amazon', arch: "64-bit (x86), uefi-preferred", virtualization: "hvm", rootDevice: "ebs",  minimumDiskSize: 10,
    defaultDiskSize: 10,freeTier: true },
   // { value: "macos-tahoe", label: "macOS Tahoe", amiId: "ami-0a6d617045de5f5ac", arch: "64-bit (Mac-Arm)", virtualization: "hvm", rootDevice: "ebs",   minimumDiskSize: 100,
   //   defaultDiskSize: 100, isMacOS:true },
-  { value: "ubuntu-26-04", label: "Ubuntu Server 26.04 LTS(HVM), SSD Volume Type", amiId: "ami-0e5497a77ef21b5ac", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs",minimumDiskSize: 10,
+  { value: "ubuntu-26-04", label: "Ubuntu Server 26.04 LTS(HVM), SSD Volume Type", amiId: "ami-0e5497a77ef21b5ac", osType: 'ubuntu', arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs",minimumDiskSize: 10,
 defaultDiskSize: 10, freeTier: true },
-  { value: "windows-2025-base", label: "Microsoft Windows Server 2025 Base", amiId: "ami-0daff962b1c050d36", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs",   minimumDiskSize: 30,
+  { value: "windows-2025-base", label: "Microsoft Windows Server 2025 Base", amiId: "ami-0daff962b1c050d36",osType: 'windows', arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs",   minimumDiskSize: 30,
     defaultDiskSize: 30,freeTier: true },
-  { value: "rhel-10-nv", label: "Red Hat Enterprise Linux 10(HVM), SSD Volume Type", amiId: "ami-008f67e1a087a7449", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs",minimumDiskSize: 10,
+  { value: "rhel-10-nv", label: "Red Hat Enterprise Linux 10(HVM), SSD Volume Type", amiId: "ami-008f67e1a087a7449", osType: 'redhat', arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs",minimumDiskSize: 10,
 defaultDiskSize: 10, freeTier: true },
-  { value: "suse-16", label: "SUSE Linux Enterprise Server 16(HVM), SSD Volume Type", amiId: "ami-00fd5e6c61615bcd0", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs",minimumDiskSize: 10,
+  { value: "suse-16", label: "SUSE Linux Enterprise Server 16(HVM), SSD Volume Type", amiId: "ami-00fd5e6c61615bcd0", osType: 'suse', arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs",minimumDiskSize: 10,
 defaultDiskSize: 10, freeTier: true },
-  { value: "debian-13", label: "Debian 13(HVM), SSD Volume Type", amiId: "ami-0e68dc81dc36750a1", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs",minimumDiskSize: 10,
+  { value: "debian-13", label: "Debian 13(HVM), SSD Volume Type", amiId: "ami-0e68dc81dc36750a1", osType: 'debian', arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs",minimumDiskSize: 10,
 defaultDiskSize: 10, freeTier: true },
 ];
 
 export const NVIRGINIA_AMI_OPTIONS: AmiOption[] = [
-  { value: "al2023-kernel-6-18-nv", label: "Amazon Linux 2023 kernel-6.18 AMI", amiId: "ami-0b826bb6d96d2afe4", arch: "64-bit (x86), uefi-preferred", virtualization: "hvm", rootDevice: "ebs", minimumDiskSize: 10,
+  { value: "al2023-kernel-6-18-nv", label: "Amazon Linux 2023 kernel-6.18 AMI", amiId: "ami-0b826bb6d96d2afe4", osType: 'amazon', arch: "64-bit (x86), uefi-preferred", virtualization: "hvm", rootDevice: "ebs", minimumDiskSize: 10,
    defaultDiskSize: 10, freeTier: true },
   // { value: "macos-tahoe", label: "macOS Tahoe", amiId: "ami-01c313e617f4f53dd", arch: "64-bit (Mac-Arm)", virtualization: "hvm", rootDevice: "ebs",   minimumDiskSize: 100,
   //   defaultDiskSize: 100, isMacOS:true },
-  { value: "ubuntu-26-04", label: "Ubuntu Server 26.04 LTS(HVM), SSD Volume Type", amiId: "ami-0b6d9d3d33ba97d99", arch: "64-bit (Arm)", virtualization: "hvm", rootDevice: "ebs", freeTier: true, minimumDiskSize: 10,
+  { value: "ubuntu-26-04", label: "Ubuntu Server 26.04 LTS(HVM), SSD Volume Type", amiId: "ami-0b6d9d3d33ba97d99", osType: 'ubuntu', arch: "64-bit (Arm)", virtualization: "hvm", rootDevice: "ebs", freeTier: true, minimumDiskSize: 10,
    defaultDiskSize: 10, },
-  { value: "windows-2025-base", label: "Microsoft Windows Server 2025 Base", amiId: "ami-013acec81a2c8ff79", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs",  minimumDiskSize: 30,
+  { value: "windows-2025-base", label: "Microsoft Windows Server 2025 Base", amiId: "ami-013acec81a2c8ff79", osType: 'windows', arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs",  minimumDiskSize: 30,
     defaultDiskSize: 30, freeTier: true },
-  { value: "rhel-10-nv", label: "Red Hat Enterprise Linux 10(HVM), SSD Volume Type", amiId: "ami-00adafae70b8029d8", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs",minimumDiskSize: 10,
+  { value: "rhel-10-nv", label: "Red Hat Enterprise Linux 10(HVM), SSD Volume Type", amiId: "ami-00adafae70b8029d8", osType: 'redhat', arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs",minimumDiskSize: 10,
 defaultDiskSize: 10, freeTier: true },
-  { value: "suse-16", label: "SUSE Linux Enterprise Server 16(HVM), SSD Volume Type", amiId: "ami-0b12a86a613a04fc6", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs",minimumDiskSize: 10,
+  { value: "suse-16", label: "SUSE Linux Enterprise Server 16(HVM), SSD Volume Type", amiId: "ami-0b12a86a613a04fc6", osType: 'suse', arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs",minimumDiskSize: 10,
 defaultDiskSize: 10, freeTier: true },
-  { value: "debian-13", label: "Debian 13(HVM), SSD Volume Type", amiId: "ami-0b75f821522bcff85", arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs",minimumDiskSize: 10,
+  { value: "debian-13", label: "Debian 13(HVM), SSD Volume Type", amiId: "ami-0b75f821522bcff85", osType: 'debian', arch: "64-bit (x86)", virtualization: "hvm", rootDevice: "ebs",minimumDiskSize: 10,
 defaultDiskSize: 10, freeTier: true },
 ];

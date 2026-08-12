@@ -344,7 +344,10 @@ export function LoadBalancersTable() {
       </div>
 
       <Dialog open={chooserOpen} onOpenChange={setChooserOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent 
+          className="max-w-3xl"
+          onInteractOutside={(event) => event.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>Compare and select load balancer type</DialogTitle>
           </DialogHeader>

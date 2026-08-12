@@ -41,9 +41,9 @@ export function CopyIconButton({
   );
 }
 
-export function Section({ title, info, children, icon }: { title: string; info?: boolean; children: React.ReactNode; icon?: React.ReactNode }) {
+export function Section({ title, info, children, icon, id }: { title: string; info?: boolean; children: React.ReactNode; icon?: React.ReactNode; id?: string }) {
   return (
-    <section className="glass-panel rounded-xl p-6">
+    <section id={id} className="glass-panel rounded-xl p-6">
       <div className="flex items-center gap-2 mb-4">
         <span>{icon}</span>
         <h3 className="text-base font-semibold">{title}</h3>
@@ -113,33 +113,54 @@ export function RadioRow({ checked, onChange, title, desc, disabled }: {
 
 export function DetailCard({ title, subtitle, action, children }: { title: string; subtitle?: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div className="bg-card border border-border rounded-lg">
-      <div className="px-5 py-4 flex items-start justify-between gap-4">
+    <div className="bg-card border border-border rounded-lg p-5">
+      <div className="flex items-start justify-between gap-4 mb-4">
         <div>
-          <h2 className="text-base font-semibold">{title}</h2>
+          <h2 className="text-sm font-semibold">{title}</h2>
           {subtitle && <p className="text-xs text-muted-foreground mt-1 max-w-3xl">{subtitle}</p>}
         </div>
         {action}
       </div>
-      <div className="px-5 pb-5">{children}</div>
+      {children}
     </div>
+  );
+}
+
+export function CopyText({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timeout = window.setTimeout(() => setCopied(false), 1500);
+    return () => window.clearTimeout(timeout);
+  }, [copied]);
+
+  return (
+    <span className="inline-flex items-start gap-1.5">
+      {copied ? (
+        <Check size={12} className="text-green-500 mt-1 shrink-0" />
+      ) : (
+        <Copy
+          size={12}
+          className="text-muted-foreground cursor-pointer mt-1 shrink-0"
+          onClick={() => {
+            navigator.clipboard.writeText(text);
+            setCopied(true);
+          }}
+        />
+      )}
+      <span className="break-all">{text}</span>
+    </span>
   );
 }
 
 export function DetailField({ label, value, mono, copy, help }: { label: string; value: string; mono?: boolean; copy?: boolean; help?: string }) {
   return (
-    <div className="mb-3 last:mb-0">
-      <div className="text-xs font-semibold mb-1">{label}</div>
+    <div>
+      <div className="text-xs text-muted-foreground mb-1">{label}</div>
       {help && <p className="text-xs text-muted-foreground mb-1">{help}</p>}
-      <div className={`text-sm break-all flex items-start gap-2 ${mono ? "font-mono text-xs" : ""}`}>
-        {copy && (
-          <CopyIconButton
-            value={value}
-            iconSize={12}
-            className="h-auto w-auto p-0 text-muted-foreground hover:text-foreground mt-0.5 shrink-0"
-          />
-        )}
-        <span className={copy ? "text-primary" : ""}>{value}</span>
+      <div className={`text-sm break-all ${mono ? "font-mono text-xs" : ""}`}>
+        {copy ? <CopyText text={value} /> : (value ?? "—")}
       </div>
     </div>
   );

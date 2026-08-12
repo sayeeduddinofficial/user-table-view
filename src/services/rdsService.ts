@@ -54,12 +54,13 @@ export type RdsClusterApi = {
   instances: RdsInstanceApi[];
   [key: string]: unknown;
 };
+export type AwsRegion = 'us-east-1' | 'us-east-2';
 
 export type ProvisionRdsRequest = {
   cluster_identifier: string;
   master_username: string;
   database_name: string;
-  region: 'us-east-1' | 'us-east-2';
+  region: AwsRegion;
   min_acu: number;
   max_acu: number;
   auto_pause_seconds: number;
@@ -99,6 +100,15 @@ export async function provisionRds(payload: ProvisionRdsRequest): Promise<Provis
     throw new Error('Failed to provision RDS cluster');
   }
   return response.data;
+}
+
+export async function checkRdsIdentifier(identifier: string, region: string): Promise<{ exists: boolean }> {
+  const response = await apiClient.get<{ exists: boolean }>(
+    env.rds,
+    `/clusters/check-identifier`,
+    { identifier, region }
+  );
+  return response ?? { exists: false };
 }
 
 export async function deleteRdsCluster(requestId: string): Promise<void> {

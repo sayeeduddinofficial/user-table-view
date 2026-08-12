@@ -24,7 +24,7 @@ interface UseMyManagerResult {
   refresh:          () => void;
 }
 
-export function useMyManager(): UseMyManagerResult {
+export function useMyManager(enabled = true): UseMyManagerResult {
   const [manager, setManager] = useState<ManagerInfo | null>(null);
   const [superAdmins, setSuperAdmins] = useState<SuperAdminOption[]>([]);
   const [hasActiveManager, setHasActiveManager] = useState(false);
@@ -35,6 +35,7 @@ export function useMyManager(): UseMyManagerResult {
   const refresh = useCallback(() => setTick((t) => t + 1), []);
 
   useEffect(() => {
+    if (!enabled) return;
     let cancelled = false;
 
     const fetchManagerOptions = async () => {
@@ -80,7 +81,7 @@ export function useMyManager(): UseMyManagerResult {
     fetchManagerOptions();
 
     return () => { cancelled = true; };
-  }, [tick]);
+  }, [tick,enabled]);
 
   return { manager, superAdmins, hasActiveManager, loading, error, refresh };
 }

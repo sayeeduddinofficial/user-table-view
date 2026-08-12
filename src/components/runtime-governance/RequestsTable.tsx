@@ -33,10 +33,15 @@ export function RequestsTable({
     const req = row.representativeRow;
     const requesterRole = req.requester_role ?? '';
     const requesterEmail = req.requester_email?.trim().toLowerCase() ?? '';
+    const managerEmail = req.manager_email?.trim().toLowerCase() ?? '';
 
     if (currentUserRole === 'SuperAdmin') return true;
     if (currentUserRole === 'SplunkOps.Admin') {
       return requesterRole === 'SplunkOps.User' && requesterEmail !== currentUserEmail;
+    }
+    // Approver can act on requests where they are the assigned manager
+    if (currentUserRole === 'SplunkOps.Approver') {
+      return managerEmail === currentUserEmail.trim().toLowerCase();
     }
     return false;
   }
@@ -65,7 +70,7 @@ export function RequestsTable({
               <Table>
                 <TableHeader>
                   <TableRow className="border-border/50 hover:bg-transparent">
-                    {['Request ID', 'Scope', 'Instance / Request', 'VM Name',
+                    {['Request ID', 'Scope', 'VM Name',
                       'Requested By', 'Duration', 'Reason', 'Manager Email',
                       'Request Time', 'Status', 'Actions'].map((h) => (
                       <TableHead key={h}
@@ -109,9 +114,9 @@ export function RequestsTable({
                         </TableCell>
 
                         {/* 3. Instance / Request */}
-                        <TableCell className="font-mono text-sm text-muted-foreground py-2">
+                        {/* <TableCell className="font-mono text-sm text-muted-foreground py-2">
                           {isRequestRow ? req.request_id : req.instance_id}
-                        </TableCell>
+                        </TableCell> */}
 
                         {/* 4. VM Name */}
                         <TableCell className="font-mono text-sm py-2 max-w-[180px]">

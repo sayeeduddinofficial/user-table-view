@@ -122,7 +122,7 @@ export function VMRequestGroup({
         <div className="ml-auto flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           {anyStopped && (
             <Button size="sm" variant="outline" disabled={!isAwsConnected}
-              className="h-7 gap-1.5 border-emerald-500/50 text-emerald-400 hover:bg-emerald-500/10 text-xs"
+              className="h-7 gap-1.5 border-emerald-300 dark:border-emerald-500/50 text-emerald-700 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/10 text-xs"
               tooltip={isAwsConnected ? "Start all stopped VMs in this request" : "AWS Disconnected"}
               onClick={() => onStartAll(requestId)}>
               <Play className="h-3 w-3" /> Start All
@@ -130,7 +130,7 @@ export function VMRequestGroup({
           )}
           {anyRunning && (
             <Button size="sm" variant="outline" disabled={!isAwsConnected}
-              className="h-7 gap-1.5 border-amber-500/50 text-amber-400 hover:bg-amber-500/10 text-xs"
+              className="h-7 gap-1.5 border-amber-300 dark:border-amber-500/50 text-amber-700 dark:text-amber-400 hover:!text-amber-700 dark:hover:!text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-500/10 text-xs"
               tooltip={isAwsConnected ? "Stop all running VMs in this request" : "AWS Disconnected"}
               onClick={() => onStopAll(requestId)}>
               <Power className="h-3 w-3" /> Stop All
@@ -138,7 +138,7 @@ export function VMRequestGroup({
           )}
           {anyRunning && (
             <Button size="sm" variant="outline" disabled={!isAwsConnected || !allSameStopTime}
-              className="h-7 gap-1.5 border-primary/50 text-primary hover:bg-primary/10 text-xs"
+              className="h-7 gap-1.5 border-primary/50 text-primary hover:text-primary hover:bg-primary/10 text-xs"
               tooltip={
                 !isAwsConnected ? "AWS Disconnected"
                 : !allSameStopTime ? "Extension disabled — Stop all VMs, then click Start All to sync runtimes."
@@ -210,7 +210,7 @@ export function VMRequestGroup({
                       {!isTerminated && vm.publicIp ? (
                         <div className="flex items-center gap-1">
                           <span className="font-mono text-sm text-primary">{vm.publicIp}</span>
-                          <Button variant="ghost" size="icon" className="h-5 w-5"
+                           <Button variant="ghost" size="icon" className="h-5 w-5"
                             tooltip={copiedIp === vm.publicIp ? "Copied!" : "Copy"}
                             onClick={() => onCopyIp(vm.publicIp)}>
                             {copiedIp === vm.publicIp

@@ -26,6 +26,7 @@ type Props = {
   showHealthCheckPath: boolean;
   healthCheckPath: string;
   pendingTargets: PendingTarget[];
+  isCreating: boolean;
   onCancel: () => void;
   onPrevious: () => void;
   onEditSettings: () => void;
@@ -58,6 +59,7 @@ export function ReviewAndCreateStep({
   onEditSettings,
   onEditTargets,
   onCreate,
+  isCreating = false
 }: Props) {
   const [tasksOpen, setTasksOpen] = useState(false);
 
@@ -130,8 +132,8 @@ export function ReviewAndCreateStep({
         <Button variant="outline" onClick={onPrevious}>
           Previous
         </Button>
-        <Button onClick={onCreate} className="min-w-[160px]">
-          Create target group
+        <Button onClick={onCreate} disabled={isCreating} className="min-w-[160px]">
+          {isCreating ? "Creating..." : "Create target group"}
         </Button>
       </div>
     </>

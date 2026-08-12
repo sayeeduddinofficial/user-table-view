@@ -239,48 +239,17 @@ import {DashboardResourceOverview, RESOURCE_ICONS
 } from "@/components/dashboard-v2/DashboardResourceOverview";
 import { DashboardQuota } from "@/components/dashboard-v2/DashboardQuota";
 import { ServiceQuotasCard } from "@/components/dashboard-v2/ServiceQuotasCard";
-import { DashboardRecentActivity } from "@/components/dashboard-v2/DashboardRecentActivity";
+import { RecentRequests } from "@/components/dashboard/RecentRequests";
 import {
   useDashboardOverview,
-  useDashboardRecentActivity,
   useCurrentUser,
   useServiceQuotas,
 } from "@/hooks/useDashboard";
 
 const Index = () => {
   const { data: overview } = useDashboardOverview();
-  const { data: auditLogs } = useDashboardRecentActivity();
   const { data: liveUser } = useCurrentUser();
   const { data: serviceQuotas, isLoading: quotasLoading } = useServiceQuotas();
-
-  const recentActivity =
-    (auditLogs?.data ?? []).map((log) => ({
-      id: String(log.id),
-      title:
-        log.action ||
-        log.category ||
-        "Activity",
-      status:
-        log.category ||
-        log.action ||
-        "info",
-      service:
-        log.service_name ||
-        "platform",
-      resourceName:
-        log.target ||
-        String(
-          log.details?.resource_name ||
-          log.details?.resourceName ||
-          log.details?.name ||
-          "resource"
-        ),
-      user:
-        log.user_role ||
-        "System",
-      timestamp:
-        log.created_at,
-    }));
 
 
   const resourceItems =
@@ -335,6 +304,7 @@ const Index = () => {
             overview?.averageProvisionTime?.formatted ??
             "0m 0s"
           }
+          trend={overview?.resourceTrend}
         />
 
         {/* <DashboardQuota
@@ -342,21 +312,16 @@ const Index = () => {
           max={quotaMax}
         /> */}
 
-        <ServiceQuotasCard 
-          quotas={serviceQuotas || []}
-          isLoading={quotasLoading}
-        />
-
+        
         <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
-          <div className="xl:col-span-6">
-            <DashboardResourceOverview
-              resources={resourceItems}
-            />
+          <div className="xl:col-span-8">
+            <RecentRequests />
           </div>
 
-          <div className="xl:col-span-6">
-            <DashboardRecentActivity
-              activities={recentActivity}
+          <div className="xl:col-span-4">
+            <ServiceQuotasCard
+              quotas={serviceQuotas || []}
+              isLoading={quotasLoading}
             />
           </div>
         </div>

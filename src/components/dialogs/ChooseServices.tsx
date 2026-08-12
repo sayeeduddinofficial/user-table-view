@@ -5,7 +5,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useResourceAvailability } from "@/hooks/useResourceAvailability";
 import serviceLimits from "@/config/serviceLimits";
 import {
@@ -18,6 +18,7 @@ import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 import { useNavigate } from "react-router-dom";
+import { useAppStore } from "@/store/appStore";
 import { LbTypeChooserDialog } from "@/components/load-balancers/LbTypeChooserDialog";
 
 const SERVICE_ROUTES: Record<string, string> = {
@@ -26,6 +27,7 @@ const SERVICE_ROUTES: Record<string, string> = {
   vpc: "/aws/vpcs/create",
   rds: "/aws/rds/create",
   eks: "/aws/eks/create",
+  route53: "/aws/createrecord",
 };
 
 interface ChooseServicesProps {
@@ -290,7 +292,39 @@ export default function ChooseServices({
   const [selectedService, setSelectedService] = useState("");
   const [lbChooserOpen, setLbChooserOpen] = useState(false);
   const navigate = useNavigate();
-  const { available } = useResourceAvailability();
+  const currentUser = useAppStore((s) => s.currentUser);
+  const { available, refetch } = useResourceAvailability();
+
+  const getServiceQuotaInfo = (serviceId: string) => {
+    const availabilityEntry = serviceId === "elb" ? available?.lb : available?.[serviceId as keyof typeof available];
+
+    const limitsByService: Record<string, number | undefined> = {
+      ec2: currentUser?.maxVMs,
+      s3: currentUser?.maxBuckets,
+      vpc: currentUser?.maxVpcs,
+      elb: currentUser?.maxLoadBalancers,
+      route53: currentUser?.maxDnsRecords,
+      rds: currentUser?.maxRdsClusters,
+      eks: currentUser?.maxEksClusters,
+    };
+
+    const limit = limitsByService[serviceId] ?? availabilityEntry?.limit ?? serviceLimits[serviceId as keyof typeof serviceLimits] ?? 1;
+    const usedCount = availabilityEntry?.count ?? 0;
+
+    const remaining = Math.max(0, limit - usedCount);
+
+    return {
+      limit,
+      remaining,
+      reached: remaining <= 0 || !!availabilityEntry?.reached,
+      availabilityEntry,
+    };
+  };
+
+  // Only fetch resource counts when the dialog actually opens
+  useEffect(() => {
+    if (open) refetch();
+  }, [open]);
 
   const handleClose = () => {
     setSelectedService("");
@@ -301,6 +335,7 @@ export default function ChooseServices({
     <>
       <Dialog open={open} onOpenChange={handleClose}>
         <DialogContent
+          onInteractOutside={(event) => event.preventDefault()}
           className="
           max-w-3xl
           p-0
@@ -324,12 +359,9 @@ export default function ChooseServices({
 
           <div className="grid grid-cols-1 gap-5 px-8 md:grid-cols-2">
             {services.map((service) => {
-              const limit =
-                available?.[service.id]?.limit ??
-                serviceLimits[service.id as keyof typeof serviceLimits] ??
-                1;
-              const reached = available?.[service.id]?.reached ?? false;
-              const disabled = !!reached;
+              const { limit, remaining, reached, availabilityEntry } = getServiceQuotaInfo(service.id);
+              const disabled = reached;
+              console.log("serviceid", service.id, "limit", limit, "remaining", remaining, "reached", reached, "availabilityEntry", availabilityEntry);
               const isSelected = selectedService === service.id;
               const className = `
       relative
@@ -380,7 +412,7 @@ export default function ChooseServices({
                 </button>
               );
 
-              const tooltipText = `Maximum ${service.title} limit ${limit} reached.`;
+              const tooltipText =remaining <= 0 ? `Quota remaining for ${service.title} is 0. Request a quota increase to continue.`: `Maximum ${service.title} limit ${limit} reached.`;
 
               return disabled ? (
                 <Tooltip key={service.id}>

@@ -111,7 +111,7 @@ function ProvidersHeader() {
           <Zap className="h-6 w-6" />
         </div>
         <div className="animate-fade-in">
-          <h1 className="font-semibold text-sidebar-foreground">SplunkOps</h1>
+          <h1 className="font-semibold text-sidebar-foreground">PrudentOps</h1>
           <p className="text-xs text-muted-foreground">Automation Console</p>
         </div>
       </div>

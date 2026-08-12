@@ -12,7 +12,7 @@ export interface TimezoneOption {
 }
 
 export const TIMEZONES: TimezoneOption[] = [
- { value: "Asia/Kolkata", label: "IST (India)" },
+ { value: "Asia/Kolkata", label: "India (IST)" },
 
   { value: "America/New_York", label: "Eastern Time (EST)" },
   { value: "America/Chicago", label: "Central Time (CST)" },
@@ -111,4 +111,30 @@ export const DEFAULT_SHIFT_BY_TIMEZONE: Record<string, { start: string; end: str
   "America/Denver": { start: "08:00", end: "18:00" },
 
   "America/Los_Angeles": { start: "09:00", end: "18:00" }
+};
+
+export const getTimeZoneAbbreviation = (timeZone?: string) => {
+  if (!timeZone) return "";
+
+  const timezone = TIMEZONES.find((tz) => tz.value === timeZone);
+
+  if (!timezone) return timeZone;
+
+  // Extract text inside parentheses
+  const match = timezone.label.match(/\((.*?)\)/);
+
+  return match ? match[1] : timezone.label;
+};
+
+
+export const formatTime = (time?: string) => {
+  if (!time) return "";
+
+  const [hours, minutes] = time.split(":").map(Number);
+
+  return new Date(0, 0, 0, hours, minutes).toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
 };

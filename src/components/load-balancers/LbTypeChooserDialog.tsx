@@ -50,7 +50,9 @@ export function LbTypeChooserDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent 
+        className="max-w-3xl"
+        onInteractOutside={(event) => event.preventDefault()}>
         <DialogHeader>
           <DialogTitle>Compare and select load balancer type</DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground">

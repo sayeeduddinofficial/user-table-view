@@ -106,6 +106,7 @@ export function VpcDetails({
     defaultRouteTableId: detail.default_route_table_id,
     mainNetworkAcl: detail.main_network_acl_id,
     vpcEncryption: detail.vpc_encryption,
+    vpcStatus: detail.vpc_status ?? detail.status,
   };
 
   const cidr = vpc.cidr as string;
@@ -125,12 +126,12 @@ export function VpcDetails({
     <div className="space-y-4">
       {!embedded && (
         <Header
-          title={`VPC ${vpc.name}`}
-          subtitle={`Details for ${vpc.id}`}
+          title="VPCs"
+          subtitle="Virtual networks for securely hosting cloud resources."
         />
       )}
       
-      <div className="space-y-4 p-6">
+      <div className="space-y-4 px-6 pb-6 pt-2">
         {/* Breadcrumb */}
         {!embedded && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -144,7 +145,7 @@ export function VpcDetails({
         {!embedded && (
           <div className="flex items-center justify-between">
             <h1 className="text-lg font-semibold">
-              {vpc.id} / {vpc.name}
+              {vpc.name}
             </h1>
           </div>
         )}
@@ -203,9 +204,9 @@ function DetailsGrid({ vpc, cidr, ownerId }: { vpc: any; cidr: string; ownerId: 
           <CopyText text={vpc.id} />
         </span>
       } />
-      <Field label="Status" value={
+      <Field label="State" value={
         <span className="inline-flex items-center gap-1.5 text-success">
-          <CheckCircle2 size={14} /> {vpc.status}
+          <CheckCircle2 size={14} /> {vpc.vpcStatus}
         </span>
       } />
       <Field label="Block Public Access" value={

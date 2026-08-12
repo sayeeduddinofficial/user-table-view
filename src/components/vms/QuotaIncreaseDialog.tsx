@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter,
   DialogHeader, DialogTitle,
@@ -47,17 +47,48 @@ export function QuotaIncreaseDialog({
   // Use the new manager hook that handles both active managers and Super Admin fallback
   const { manager, superAdmins, hasActiveManager, loading: managerLoading, error: managerError } = useMyManager();
   const [selectedSuperAdmin, setSelectedSuperAdmin] = useState('');
- 
-  // Determine which email to use for submission
-  const managerEmail = hasActiveManager && manager?.email 
-    ? manager.email 
+  const [quotaTouched, setQuotaTouched] = useState(false);
+  const [reasonTouched, setReasonTouched] = useState(false);
+  const [submitTouched, setSubmitTouched] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setQuotaTouched(false);
+      setReasonTouched(false);
+      setSubmitTouched(false);
+      setSelectedSuperAdmin('');
+    }
+  }, [open]);
+
+  const managerEmail = hasActiveManager && manager?.email
+    ? manager.email
     : selectedSuperAdmin;
-    
-  // Submit is blocked if manager hasn't resolved yet or no email selected
-  const canSubmit = !isMAxREached && !submitquota && !managerLoading && !!managerEmail.trim();
+
+  const quotaValidationError = quotaTouched
+    ? requestedquota === 0
+      ? "New limit is required"
+      : requestedquota <= currentMaxVMs
+      ? `New limit must be greater than ${currentMaxVMs}`
+      : requestedquota > 50
+      ? "Maximum VM quota limit (50) exceeded"
+      : ""
+    : "";
+  const reasonError = reasonTouched
+    ? !reason.trim()
+      ? "Reason is required"
+      : submitTouched && reason.trim().length < 10
+      ? "Reason must be at least 10 characters"
+      : ""
+    : submitTouched && reason.trim().length < 10
+    ? "Reason must be at least 10 characters"
+    : "";
+  const managerError2 = submitTouched && !managerLoading && !managerEmail.trim() ? "Please select an approver" : "";
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent
+        className="sm:max-w-md"
+        onInteractOutside={(event) => event.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Request Quota Increase</DialogTitle>
           <DialogDescription>
@@ -86,7 +117,7 @@ export function QuotaIncreaseDialog({
                 value={requestedquota === 0 ? "" : requestedquota}
                 onChange={(e) => {
                   const value = e.target.value;
-                  setTouched(true);
+                  setQuotaTouched(true);
                   if (value === "") {
                     setrequestedquota(0);
                     setQuotaError("");
@@ -104,21 +135,22 @@ export function QuotaIncreaseDialog({
                   setQuotaError(numericValue <= currentMaxVMs ? `New limit must be greater than ${currentMaxVMs}` : "");
                 }}
               />
-              {touched && quotaError && <p className="text-sm text-red-500">{quotaError}</p>}
+              {quotaValidationError && <p className="text-sm text-red-500">{quotaValidationError}</p>}
             </div>
           </div>
 
           <div className="space-y-1">
             <Label htmlFor="reason">
-              Reason / Justification <span className="text-destructive">*</span>
+              Reason / Justification
             </Label>
             <Textarea
               id="reason"
               rows={3}
               placeholder="Explain why you need additional VM capacity..."
               value={reason}
-              onChange={(e) => setreason(e.target.value)}
+              onChange={(e) => { setReasonTouched(true); setreason(e.target.value); }}
             />
+            {reasonError && <p className="text-sm text-red-500">{reasonError}</p>}
           </div>
 
           <ManagerDisplay
@@ -131,13 +163,25 @@ export function QuotaIncreaseDialog({
             onEmailChange={setSelectedSuperAdmin}
             label="Manager (Approver)"
           />
+          {managerError2 && (
+            <p className="text-sm text-red-500">{managerError2}</p>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button
-            onClick={() => onSubmit(managerEmail)}
-            disabled={!canSubmit}
+            onClick={() => {
+              setTouched(true);
+              setQuotaTouched(true);
+              setReasonTouched(true);
+              setSubmitTouched(true);
+              if (requestedquota === 0 || requestedquota <= currentMaxVMs || requestedquota > 50) return;
+              if (!reason.trim() || reason.trim().length < 10) return;
+              if (!managerEmail.trim()) return;
+              onSubmit(managerEmail);
+            }}
+            disabled={isMAxREached || submitquota}
           >
             {submitquota ? "Submitting..." : "Submit Request"}
           </Button>

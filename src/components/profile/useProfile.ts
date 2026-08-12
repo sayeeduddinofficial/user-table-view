@@ -49,6 +49,9 @@ export function useProfile() {
           ...prev!,
           display_name: data.data.display_name,
           profile_image: isImageRemoved ? null : data.data.profile_image,
+          ...(data.data.time_zone !== undefined && { time_zone: data.data.time_zone }),
+          ...(data.data.work_start_time !== undefined && { work_start_time: data.data.work_start_time }),
+          ...(data.data.work_end_time !== undefined && { work_end_time: data.data.work_end_time }),
         }));
 
         await refreshUser();

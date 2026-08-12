@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, type ReactNode } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ChevronDown, ChevronUp, Plus, X, XCircle, RefreshCw, Info, AlertTriangle } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, X, XCircle, RefreshCw, Info, AlertTriangle, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Link } from "react-router-dom";
@@ -11,6 +11,8 @@ import { useDialog } from "@/components/ui/dialog-context";
 import { Header } from "../layout/Header";
 import { CreateLbPayload } from "@/services/lbApi";
 import { REGIONS } from "@/utils/s3.utils";
+import albHowItWorksSvg from "@/assets/load-balancers/alb.svg?raw";
+import nlbHowItWorksSvg from "@/assets/load-balancers/nlb.svg?raw";
 import {
   Select,
   SelectContent,
@@ -21,8 +23,9 @@ import {
 import { toast } from "sonner";
 import { Textarea } from "@/components/ui/textarea";
 import { FileText, Info as InfoIcon, RefreshCw as RefreshIcon } from "lucide-react";
-import { lbApi, type VpcItem, type SubnetItem, type SgItem, type TgItem, type EipItem, type AzItem } from "@/services/lbApi";
+import { lbApi, type VpcItem, type SubnetItem, type SgItem, type TgItem, type EipItem, type AzItem, type ManagedTargetGroup } from "@/services/lbApi";
 import { CreateTargetGroupPage } from "./CreateTargetGroupPage";
+import { Input } from "../ui/input";
 
 type LbKind = "ALB" | "NLB";
 type RoutingAction = "forward" | "redirect" | "fixed-response";
@@ -108,6 +111,67 @@ const createListener = (id: number, isAlb: boolean, port = 80): ListenerConfig =
 
 });
 const LB_NAME_REGEX = /^[a-zA-Z0-9-]+$/;
+const DEFAULT_SG_NAME = "splunk-poc-sg";
+const STATIC_SUBNETS_BY_REGION: Record<string, SubnetItem[]> = {
+  "us-east-2": [
+    {
+      id: "subnet-093d40d08c73d4a60",
+      name: "splunk-poc-public-subnet-3",
+      az: "us-east-2c",
+      cidr: "10.0.3.0/24",
+    },
+    {
+      id: "subnet-09edfe5b54b85d2c8",
+      name: "splunk-poc-public-subnet-2",
+      az: "us-east-2b",
+      cidr: "10.0.2.0/24",
+    },
+    {
+      id: "subnet-03dffb510edb7ab4e",
+      name: "splunk-poc-public-subnet-1",
+      az: "us-east-2a",
+      cidr: "10.0.1.0/24",
+    },
+  ],
+  "us-east-1": [
+    {
+      id: "subnet-0012ebab3c854f686",
+      name: "splunk-poc-public-subnet-4",
+      az: "us-east-1c",
+      cidr: "10.0.4.0/24",
+    },
+    {
+      id: "subnet-0e86b2ff8dbb39142",
+      name: "splunk-poc-public-subnet-2",
+      az: "us-east-1a",
+      cidr: "10.0.2.0/24",
+    },
+    {
+      id: "subnet-099455525bf2dcc2a",
+      name: "splunk-poc-public-subnet-5",
+      az: "us-east-1d",
+      cidr: "10.0.5.0/24",
+    },
+    {
+      id: "subnet-0f9f4f1f4d17b998c",
+      name: "Splunk-Poc-Public-Subnet-1",
+      az: "us-east-1e",
+      cidr: "10.0.1.0/24",
+    },
+    {
+      id: "subnet-001dd87543f9c1402",
+      name: "splunk-poc-public-subnet-3",
+      az: "us-east-1b",
+      cidr: "10.0.3.0/24",
+    },
+    {
+      id: "subnet-0f6b10e5760a9e210",
+      name: "splunk-poc-public-subnet-6",
+      az: "us-east-1f",
+      cidr: "10.0.6.0/24",
+    },
+  ],
+};
 
 function validateLbName(value: string): string | null {
   if (!value) return "Load balancer name is required.";
@@ -120,10 +184,11 @@ function validateLbName(value: string): string | null {
 
 export function LoadBalancerCreate({ kind }: Props) {
   const navigate = useNavigate();
+
   const [searchParams, setSearchParams] = useSearchParams();
   const user = useAppStore((s: any) => s.currentUser);
   const setActiveRequest = useAppStore((s) => s.setActiveRequest);
-  const { alert } = useDialog()
+  const { alert, confirm } = useDialog()
   const isAlb = kind === "ALB";
   const title = isAlb ? "Create Application Load Balancer" : "Create Network Load Balancer";
   const subtitle = isAlb
@@ -153,12 +218,13 @@ export function LoadBalancerCreate({ kind }: Props) {
   const [existingLbDialogOpen, setExistingLbDialogOpen] = useState(false);
   const [nameFormatError, setNameFormatError] = useState(false);
   const [justificationError, setJustificationError] = useState(false);
-  const [justificationTouched, setJustificationTouched] = useState(false);
   const [provisioningLb, setProvisioningLb] = useState<import("@/services/lbApi").ProvisioningLbItem | null>(null);
   const [checkingProvisioning, setCheckingProvisioning] = useState(false);
   const [name, setName] = useState("");
   const [justifications, setJustifications] = useState("");
-  const [selectedRegion, setSelectedRegion] = useState("us-east-2");
+  const [selectedRegion, setSelectedRegion] = useState(
+    () => searchParams.get("region") ?? "us-east-2"
+  );
   const [nameError, setNameError] = useState(false);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const [scheme, setScheme] = useState<"internet-facing" | "internal">("internet-facing");
@@ -210,6 +276,7 @@ export function LoadBalancerCreate({ kind }: Props) {
   const [reviewIssueOpen, setReviewIssueOpen] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
   const isJustificationValid = justifications.trim().length >= 20;
   // Integration toggles
   const [cfWafEnabled, setCfWafEnabled] = useState(false);
@@ -239,13 +306,14 @@ export function LoadBalancerCreate({ kind }: Props) {
   const [vpcList, setVpcList] = useState<VpcItem[]>([]);
   const [subnetMap, setSubnetMap] = useState<Record<string, SubnetItem[]>>({});
   const [sgOptions, setSgOptions] = useState<SgItem[]>([]);
-  const [tgOptions, setTgOptions] = useState<TgItem[]>([]);
+  const [tgOptions, setTgOptions] = useState<ManagedTargetGroup[]>([]);
   // Add this derived variable near the top of the component (after tgOptions is declared)
   const ALB_PROTOCOLS = ["HTTP", "HTTPS"];
-  const filteredTgOptions = tgOptions.filter((tg) => {
-    if (!tg.protocol) return false;
-    return isAlb ? ALB_PROTOCOLS.includes(tg.protocol) : !ALB_PROTOCOLS.includes(tg.protocol);
-  });
+  // replace the module-level filteredTgOptions with a function
+  const getFilteredTgOptions = (listenerProtocol: string) =>
+    tgOptions.filter(
+      (tg) => tg.protocol === listenerProtocol && tg.vpc_id === vpc && tg.region === selectedRegion
+    );
   const ALLOWED_VPCS: Record<string, string> = {
     "us-east-2": "vpc-02e99db96569078e6",
     "us-east-1": "vpc-00f1dd2c4bab98af5",
@@ -304,6 +372,35 @@ export function LoadBalancerCreate({ kind }: Props) {
   })();
 
   useEffect(() => {
+    if (!submitted) return;
+    setJustificationError(justifications.trim().length < 20);
+  }, [justifications, submitted]);
+
+  useEffect(() => {
+    if (!submitted) return;
+    const badListeners = listeners
+      .filter((l) => l.action === "forward" && !l.targetGroups.some((t) => t.group))
+      .map((l) => l.id);
+    setListenerTgError(badListeners);
+  }, [listeners, submitted]);
+
+  useEffect(() => {
+    if (!submitted) return;
+    if (vpc) setVpcError(false);
+  }, [vpc, submitted]);
+
+  useEffect(() => {
+    if (!submitted) return;
+    if (!isAlb || sgs.length > 0) setSgError(false);
+  }, [sgs, submitted]);
+
+  useEffect(() => {
+    if (!submitted) return;
+    const missingSubnet = azs.length < 2 || azs.some((az) => !azSubnets[az]?.subnet);
+    setSubnetError(missingSubnet);
+  }, [azs, azSubnets, submitted]);
+
+  useEffect(() => {
     if (azs.length === 0) return;
     setAzSubnets((prev) => {
       const next = { ...prev };
@@ -331,7 +428,7 @@ export function LoadBalancerCreate({ kind }: Props) {
   useEffect(() => {
     if (!user?.id) return;
     setCheckingProvisioning(true);
-    lbApi.checkProvisioning(user.id,  currentTypeValue as "application" | "network")
+    lbApi.checkProvisioning(user.id, currentTypeValue as "application" | "network")
       .then((res) => setProvisioningLb(res.loadBalancer ?? null))
       .catch(() => setProvisioningLb(null))
       .finally(() => setCheckingProvisioning(false));
@@ -342,14 +439,14 @@ export function LoadBalancerCreate({ kind }: Props) {
     setCheckingExisting(true);
     lbApi.checkExisting(selectedRegion)
       .then((res) => {
-         const all = res.loadBalancers ?? [];
-      setExistingLbs(all);
-      const sameType = all.filter((lb) => lb.type === currentTypeValue);
-      setExistingLbDialogOpen(sameType.length > 0);
+        const all = res.loadBalancers ?? [];
+        setExistingLbs(all);
+        const sameType = all.filter((lb) => lb.type === currentTypeValue);
+        setExistingLbDialogOpen(sameType.length > 0);
       })
       .catch(() => setExistingLbs([])) // fail open on lookup errors, don't block the page
       .finally(() => setCheckingExisting(false));
-  }, [selectedRegion,currentTypeValue]);
+  }, [selectedRegion, currentTypeValue]);
 
 
   useEffect(() => {
@@ -372,31 +469,51 @@ export function LoadBalancerCreate({ kind }: Props) {
     setLoadingVpc(true);
     Promise.all([
       lbApi.securityGroups(selectedRegion, vpc).catch(() => ({ securityGroups: [] as SgItem[] })),
-      lbApi.targetGroups(selectedRegion, vpc).catch(() => ({ targetGroups: [] as TgItem[] })),
+      lbApi.listManagedTargetGroups().catch(() => ({ data: [] as ManagedTargetGroup[] })),
     ]).then(([sgRes, tgRes]) => {
       setSgOptions(sgRes.securityGroups);
-      setTgOptions(tgRes.targetGroups);
+      setTgOptions(tgRes.data);
       if (sgs.length === 0 && sgRes.securityGroups.length > 0) {
-        const firstSg = sgRes.securityGroups[0].id;
-        setSgs([firstSg]);
-        setSelectedSgId(firstSg);
+        const defaultSg = sgRes.securityGroups.find((sg) => sg.name.toLowerCase() === DEFAULT_SG_NAME.toLowerCase());
+        const selectedSg = defaultSg ? defaultSg.id : sgRes.securityGroups[0].id;
+        setSgs([selectedSg]);
+        setSelectedSgId(selectedSg);
       }
     }).finally(() => setLoadingVpc(false));
   }, [vpc, selectedRegion]);
 
   useEffect(() => {
-    if (!vpc || !selectedRegion || azs.length === 0) return;
-    azs.forEach((az) => {
-      if (subnetMap[az]) return;
-      lbApi.subnets(selectedRegion, vpc).then((res) => {
-        const forAz = res.subnets.filter((s) => s.az === az);
-        setSubnetMap((prev) => ({ ...prev, [az]: forAz }));
-        if (!azSubnets[az]?.subnet && forAz.length === 1) {
-          updateAzSubnet(az, { subnet: forAz[0].id });
+    if (!selectedRegion) {
+      setSubnetMap({});
+      return;
+    }
+
+    const regionSubnets = STATIC_SUBNETS_BY_REGION[selectedRegion] ?? [];
+    const nextSubnetMap = regionSubnets.reduce<Record<string, SubnetItem[]>>((acc, subnet) => {
+      const key = subnet.az;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(subnet);
+      return acc;
+    }, {});
+
+    setSubnetMap(nextSubnetMap);
+
+    setAzSubnets((prev) => {
+      const next = { ...prev };
+      let changed = false;
+
+      azs.forEach((az) => {
+        const subnetsForAz = nextSubnetMap[az] ?? [];
+        if (!next[az]?.subnet && subnetsForAz.length === 1) {
+          next[az] = getAzSubnetEntry(next[az]);
+          next[az].subnet = subnetsForAz[0].id;
+          changed = true;
         }
-      }).catch(() => { });
+      });
+
+      return changed ? next : prev;
     });
-  }, [azs, vpc, selectedRegion]);
+  }, [azs, selectedRegion]);
 
 
   const toggleAz = (az: string) =>
@@ -475,24 +592,17 @@ export function LoadBalancerCreate({ kind }: Props) {
   };
 
   async function submit() {
+    setSubmitted(true);
     let valid = true;
 
     if (provisioningLb) {
       alert({ title: `"${provisioningLb.name}" is still provisioning`, description: "Wait for it to finish before creating another.", severity: "error" });
       return;
     }
-
-    if (relevantExistingLbs.length > 0) {
-      setExistingLbDialogOpen(true);
-      alert({ title: "You already have a load balancer under your name.", severity: "error" });
-      return;
-    }
-
     const nameValidationError = validateLbName(name);
     if (nameValidationError) {
       setNameErrorMsg(nameValidationError);
       if (valid) {
-        alert({ title: nameValidationError, severity: "error" });
         nameInputRef.current?.focus();
         nameInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
       }
@@ -503,25 +613,16 @@ export function LoadBalancerCreate({ kind }: Props) {
 
     if (!vpc) {
       setVpcError(true);
-      if (valid) {
-        alert({ title: "Please select a VPC", severity: "error" });
-        document.getElementById("network-mapping")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
+      if (valid) document.getElementById("network-mapping")?.scrollIntoView({ behavior: "smooth", block: "start" });
       valid = false;
     } else {
       setVpcError(false);
     }
 
     const missingSubnet = azs.length < 2 || azs.some((az) => !azSubnets[az]?.subnet);
-    if (azs.length < 2 || missingSubnet) {
+    if (missingSubnet) {
       setSubnetError(true);
-      if (valid) {
-        alert({
-          title: azs.length < 2 ? "Select at least 2 Availability Zones" : "Each selected AZ must have a subnet chosen",
-          severity: "error",
-        });
-        document.getElementById("network-mapping")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
+      if (valid) document.getElementById("network-mapping")?.scrollIntoView({ behavior: "smooth", block: "start" });
       valid = false;
     } else {
       setSubnetError(false);
@@ -529,10 +630,7 @@ export function LoadBalancerCreate({ kind }: Props) {
 
     if (isAlb && sgs.length === 0) {
       setSgError(true);
-      if (valid) {
-        alert({ title: "At least one security group is required", severity: "error" });
-        document.getElementById("security-groups")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
+      if (valid) document.getElementById("security-groups")?.scrollIntoView({ behavior: "smooth", block: "start" });
       valid = false;
     } else {
       setSgError(false);
@@ -543,10 +641,7 @@ export function LoadBalancerCreate({ kind }: Props) {
       .map((l) => l.id);
     setListenerTgError(badListeners);
     if (badListeners.length > 0) {
-      if (valid) {
-        alert({ title: "Each forward listener must have a target group selected", severity: "error" });
-        document.getElementById("listeners-routing")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
+      if (valid) document.getElementById("listeners-routing")?.scrollIntoView({ behavior: "smooth", block: "start" });
       valid = false;
     }
 
@@ -555,10 +650,7 @@ export function LoadBalancerCreate({ kind }: Props) {
       .map((l) => l.id);
     setPortErrorIds(badPorts);
     if (badPorts.length > 0) {
-      if (valid) {
-        alert({ title: "Port must be an integer between 1 and 65535, inclusive.", severity: "error" });
-        document.getElementById("listeners-routing")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
+      if (valid) document.getElementById("listeners-routing")?.scrollIntoView({ behavior: "smooth", block: "start" });
       valid = false;
     }
 
@@ -567,40 +659,22 @@ export function LoadBalancerCreate({ kind }: Props) {
       .map((l) => l.id);
     setFixedResponseErrorIds(badFixedResponses);
     if (badFixedResponses.length > 0) {
-      if (valid) {
-        alert({ title: "Response code must be a valid HTTP status code (2xx, 4xx, or 5xx).", severity: "error" });
-        document.getElementById("listeners-routing")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }
+      if (valid) document.getElementById("listeners-routing")?.scrollIntoView({ behavior: "smooth", block: "start" });
       valid = false;
     }
 
     if (justifications.trim().length < 20) {
       setJustificationError(true);
-      if (valid) {
-        alert({ title: "Business justification is required (minimum 20 characters)", severity: "error" });
-        document.getElementById("justification")?.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
+      if (valid) document.getElementById("justification")?.scrollIntoView({ behavior: "smooth", block: "center" });
       valid = false;
     } else {
       setJustificationError(false);
     }
 
-    if (valid && !validateLbName(name)) {
-      try {
-        const res = await lbApi.checkLbName(name, selectedRegion);
-        if (res.exists) {
-          setNameExistsError(true);
-          alert({
-            title: `A load balancer named "${name}" already exists in ${selectedRegion}.`,
-            severity: "error",
-          });
-          nameInputRef.current?.focus();
-          nameInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-          valid = false;
-        }
-      } catch {
-        // fail open — a network hiccup shouldn't block submission; a true dupe still gets caught by AWS on create
-      }
+    if (nameCheckLoading || nameExistsError) {
+      nameInputRef.current?.focus();
+      nameInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      valid = false;
     }
 
     if (!valid) return;
@@ -618,11 +692,6 @@ export function LoadBalancerCreate({ kind }: Props) {
 
     if (!isJustificationValid) {
       setJustificationError(true);
-      alert({
-        title: "Business justification is required (minimum 20 characters)",
-        severity: "error",
-      });
-      document.getElementById("justification")?.scrollIntoView({ behavior: "smooth", block: "center" });
       return;
     }
 
@@ -730,7 +799,21 @@ export function LoadBalancerCreate({ kind }: Props) {
   const panel = searchParams.get("panel");
   const showCreateTargetGroup = panel === "create-target-group";
 
+  useEffect(() => {
+    if (showCreateTargetGroup) {
+      window.scrollTo({
+        top: 0,
+        left: 0,
+        behavior: "instant",
+      });
+    }
+  }, [showCreateTargetGroup]);
+
   const handleCreateTargetGroup = () => {
+    if (!user?.id) {
+      console.log("The User data is missing");
+
+    }
     const next = new URLSearchParams(searchParams);
     next.set("panel", "create-target-group");
     next.set("region", selectedRegion);
@@ -743,16 +826,65 @@ export function LoadBalancerCreate({ kind }: Props) {
     next.delete("panel");
     next.delete("region");
     next.delete("vpcId");
+    next.delete("step");
     setSearchParams(next);
   };
 
-  const handleTargetGroupCreated = (tg: TgItem) => {
-    setTgOptions((prev) => [...prev, tg]);
+  const handleTargetGroupCreated = (tg: ManagedTargetGroup) => {
+    setTgOptions((prev) => [
+      ...prev,
+      {
+        ...tg, is_used: false, used_by: [] // freshly created — not attached to any LB yet
+      },
+    ]);
     alert({
       title: `Target group "${tg.name}" created successfully`,
       severity: "success",
     });
     closeCreateTargetGroup();
+  };
+
+  const [deletingTgId, setDeletingTgId] = useState<string | null>(null);
+
+  const handleDeleteTargetGroup = async (tg: ManagedTargetGroup, e: React.SyntheticEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (tg.is_used) {
+      alert({ title: "Can't delete this target group", description: `"${tg.name}" is attached to a load balancer. Remove it from the listener first.`, severity: "error" });
+      return;
+    }
+
+    const confirmed = await confirm({
+      title: `Delete target group "${tg.name}"?`,
+      description: "This can't be undone.",
+      icon: "destroy",
+    });
+    if (!confirmed) return;
+
+    setDeletingTgId(tg.id);
+    try {
+      await lbApi.deleteManagedTargetGroup(tg.id);
+
+      setTgOptions((prev) => prev.filter((t) => t.id !== tg.id));
+
+      // Clear it out of any listener row that had it selected
+      setListeners((prev) => prev.map((l) => ({
+        ...l,
+        targetGroups: l.targetGroups.map((t) => (t.group === tg.arn ? { ...t, group: "" } : t)),
+      })));
+
+      alert({ title: `Target group "${tg.name}" deleted`, severity: "success" });
+    } catch (err: any) {
+      const status = err?.response?.status ?? err?.status;
+      alert({
+        title: status === 409 ? "Target group is in use" : "Failed to delete target group",
+        description: err?.response?.data?.error ?? err?.message ?? "Something went wrong.",
+        severity: "error",
+      });
+    } finally {
+      setDeletingTgId(null);
+    }
   };
 
   if (showCreateTargetGroup) {
@@ -764,6 +896,8 @@ export function LoadBalancerCreate({ kind }: Props) {
             isAlb={isAlb}
             vpcList={filteredVpcList}
             defaultVpcId={searchParams.get("vpcId") ?? vpc}
+            region={selectedRegion}
+            userId={user?.id as number}
             onCancel={closeCreateTargetGroup}
             onCreate={handleTargetGroupCreated}
           />
@@ -775,251 +909,255 @@ export function LoadBalancerCreate({ kind }: Props) {
   }
 
   return (
-    <div>
-      <Header title="Load Balancers" subtitle="" />
-      <div className="flex items-center gap-2 text-sm text-muted-foreground ml-7">
-        <Link
-          to="/aws/load-balancers"
-          className="text-primary hover:underline"
-        >
-          Load Balancers
-        </Link>
-        <span>/</span>
-        <span>{title}</span>
-      </div>
-      <div className="max-w-[1100px] mx-auto pb-8 m-5">
-        <div className="mb-6">
-          <h1 className="text-2xl font-semibold">{title}</h1>
-          <p className="text-sm text-muted-foreground mt-2 leading-relaxed max-w-5xl">{subtitle}</p>
-        </div>
-
-        {/* How it works */}
-        <Section>
-          <Collapsible title={isAlb ? "How Application Load Balancers work" : "How Network Load Balancers work"}>
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
-              <ol className="text-sm text-muted-foreground space-y-3">
-                <li><span className="text-foreground font-medium">1.</span> Clients send requests to your {isAlb ? "application" : "load balancer"}.</li>
-                <li><span className="text-foreground font-medium">2.</span> The listener in your load balancer receives requests matching the protocol and port that you configure.</li>
-                <li><span className="text-foreground font-medium">3.</span> The receiving listener evaluates the incoming request against the rules you specify, and if applicable, routes the request to the appropriate target group. {isAlb && "You can use an HTTPS listener to offload the work of TLS encryption and decryption to your load balancer."}</li>
-                <li><span className="text-foreground font-medium">4.</span> Healthy targets in one or more target groups receive traffic based on the load balancing algorithm, and the routing rules you specify in the listener.</li>
-              </ol>
-              <div className="border border-border rounded-md bg-background/100 aspect-square">
-                {isAlb ? <AlbHowItWorks /> : <NlbHowItWorks />}
-              </div>
-            </div>
-          </Collapsible>
-        </Section>
-
-        {/* Basic configuration */}
-        <Section id="basic-configuration" title="Basic Configuration">
-          <Field label="AWS Region">
-
-            <Select
-              value={selectedRegion}
-              onValueChange={setSelectedRegion}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select AWS Region" />
-              </SelectTrigger>
-
-              <SelectContent>
-                {REGIONS.map(([value, label]) => (
-                  <SelectItem key={value} value={value}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-
-          <Field
-            label="Load Balancer Name"
+    <div className="space-y-4">
+      <Header
+        title="Load Balancers" subtitle=""
+        showSearch={false}
+      />
+      <div className="space-y-4 p-6 pt-0">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Link
+            to="/aws/load-balancers"
+            className="text-primary hover:underline"
           >
-            <p className="text-xs text-muted-foreground m-1">Name must be unique within your AWS account and can't be changed after the load balancer is created.</p>
-            <input
-              ref={nameInputRef}
-              value={name}
-              onChange={(e) => {
-                const value = e.target.value;
-                setName(value);
-                setNameErrorMsg(validateLbName(value));
-              }}
-              className={`w-full bg-input/40 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40 ${nameErrorMsg || nameExistsError ? "border-red-500 ring-red-200" : "border-blue-500 ring-blue-200"
-                }`}
-              placeholder=""
-            />
-            {nameErrorMsg ? (
-              <div className="mt-2 flex items-start gap-2 text-xs text-red-600">
-                <XCircle size={14} className="mt-0.5 shrink-0" />
-                <span>{nameErrorMsg}</span>
-              </div>
-            ) : nameCheckLoading ? (
-              <p className="mt-2 text-xs text-muted-foreground">Checking availability...</p>
-            ) : nameExistsError ? (
-              <div className="mt-2 flex items-start gap-2 text-xs text-red-600">
-                <XCircle size={14} className="mt-0.5 shrink-0" />
-                <span>A load balancer named "{name}" already exists in {selectedRegion}. Choose a different name.</span>
-              </div>
-            ) : null}
-          </Field>
+            Load Balancers
+          </Link>
+          <span>/</span>
+          <span>{title}</span>
+        </div>
+        <div className="max-w-[1100px] mx-auto pb-8 m-5">
+          <div className="mb-6">
+            <h1 className="text-2xl font-semibold">{title}</h1>
+            <p className="text-sm text-muted-foreground mt-2 leading-relaxed max-w-5xl">{subtitle}</p>
+          </div>
 
-          <Field label="Scheme" >
-            <p className="text-xs text-muted-foreground m-1">Scheme can't be changed after the load balancer is created.</p>
-            <div className="grid grid-cols-2 gap-3">
-              <RadioCard
-                checked={scheme === "internet-facing"}
-                onClick={() => setScheme("internet-facing")}
-                title="Internet-facing"
-                bullets={["Serves internet-facing traffic.", "Has public IP addresses.", "DNS name resolves to public IPs.", "Requires a public subnet."]}
+          {/* How it works */}
+          <Section>
+            <Collapsible title={isAlb ? "How Application Load Balancers work" : "How Network Load Balancers work"}>
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
+                <ol className="text-sm text-muted-foreground space-y-3">
+                  <li><span className="text-foreground font-medium">1.</span> Clients send requests to your {isAlb ? "application" : "load balancer"}.</li>
+                  <li><span className="text-foreground font-medium">2.</span> The listener in your load balancer receives requests matching the protocol and port that you configure.</li>
+                  <li><span className="text-foreground font-medium">3.</span> The receiving listener evaluates the incoming request against the rules you specify, and if applicable, routes the request to the appropriate target group. {isAlb && "You can use an HTTPS listener to offload the work of TLS encryption and decryption to your load balancer."}</li>
+                  <li><span className="text-foreground font-medium">4.</span> Healthy targets in one or more target groups receive traffic based on the load balancing algorithm, and the routing rules you specify in the listener.</li>
+                </ol>
+                <div className="border border-border rounded-md bg-background/100 aspect-square">
+                  {isAlb ? <AlbHowItWorks /> : <NlbHowItWorks />}
+                </div>
+              </div>
+            </Collapsible>
+          </Section>
+
+          {/* Basic configuration */}
+          <Section id="basic-configuration" title="Basic Configuration">
+            <Field label="AWS Region">
+
+              <Select
+                value={selectedRegion}
+                onValueChange={setSelectedRegion}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select AWS Region" />
+                </SelectTrigger>
+
+                <SelectContent>
+                  {REGIONS.map(([value, label]) => (
+                    <SelectItem key={value} value={value}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+
+            <Field
+              label="Load Balancer Name"
+            >
+              <p className="text-xs text-muted-foreground m-1">Name must be unique within your AWS account and can't be changed after the load balancer is created.</p>
+              <Input
+                ref={nameInputRef}
+                value={name}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setName(value);
+                  setNameErrorMsg(validateLbName(value));
+                }}
+                className={`w-full bg-input/40 border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring/40 ${nameErrorMsg || nameExistsError ? "border-red-500 ring-red-200" : "border-blue-500 ring-blue-200"
+                  }`}
+                placeholder=""
               />
-              <RadioCard
-                checked={scheme === "internal"}
-                onClick={() => ""}
-                title="Internal"
-                bullets={["Serves internal traffic.", "Has private IP addresses.", "DNS name resolves to private IPs."]}
-              />
-            </div>
-          </Field>
+              {submitted && nameErrorMsg ? (
+                <div className="mt-2 flex items-start gap-2 text-xs text-red-600">
+                  <XCircle size={14} className="mt-0.5 shrink-0" />
+                  <span>{nameErrorMsg}</span>
+                </div>
+              ) : nameCheckLoading ? (
+                <p className="mt-2 text-xs text-muted-foreground">Checking availability...</p>
+              ) : nameExistsError ? (
+                <div className="mt-2 flex items-start gap-2 text-xs text-red-600">
+                  <XCircle size={14} className="mt-0.5 shrink-0" />
+                  <span>A load balancer named "{name}" already exists in {selectedRegion}. Choose a different name.</span>
+                </div>
+              ) : null}
+            </Field>
 
-          <Field label="Load Balancer IP Address Type">
-            <div className="space-y-2">
-              {[
-                { value: "ipv4", title: "IPv4", desc: "Includes only IPv4 addresses.", disabled: false },
-                { value: "dualstack", title: "Dualstack", desc: "Includes IPv4 and IPv6 addresses.", disabled: true },
-                ...(scheme === "internet-facing" && isAlb
-                  ? [{ value: "dualstack-public", title: "Dualstack without public IPv4", desc: "Includes public IPv6 address, and private IPv4 and IPv6 addresses. Compatible with Internet-facing load balancers only.", disabled: true }]
-                  : []),
-              ].map((opt) => (
-                <label key={opt.value} className="flex items-start gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    checked={ipType === opt.value}
-                    disabled={opt.disabled}
-                    onChange={() => setIpType(opt.value)}
-                    className="mt-1 accent-primary"
-                  />
-                  <div>
-                    <div className="text-sm">{opt.title}</div>
-                    <div className="text-xs text-muted-foreground">{opt.desc}</div>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </Field>
-        </Section>
-
-        {/* Network mapping */}
-        <Section id="network-mapping" title="Network Mapping">
-          <Field label="VPC">
-            <div className="flex gap-2 md:gap-2">
-              <div className="flex-1">
-                <Select
-                  value={vpc || undefined}
-                  onValueChange={(value) => setVpc(value)}
-                  disabled={loadingRegion}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder={loadingRegion ? "Loading VPCs..." : "Select a VPC"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {filteredVpcList.map((v) => (
-                      <SelectItem key={v.id} value={v.id}>
-                        {v.id} ({v.name}) — {v.cidr}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+            <Field label="Scheme" >
+              <p className="text-xs text-muted-foreground m-1">Scheme can't be changed after the load balancer is created.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <RadioCard
+                  checked={scheme === "internet-facing"}
+                  onClick={() => setScheme("internet-facing")}
+                  title="Internet-facing"
+                  bullets={["Serves internet-facing traffic.", "Has public IP addresses.", "DNS name resolves to public IPs.", "Requires a public subnet."]}
+                />
+                <RadioCard
+                  checked={scheme === "internal"}
+                  onClick={() => ""}
+                  title="Internal"
+                  bullets={["Serves internal traffic.", "Has private IP addresses.", "DNS name resolves to private IPs."]}
+                />
               </div>
-            </div>
-            {vpcError && (
-              <p className="mt-1 flex items-center gap-1 text-xs text-red-500">
-                <XCircle size={12} /> VPC is required.
-              </p>
-            )}
-            {!isAlb && ipType === "dualstack" && (
-              <Field label="Enable prefix for IPv6 source NAT">
-                <p className="text-xs text-muted-foreground mb-3">
-                  Allows NLB to translate IPv4 traffic to IPv6 using a /80 IPv6 prefix
-                  from each subnet. Required when load balancing IPv4 targets behind an
-                  IPv6 listener.
+            </Field>
+
+            <Field label="Load Balancer IP Address Type">
+              <div className="space-y-2">
+                {[
+                  { value: "ipv4", title: "IPv4", desc: "Includes only IPv4 addresses.", disabled: false },
+                  { value: "dualstack", title: "Dualstack", desc: "Includes IPv4 and IPv6 addresses.", disabled: true },
+                  ...(scheme === "internet-facing" && isAlb
+                    ? [{ value: "dualstack-public", title: "Dualstack without public IPv4", desc: "Includes public IPv6 address, and private IPv4 and IPv6 addresses. Compatible with Internet-facing load balancers only.", disabled: true }]
+                    : []),
+                ].map((opt) => (
+                  <label key={opt.value} className="flex items-start gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      checked={ipType === opt.value}
+                      disabled={opt.disabled}
+                      onChange={() => setIpType(opt.value)}
+                      className="mt-1 accent-primary"
+                    />
+                    <div>
+                      <div className="text-sm">{opt.title}</div>
+                      <div className="text-xs text-muted-foreground">{opt.desc}</div>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </Field>
+          </Section>
+
+          {/* Network mapping */}
+          <Section id="network-mapping" title="Network Mapping">
+            <Field label="VPC">
+              <div className="flex gap-2 md:gap-2">
+                <div className="flex-1">
+                  <Select
+                    value={vpc || undefined}
+                    onValueChange={(value) => setVpc(value)}
+                    disabled={loadingRegion}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder={loadingRegion ? "Loading VPCs..." : "Select a VPC"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {filteredVpcList.map((v) => (
+                        <SelectItem key={v.id} value={v.id}>
+                          {v.id} ({v.name}) — {v.cidr}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              {submitted && vpcError && (
+                <p className="mt-1 flex items-center gap-1 text-xs text-red-500">
+                  <XCircle size={12} /> VPC is required.
                 </p>
+              )}
+              {!isAlb && ipType === "dualstack" && (
+                <Field label="Enable prefix for IPv6 source NAT">
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Allows NLB to translate IPv4 traffic to IPv6 using a /80 IPv6 prefix
+                    from each subnet. Required when load balancing IPv4 targets behind an
+                    IPv6 listener.
+                  </p>
 
-                <div className="grid md:grid-cols-2 gap-3">
-                  {[
-                    {
-                      value: "off",
-                      title: "Off (no source NAT)",
-                      bullets: [
-                        "No source NAT will occur.",
-                        "IPv6 listener cannot route to IPv4 targets.",
-                        "No IPv6 UDP load balancer support.",
-                      ],
-                    },
-                    {
-                      value: "on",
-                      title: "On (source NAT prefixes per subnet)",
-                      bullets: [
-                        "Assigns a /80 IPv6 source NAT prefix per subnet.",
-                        "Allows IPv6 listeners to route to IPv4 targets.",
-                        "Required for IPv6 UDP load balancing scenarios.",
-                      ],
-                    },
-                  ].map((opt) => {
-                    const selected = ipv6SourceNat === opt.value;
+                  <div className="grid md:grid-cols-2 gap-3">
+                    {[
+                      {
+                        value: "off",
+                        title: "Off (no source NAT)",
+                        bullets: [
+                          "No source NAT will occur.",
+                          "IPv6 listener cannot route to IPv4 targets.",
+                          "No IPv6 UDP load balancer support.",
+                        ],
+                      },
+                      {
+                        value: "on",
+                        title: "On (source NAT prefixes per subnet)",
+                        bullets: [
+                          "Assigns a /80 IPv6 source NAT prefix per subnet.",
+                          "Allows IPv6 listeners to route to IPv4 targets.",
+                          "Required for IPv6 UDP load balancing scenarios.",
+                        ],
+                      },
+                    ].map((opt) => {
+                      const selected = ipv6SourceNat === opt.value;
 
-                    return (
-                      <label
-                        key={opt.value}
-                        className={`
+                      return (
+                        <label
+                          key={opt.value}
+                          className={`
                         relative cursor-pointer rounded-lg border p-4 transition-all
                         ${selected
-                            ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                            : "border-border hover:border-primary/40 hover:bg-muted/30"
-                          }
-                      `}
-                      >
-                        <div className="flex items-start gap-3">
-                          <input
-                            type="radio"
-                            checked={selected}
-                            onChange={() =>
-                              setIpv6SourceNat(opt.value as "off" | "on")
+                              ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                              : "border-border hover:border-primary/40 hover:bg-muted/30"
                             }
-                            className="mt-1 accent-primary"
-                          />
+                      `}
+                        >
+                          <div className="flex items-start gap-3">
+                            <input
+                              type="radio"
+                              checked={selected}
+                              onChange={() =>
+                                setIpv6SourceNat(opt.value as "off" | "on")
+                              }
+                              className="mt-1 accent-primary"
+                            />
 
-                          <div className="flex-1">
-                            <div className="text-sm font-medium">
-                              {opt.title}
+                            <div className="flex-1">
+                              <div className="text-sm font-medium">
+                                {opt.title}
+                              </div>
+
+                              <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                                {opt.bullets.map((item) => (
+                                  <li key={item} className="flex gap-2">
+                                    <span>•</span>
+                                    <span>{item}</span>
+                                  </li>
+                                ))}
+                              </ul>
                             </div>
-
-                            <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                              {opt.bullets.map((item) => (
-                                <li key={item} className="flex gap-2">
-                                  <span>•</span>
-                                  <span>{item}</span>
-                                </li>
-                              ))}
-                            </ul>
                           </div>
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-
-                {ipv6SourceNat === "on" && (
-                  <div className="mt-3 rounded-md border border-border bg-card/40 p-3 text-xs text-muted-foreground">
-                    A /80 IPv6 source NAT prefix will be allocated per subnet you select
-                    below. You can override the auto-assigned prefix in the subnet mapping
-                    panel after picking subnets.
+                        </label>
+                      );
+                    })}
                   </div>
-                )}
-              </Field>
-            )}
-          </Field>
 
-          {/* {isAlb && (
+                  {ipv6SourceNat === "on" && (
+                    <div className="mt-3 rounded-md border border-border bg-card/40 p-3 text-xs text-muted-foreground">
+                      A /80 IPv6 source NAT prefix will be allocated per subnet you select
+                      below. You can override the auto-assigned prefix in the subnet mapping
+                      panel after picking subnets.
+                    </div>
+                  )}
+                </Field>
+              )}
+            </Field>
+
+            {/* {isAlb && (
           <Field label="IP pools">
             <p className="text-xs text-muted-foreground mb-2">
               You can optionally choose to configure an IPAM pool as the preferred source for your load balancers IP addresses.
@@ -1060,53 +1198,53 @@ export function LoadBalancerCreate({ kind }: Props) {
           </Field>
         )} */}
 
-          <Field label="Availability Zones and Subnets">
-            <div className="space-y-2">
-              {loadingRegion && <p className="text-xs text-muted-foreground">Loading availability zones...</p>}
-              {!loadingRegion && allAzs.length === 0 && <p className="text-xs text-muted-foreground">Select a region to load availability zones.</p>}
-              {allAzs.map((az) => {
-                const k = az.name;
-                const checked = azs.includes(k);
-                const detail = getAzSubnetEntry(azSubnets[k]);
-                const subnetsForAz = subnetMap[k] ?? [];
-                return (
-                  <div key={k} className="border border-border/60 rounded-md">
-                    <label className="flex items-center gap-2 cursor-pointer text-sm px-3 py-2">
-                      <input type="checkbox" checked={checked} onChange={() => toggleAz(k)} className="accent-primary" />
-                      <span>{az.name} ({az.zoneId})</span>
-                    </label>
-                    {checked && (
-                      <div className={`px-3 pb-3 pl-9 border-t border-border/60 pt-3 ${isAlb ? "" : "space-y-3"}`}>
-                        <div>
-                          <div className="text-xs font-medium mb-1">Subnet</div>
-                          <Select
-                            value={detail.subnet || undefined}
-                            onValueChange={(value) => updateAzSubnet(k, { subnet: value })}
-                            disabled={!vpc}
-                          >
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder={!vpc ? "Select a VPC" : "Select a subnet"} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {subnetsForAz.map((s) => (
-                                <SelectItem key={s.id} value={s.id}>
-                                  {s.id} ({s.name}) — {s.cidr}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        {!isAlb && (
+            <Field label="Availability Zones and Subnets">
+              <div className="space-y-2">
+                {loadingRegion && <p className="text-xs text-muted-foreground">Loading availability zones...</p>}
+                {!loadingRegion && allAzs.length === 0 && <p className="text-xs text-muted-foreground">Select a region to load availability zones.</p>}
+                {allAzs.map((az) => {
+                  const k = az.name;
+                  const checked = azs.includes(k);
+                  const detail = getAzSubnetEntry(azSubnets[k]);
+                  const subnetsForAz = subnetMap[k] ?? [];
+                  return (
+                    <div key={k} className="border border-border/60 rounded-md">
+                      <label className="flex items-center gap-2 cursor-pointer text-sm px-3 py-2">
+                        <input type="checkbox" checked={checked} onChange={() => toggleAz(k)} className="accent-primary" />
+                        <span>{az.name} ({az.zoneId})</span>
+                      </label>
+                      {checked && (
+                        <div className={`px-3 pb-3 pl-9 border-t border-border/60 pt-3 ${isAlb ? "" : "space-y-3"}`}>
                           <div>
-                            <div className="text-sm">IPv4 Address</div>
-                            <div className="text-xs text-muted-foreground mb-2">The front-end IPv4 address of the load balancer in the selected Availability Zone.</div>
-                            <div className="space-y-2">
-                              {/* <label className="flex items-start gap-2 cursor-pointer text-sm">
+                            <div className="text-xs font-medium mb-1">Subnet</div>
+                            <Select
+                              value={detail.subnet || undefined}
+                              onValueChange={(value) => updateAzSubnet(k, { subnet: value })}
+                              disabled={!vpc}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder={!vpc ? "Select a VPC" : "Select a subnet"} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {subnetsForAz.map((s) => (
+                                  <SelectItem key={s.id} value={s.id}>
+                                    {s.id} ({s.name}) — {s.cidr}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {!isAlb && (
+                            <div>
+                              <div className="text-sm">IPv4 Address</div>
+                              <div className="text-xs text-muted-foreground mb-2">The front-end IPv4 address of the load balancer in the selected Availability Zone.</div>
+                              <div className="space-y-2">
+                                {/* <label className="flex items-start gap-2 cursor-pointer text-sm">
                                 <input type="checkbox" checked={detail.ipv4 === "Assigned by AWS"} onChange={(e) => updateAzSubnet(k, { ipv4: e.target.checked ? "Assigned by AWS" : "" })} className="mt-1 accent-primary" />
                                 <div><div className="text-sm">Assigned by AWS</div><div className="text-xs text-muted-foreground">A public IPv4 address auto-assigned by AWS.</div></div>
                               </label> */}
-                              {/* <label className="flex items-start gap-2 cursor-pointer text-sm">
+                                {/* <label className="flex items-start gap-2 cursor-pointer text-sm">
                                 <input type="checkbox" checked={detail.ipv4 === "Use an Elastic IP"} onChange={() => updateAzSubnet(k, { ipv4: "Use an Elastic IP", eip: detail.eip ?? "" })} className="mt-1 accent-primary" />
                                 <div><div className="text-sm">Use an Elastic IP address</div><div className="text-xs text-muted-foreground">Choose an existing Elastic IP allocation in this zone.</div></div>
                               </label>
@@ -1120,446 +1258,488 @@ export function LoadBalancerCreate({ kind }: Props) {
                                   </select>
                                 </div>
                               )} */}
+                              </div>
                             </div>
-                          </div>
 
-                        )}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              {subnetError && (
-                <p className="mt-1 flex items-center gap-1 text-xs text-red-500">
-                  <XCircle size={12} /> {azs.length < 2 ? "Select at least 2 Availability Zones." : "Each selected Availability Zone must have a subnet chosen."}
-                </p>
-              )}
-
-            </div>
-          </Field>
-        </Section>
-
-
-
-        {/* Security groups */}
-        <Section id="security-groups" title="Security Groups">
-          <Field label={isAlb ? "Security groups" : "Security groups - recommended"}>
-            <div className="flex flex-col gap-2">
-              <Select
-                value=""
-                onValueChange={(value) => {
-                  if (value && !sgs.includes(value) && sgs.length < 5) {
-                    setSgs((p) => [...p, value]);
-                  }
-                  setSelectedSgId("");
-                }}
-                disabled={!vpc || loadingVpc}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={!vpc ? "Select a VPC" : loadingVpc ? "Loading..." : "Select a security group"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {sgOptions.map((o) => (
-                    <SelectItem key={o.id} value={o.id} disabled={sgs.includes(o.id) && selectedSgId !== o.id}>
-                      {o.name} ({o.id})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {sgError && (
-                <p className="mt-1 flex items-center gap-1 text-xs text-red-500">
-                  <XCircle size={12} /> At least one security group is required.
-                </p>
-              )}
-
-              <div className="flex flex-wrap gap-2">
-                {sgs.map((g) => {
-                  const sg = sgOptions.find((o) => o.id === g);
-                  return (
-                    <span key={g} className="inline-flex items-center gap-2 px-2.5 py-1 text-xs border border-border rounded-md bg-primary/10 text-primary">
-                      {sg ? `${sg.name} (${sg.id})` : g}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const nextSgs = sgs.filter((x) => x !== g);
-                          setSgs(nextSgs);
-                          setSelectedSgId(nextSgs[nextSgs.length - 1] ?? "");
-                        }}
-                        className="hover:text-foreground"
-                        aria-label={`Remove ${g}`}
-                      >
-                        <X size={12} />
-                      </button>
-                    </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
+                {submitted && subnetError && (
+                  <p className="mt-1 flex items-center gap-1 text-xs text-red-500">
+                    <XCircle size={12} /> {azs.length < 2 ? "Select at least 2 Availability Zones." : "Each selected Availability Zone must have a subnet chosen."}
+                  </p>
+                )}
+
               </div>
-            </div>
-          </Field>
-        </Section>
+            </Field>
+          </Section>
 
-        {/* Listeners */}
-        <Section id="listeners-routing" title="Listeners and Routing">
-          <p className="text-xs text-muted-foreground mb-3">
-            A listener is a process that checks for connection requests using the protocol and port you configure.
-          </p>
-          <div className="space-y-3">
-            {listeners.map((listener) => (
-              <div key={listener.id} className="border border-border rounded-md bg-card/40 overflow-hidden">
-                <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-background/30">
-                  <button
-                    type="button"
-                    onClick={() => updateListener(listener.id, { expanded: !listener.expanded })}
-                    className="flex items-center gap-2 font-medium text-sm"
-                  >
-                    {listener.expanded ? <ChevronDown size={14} /> : <ChevronUp size={14} className="rotate-90" />}
-                    Listener {listener.protocol}:{listener.port}
-                  </button>
-                  <Button variant="outline" size="sm" disabled={listeners.length === 1} onClick={() => removeListener(listener.id)}>Remove</Button>
-                </div>
 
-                {listener.expanded && (
-                  <div className="p-4">
-                    <div className="grid grid-cols-2 gap-3 mb-3">
-                      <Field label="Protocol" inline>
-                        <select
-                          value={listener.protocol}
-                          onChange={(e) => updateListener(listener.id, { protocol: e.target.value })}
-                          className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
-                        >
-                          {(isAlb ? ["HTTP", "HTTPS"] : ["TCP", "UDP", "TCP_UDP", "TLS"]).map((p) => (
-                            <option key={p}>{p}</option>
-                          ))}
-                        </select>
-                      </Field>
-                      <Field label="Port" inline>
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          value={listener.port === 0 ? "" : listener.port}
-                          onChange={(e) => {
-                            const cleaned = sanitizePort(e.target.value);
-                            const num = cleaned === "" ? 0 : Number(cleaned);
-                            updateListener(listener.id, { port: num });
-                            // live-clear the error once it's valid again
-                            if (num >= 1 && num <= 65535) {
-                              setPortErrorIds((prev) => prev.filter((id) => id !== listener.id));
-                            }
-                          }}
-                          className={`w-full bg-input/40 border rounded-md px-3 py-2 text-sm ${portErrorIds.includes(listener.id)
-                            ? "border-red-500 ring-2 ring-red-200"
-                            : "border-border"
-                            }`}
-                        />
-                        {portErrorIds.includes(listener.id) ? (
-                          <div className="mt-2 flex items-start gap-2 text-xs text-red-600">
-                            <XCircle size={14} className="mt-0.5 shrink-0" />
-                            <span>Port must be an integer between 1 and 65535, inclusive.</span>
-                          </div>
-                        ) : (
-                          <p className="text-[11px] text-muted-foreground mt-1">1 - 65535</p>
-                        )}
-                      </Field>
-                    </div>
 
-                    {isAlb && (
-                      <Field label="Default action">
-                        <p className="text-xs text-muted-foreground mb-3">The default action is used if no other rules apply. Choose the default action for traffic on this listener.</p>
-                        <div className="text-xs font-medium mb-3">Routing action</div>
-                        <div className="grid grid-cols-3 gap-2 mb-3">
-                          {([
-                            { id: "forward", label: "Forward to target groups", disabled: false },
-                            { id: "redirect", label: "Redirect to URL", disabled: true },
-                            { id: "fixed-response", label: "Return fixed response", disabled: false },
-                          ] as const).map((a) => (
-                            <label key={a.id} className={`flex items-center gap-2 px-3 py-2 text-xs border rounded-md cursor-pointer ${listener.action === a.id ? "border-primary bg-primary/5 text-primary" : "border-border"}`}>
-                              <input
-                                type="radio"
-                                name={`action-${listener.id}`}
-                                checked={listener.action === a.id}
-                                disabled={a.disabled}
-                                onChange={() =>
-                                  !a.disabled && updateListener(listener.id, { action: a.id })
-                                }
-                                className="accent-primary"
-                              />
-                              {a.label}
-                            </label>
-                          ))}
-                        </div>
-                        <div>
-                          <div className="text-xs font-medium mb-3">Forward to target group</div>
-                           <p className="text-xs text-muted-foreground mb-3">Choose a target group and specify routing weight or <button type="button" onClick={handleCreateTargetGroup} className="text-primary hover:underline text-xs cursor-pointer"> Create target group</button></p>
-                        </div>
-                              
-                      </Field>
-                    )}
+          {/* Security groups */}
+          <Section id="security-groups" title="Security Groups">
+            <Field label={isAlb ? "Security groups" : "Security groups - recommended"}>
+              <div className="flex flex-col gap-2">
+                {(() => {
+                  const defaultSg = sgOptions.find((o) => o.name.toLowerCase() === DEFAULT_SG_NAME.toLowerCase());
+                  const isDefaultSgLocked = !!defaultSg && sgs.includes(defaultSg.id);
+                  return (
+                    <Select
+                      value={selectedSgId}
+                      onValueChange={(value) => {
+                        if (value && !sgs.includes(value) && sgs.length < 5) {
+                          setSgs((p) => [...p, value]);
+                        }
+                        setSelectedSgId("");
+                      }}
+                      disabled={!vpc || loadingVpc || isDefaultSgLocked}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder={!vpc ? "Select a VPC" : loadingVpc ? "Loading..." : "Select a security group"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sgOptions.map((o) => (
+                          <SelectItem key={o.id} value={o.id} disabled={sgs.includes(o.id) && selectedSgId !== o.id}>
+                            {o.name} ({o.id})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  );
+                })()}
+                {submitted && sgError && (
+                  <p className="mt-1 flex items-center gap-1 text-xs text-red-500">
+                    <XCircle size={12} /> At least one security group is required.
+                  </p>
+                )}
 
-                    {(!isAlb || listener.action === "forward") && (
-                      <div className="border-l-2 border-border pl-4">
-                        <Field label="Forward to target group">
-                          <div className="space-y-2">
-                            {listener.targetGroups.map((tg) => {
-                              const totalWeight = listener.targetGroups.reduce((s: number, t: TargetGroupRow) => s + (Number(t.weight) || 0), 0);
-                              const pct = totalWeight > 0 ? Math.round(((Number(tg.weight) || 0) / totalWeight) * 100) : 0;
-                              const selectedElsewhere = new Set(
-                                listener.targetGroups
-                                  .filter((other) => other.id !== tg.id && other.group)
-                                  .map((other) => other.group)
-                              );
-                              return (
-                                <div key={tg.id} className="grid grid-cols-[1fr_auto_110px_70px_auto] gap-2 items-end">
-                                  <div>
-                                    <Select
-                                      value={tg.group}
-                                      onValueChange={(value) =>
-                                        updateTargetGroup(listener.id, tg.id, { group: value })
-                                      }
-                                    >
-                                      <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Select a target group" />
-                                      </SelectTrigger>
-
-                                      <SelectContent>
-                                        {filteredTgOptions.map((opt) => {
-                                          const isAssociated = (opt.loadBalancerArns ?? []).length > 0;
-                                          const isUsedElsewhere = selectedElsewhere.has(opt.arn);
-                                          const isDisabled = isAssociated || isUsedElsewhere;
-                                          return (
-                                            <SelectItem
-                                              key={opt.arn}
-                                              value={opt.arn}
-                                              disabled={isDisabled}
-                                            >
-                                              {opt.name} ({opt.protocol}:{opt.port})
-                                              {isAssociated ? " — already in use" : isUsedElsewhere
-                                                ? " — already selected"
-                                                : ""}
-                                            </SelectItem>
-                                          );
-                                        })}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
-
-                                  <div>
-                                    <div className="text-[11px] text-muted-foreground mb-1">Weight</div>
-                                    <input
-                                      type="number"
-                                      min={0}
-                                      max={999}
-                                      value={tg.weight}
-                                      onChange={(e) => updateTargetGroup(listener.id, tg.id, { weight: Number(e.target.value) })}
-                                      className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
-                                    />
-                                  </div>
-                                  <div>
-                                    <div className="text-[11px] text-muted-foreground mb-1">Percent</div>
-                                    <div className="px-2 py-2 text-sm">{pct}%</div>
-                                  </div>
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={listener.targetGroups.length === 1}
-                                    onClick={() => removeTargetGroup(listener.id, tg.id)}
-                                  >
-                                    Remove
-                                  </Button>
-                                </div>
-                              );
-                            })}
-                          </div>
+                <div className="flex flex-wrap gap-2">
+                  {sgs.map((g) => {
+                    const sg = sgOptions.find((o) => o.id === g);
+                    const isDefault = sg?.name.toLowerCase() === DEFAULT_SG_NAME.toLowerCase();
+                    return (
+                      <span key={g} className="inline-flex items-center gap-2 px-2.5 py-1 text-xs border border-border rounded-md bg-primary/10 text-primary">
+                        {sg ? `${sg.name} (${sg.id})` : g}
+                        {!isDefault && (
                           <button
                             type="button"
-                            onClick={() => addTargetGroup(listener.id)}
-                            disabled={listener.targetGroups.length >= 5}
-                            className="mt-2 inline-flex items-center gap-1 text-xs px-4 py-1.5 border border-primary/60 text-primary rounded-full hover:bg-primary/10 font-medium"
+                            onClick={() => {
+                              const nextSgs = sgs.filter((x) => x !== g);
+                              setSgs(nextSgs);
+                              setSelectedSgId(nextSgs[nextSgs.length - 1] ?? "");
+                            }}
+                            className="hover:text-foreground"
+                            aria-label={`Remove ${g}`}
                           >
-                            Add target group
+                            <X size={12} />
                           </button>
-                          <p className="text-xs text-muted-foreground mt-1.5">You can add up to {Math.max(0, 5 - listener.targetGroups.length)} more target group{5 - listener.targetGroups.length === 1 ? "" : "s"}.</p>
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            </Field>
+          </Section>
+
+          {/* Listeners */}
+          <Section id="listeners-routing" title="Listeners and Routing">
+            <p className="text-xs text-muted-foreground mb-3">
+              A listener is a process that checks for connection requests using the protocol and port you configure.
+            </p>
+            <div className="space-y-3">
+              {listeners.map((listener) => (
+                <div key={listener.id} className="border border-border rounded-md bg-card/40 overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-background/30">
+                    <button
+                      type="button"
+                      onClick={() => updateListener(listener.id, { expanded: !listener.expanded })}
+                      className="flex items-center gap-2 font-medium text-sm"
+                    >
+                      {listener.expanded ? <ChevronDown size={14} /> : <ChevronUp size={14} className="rotate-90" />}
+                      Listener {listener.protocol}:{listener.port}
+                    </button>
+                    <Button variant="outline" size="sm" disabled={listeners.length === 1} onClick={() => removeListener(listener.id)}>Remove</Button>
+                  </div>
+
+                  {listener.expanded && (
+                    <div className="p-4">
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <Field label="Protocol" inline>
+                          <select
+                            value={listener.protocol}
+                            onChange={(e) => updateListener(listener.id, { protocol: e.target.value })}
+                            className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
+                          >
+                            {(isAlb ? ["HTTP", "HTTPS"] : ["TCP", "UDP", "TCP_UDP", "TLS"]).map((p) => (
+                              <option key={p}>{p}</option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field label="Port" inline>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={listener.port === 0 ? "" : listener.port}
+                            onChange={(e) => {
+                              const cleaned = sanitizePort(e.target.value);
+                              const num = cleaned === "" ? 0 : Number(cleaned);
+                              updateListener(listener.id, { port: num });
+                              // live-clear the error once it's valid again
+                              if (num >= 1 && num <= 65535) {
+                                setPortErrorIds((prev) => prev.filter((id) => id !== listener.id));
+                              }
+                            }}
+                            className={`w-full bg-input/40 border rounded-md px-3 py-2 text-sm ${portErrorIds.includes(listener.id)
+                              ? "border-red-500 ring-2 ring-red-200"
+                              : "border-border"
+                              }`}
+                          />
+                          {submitted && portErrorIds.includes(listener.id) ? (
+                            <div className="mt-2 flex items-start gap-2 text-xs text-red-600">
+                              <XCircle size={14} className="mt-0.5 shrink-0" />
+                              <span>Port must be an integer between 1 and 65535, inclusive.</span>
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-muted-foreground mt-1">1 - 65535</p>
+                          )}
                         </Field>
                       </div>
-                    )}
 
-                    {isAlb && listener.action === "redirect" && (
-                      <div className="border-l-2 border-border pl-4">
-                        <div className="flex items-center gap-1.5 mb-1">
-                          <span className="text-sm font-medium">Redirect to URL</span>
-                          <a className="text-xs text-primary hover:underline">Info</a>
-                        </div>
-                        <div className="inline-flex rounded-md border border-border overflow-hidden mb-3 text-xs">
-                          <button type="button" onClick={() => updateListener(listener.id, { redirectMode: "uri" })} className={`px-3 py-1.5 ${listener.redirectMode === "uri" ? "bg-primary text-primary-foreground" : "bg-background/40"}`}>URI parts</button>
-                          <button type="button" disabled onClick={() => updateListener(listener.id, { redirectMode: "full" })} className={`px-3 py-1.5 ${listener.redirectMode === "full" ? "bg-primary text-primary-foreground" : "bg-background/40"}`}>Full URL</button>
-                        </div>
-                        {listener.redirectMode === "full" ? (
-                          <div className="space-y-3">
-                            <div>
-                              <div className="text-sm font-medium mb-1">Full URL</div>
-                              <p className="text-xs text-muted-foreground mb-1.5">Enter the full destination URL, including protocol, hostname, path, and query string.</p>
-                              <input defaultValue="https://#{host}/#{path}?#{query}" className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm" />
-                            </div>
-                            <div>
-                              <div className="text-sm font-medium mb-1">Status code</div>
-                              <select className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm">
-                                <option>301 - Permanently moved</option>
-                                <option>302 - Found</option>
-                              </select>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="grid grid-cols-2 gap-3">
-                              <div>
-                                <div className="text-sm font-medium mb-1">Protocol</div>
-                                <p className="text-xs text-muted-foreground mb-1.5">Used for connections from clients to the load balancer.</p>
-                                <select
-                                  value={listener.redirectProtocol}
-                                  onChange={(e) => updateListener(listener.id, { redirectProtocol: e.target.value })}
-                                  className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
-                                >
-                                  {listener.protocol === 'HTTPS' ? (
-                                    <option value="HTTPS">HTTPS</option>
-                                  ) : (
-                                    <>
-                                      <option value="HTTP">HTTP</option>
-                                      <option value="HTTPS">HTTPS</option>
-                                    </>
-                                  )}
-                                </select>
-
-                              </div>
-                              <div>
-                                <div className="text-sm font-medium mb-1">Port</div>
-                                <p className="text-xs text-muted-foreground mb-1.5">The port on which the load balancer is listening for connections.</p>
+                      {isAlb && (
+                        <Field label="Default action">
+                          <p className="text-xs text-muted-foreground mb-3">The default action is used if no other rules apply. Choose the default action for traffic on this listener.</p>
+                          <div className="text-xs font-medium mb-3">Routing action</div>
+                          <div className="grid grid-cols-3 gap-2 mb-3">
+                            {([
+                              { id: "forward", label: "Forward to target groups", disabled: false },
+                              { id: "redirect", label: "Redirect to URL", disabled: true },
+                              { id: "fixed-response", label: "Return fixed response", disabled: false },
+                            ] as const).map((a) => (
+                              <label key={a.id} className={`flex items-center gap-2 px-3 py-2 text-xs border rounded-md cursor-pointer ${listener.action === a.id ? "border-primary bg-primary/5 text-primary" : "border-border"}`}>
                                 <input
-                                  placeholder="Port number"
-                                  value={listener.redirectPort}
-                                  onChange={(e) => updateListener(listener.id, { redirectPort: e.target.value })}
-                                  className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
+                                  type="radio"
+                                  name={`action-${listener.id}`}
+                                  checked={listener.action === a.id}
+                                  disabled={a.disabled}
+                                  onChange={() => !a.disabled && updateListener(listener.id, { action: a.id })}
+                                  className="accent-primary"
                                 />
-                                <p className="text-[11px] text-muted-foreground mt-0.5">1-65535 or to retain the original port enter {"#{port}"}</p>
+                                {a.label}
+                              </label>
+                            ))}
+                          </div>
+                        </Field>
+                      )}
+
+                      {(!isAlb || listener.action === "forward") && (
+                        <div className="border-l-2 border-border pl-4">
+                          <Field label="Forward to target group">
+                            <p className="text-xs text-muted-foreground mb-3">
+                              Choose a target group and specify routing weight or{" "}
+                              <button
+                                type="button"
+                                onClick={handleCreateTargetGroup}
+                                className="text-primary hover:underline text-xs cursor-pointer"
+                              >
+                                Create target group
+                              </button>
+                            </p>
+                            <div className="space-y-2">
+                              {listener.targetGroups.map((tg) => {
+                                const totalWeight = listener.targetGroups.reduce((s: number, t: TargetGroupRow) => s + (Number(t.weight) || 0), 0);
+                                const pct = totalWeight > 0 ? Math.round(((Number(tg.weight) || 0) / totalWeight) * 100) : 0;
+                                const selectedElsewhere = new Set(
+                                  listener.targetGroups
+                                    .filter((other) => other.id !== tg.id && other.group)
+                                    .map((other) => other.group)
+                                );
+                                return (
+                                  <div key={tg.id} className="grid grid-cols-[1fr_auto_110px_70px_auto] gap-2 items-end">
+                                    <div>
+                                      <Select
+                                        value={tg.group}
+                                        onValueChange={(value) =>
+                                          updateTargetGroup(listener.id, tg.id, { group: value })
+                                        }
+                                      >
+                                        <SelectTrigger className="w-full">
+                                          <SelectValue placeholder="Select a target group" />
+                                        </SelectTrigger>
+
+                                        <SelectContent className="min-w-[420px]">
+                                          {
+                                            getFilteredTgOptions(listener.protocol).length === 0 ? (
+                                              <div className="px-3 py-6 text-center text-xs text-muted-foreground">
+                                                No resource to display
+                                              </div>
+                                            ) :
+                                              (getFilteredTgOptions(listener.protocol).map((opt) => {
+                                                const isUsedElsewhere = selectedElsewhere.has(opt.arn ?? "");
+                                                const isDisabled = opt.is_used || isUsedElsewhere;
+                                                return (
+                                                  <SelectItem
+                                                    key={opt.id}
+                                                    value={opt.arn ?? ""}
+                                                    disabled={isDisabled}
+                                                    actions={
+                                                      !opt.is_used && (
+                                                        <span
+                                                          role="button"
+                                                          tabIndex={-1}
+                                                          onPointerDown={(e) => e.stopPropagation()}
+                                                          onPointerUp={(e) => e.stopPropagation()}
+                                                          onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleDeleteTargetGroup(opt, e);
+                                                          }}
+                                                          className="p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive shrink-0 ml-auto"
+                                                          title="Delete target group"
+                                                        >
+                                                          {deletingTgId === opt.id ? (
+                                                            <RefreshCw size={12} className="animate-spin" />
+                                                          ) : (
+                                                            <Trash2 size={12} />
+                                                          )}
+                                                        </span>
+                                                      )
+                                                    }
+                                                  >
+                                                    {opt.name} ({opt.protocol}:{opt.port})
+                                                    {opt.is_used ? " — already in use" : isUsedElsewhere ? " — already selected" : ""}
+                                                  </SelectItem>
+                                                );
+                                              }))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+
+                                    <div>
+                                      <div className="text-[11px] text-muted-foreground mb-1">Weight</div>
+                                      <input
+                                        type="number"
+                                        min={0}
+                                        max={999}
+                                        value={tg.weight}
+                                        onChange={(e) => updateTargetGroup(listener.id, tg.id, { weight: Number(e.target.value) })}
+                                        className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
+                                      />
+                                    </div>
+                                    <div>
+                                      <div className="text-[11px] text-muted-foreground mb-1">Percent</div>
+                                      <div className="px-2 py-2 text-sm">{pct}%</div>
+                                    </div>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      disabled={listener.targetGroups.length === 1}
+                                      onClick={() => removeTargetGroup(listener.id, tg.id)}
+                                    >
+                                      Remove
+                                    </Button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                            {submitted && listenerTgError.includes(listener.id) && (
+                              <p className="mt-1 flex items-center gap-1 text-xs text-red-500">
+                                <XCircle size={12} /> A target group is required.
+                              </p>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => addTargetGroup(listener.id)}
+                              disabled={listener.targetGroups.length >= 5}
+                              className="mt-2 inline-flex items-center gap-1 text-xs px-4 py-1.5 border border-primary/60 text-primary rounded-full hover:bg-primary/10 font-medium"
+                            >
+                              Add target group
+                            </button>
+                            <p className="text-xs text-muted-foreground mt-1.5">You can add up to {Math.max(0, 5 - listener.targetGroups.length)} more target group{5 - listener.targetGroups.length === 1 ? "" : "s"}.</p>
+                          </Field>
+                        </div>
+                      )}
+
+                      {isAlb && listener.action === "redirect" && (
+                        <div className="border-l-2 border-border pl-4">
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <span className="text-sm font-medium">Redirect to URL</span>
+                            <a className="text-xs text-primary hover:underline">Info</a>
+                          </div>
+                          <div className="inline-flex rounded-md border border-border overflow-hidden mb-3 text-xs">
+                            <button type="button" onClick={() => updateListener(listener.id, { redirectMode: "uri" })} className={`px-3 py-1.5 ${listener.redirectMode === "uri" ? "bg-primary text-primary-foreground" : "bg-background/40"}`}>URI parts</button>
+                            <button type="button" disabled onClick={() => updateListener(listener.id, { redirectMode: "full" })} className={`px-3 py-1.5 ${listener.redirectMode === "full" ? "bg-primary text-primary-foreground" : "bg-background/40"}`}>Full URL</button>
+                          </div>
+                          {listener.redirectMode === "full" ? (
+                            <div className="space-y-3">
+                              <div>
+                                <div className="text-sm font-medium mb-1">Full URL</div>
+                                <p className="text-xs text-muted-foreground mb-1.5">Enter the full destination URL, including protocol, hostname, path, and query string.</p>
+                                <input defaultValue="https://#{host}/#{path}?#{query}" className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm" />
+                              </div>
+                              <div>
+                                <div className="text-sm font-medium mb-1">Status code</div>
+                                <select className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm">
+                                  <option>301 - Permanently moved</option>
+                                  <option>302 - Found</option>
+                                </select>
                               </div>
                             </div>
-                            <label className="flex items-start gap-2 cursor-pointer mt-3">
+                          ) : (
+                            <>
+                              <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                  <div className="text-sm font-medium mb-1">Protocol</div>
+                                  <p className="text-xs text-muted-foreground mb-1.5">Used for connections from clients to the load balancer.</p>
+                                  <select
+                                    value={listener.redirectProtocol}
+                                    onChange={(e) => updateListener(listener.id, { redirectProtocol: e.target.value })}
+                                    className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
+                                  >
+                                    {listener.protocol === 'HTTPS' ? (
+                                      <option value="HTTPS">HTTPS</option>
+                                    ) : (
+                                      <>
+                                        <option value="HTTP">HTTP</option>
+                                        <option value="HTTPS">HTTPS</option>
+                                      </>
+                                    )}
+                                  </select>
+
+                                </div>
+                                <div>
+                                  <div className="text-sm font-medium mb-1">Port</div>
+                                  <p className="text-xs text-muted-foreground mb-1.5">The port on which the load balancer is listening for connections.</p>
+                                  <input
+                                    placeholder="Port number"
+                                    value={listener.redirectPort}
+                                    onChange={(e) => updateListener(listener.id, { redirectPort: e.target.value })}
+                                    className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
+                                  />
+                                  <p className="text-[11px] text-muted-foreground mt-0.5">1-65535 or to retain the original port enter {"#{port}"}</p>
+                                </div>
+                              </div>
+                              <label className="flex items-start gap-2 cursor-pointer mt-3">
+                                <input
+                                  type="checkbox"
+                                  checked={listener.customHostPath}
+                                  onChange={(e) => updateListener(listener.id, { customHostPath: e.target.checked })}
+                                  className="mt-1 accent-primary"
+                                />
+                                <div>
+                                  <div className="text-sm">Custom host, path, query</div>
+                                  <div className="text-xs text-muted-foreground">Select to modify host, path and query. If no changes are made, settings from the request URL are retained.</div>
+                                </div>
+                              </label>
+                              {listener.customHostPath && (
+                                <div className="mt-3 pl-6 grid grid-cols-1 gap-3">
+                                  <div>
+                                    <div className="text-sm font-medium mb-1">Host</div>
+                                    <div className="text-xs text-muted-foreground">Specify a host or retain the original host by using. Not case sensitive.</div>
+                                    <input
+                                      value={listener.redirectHost}
+                                      onChange={(e) => updateListener(listener.id, { redirectHost: e.target.value })}
+                                      className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
+                                    />
+                                    <p className="text-[11px] text-muted-foreground mt-0.5">Maximum 128 characters. Allowed characters are a-z, A-Z, 0-9; the following special characters: -.; and wildcards (* and ?). At least one “.” is required. Only alphabetical characters are allowed after the final “.” character.</p>
+                                  </div>
+                                  <div>
+                                    <div className="text-sm font-medium mb-1">Path</div>
+                                    <div className="text-xs text-muted-foreground">Specify a path or retain the original path by using. Case sensitive.</div>
+                                    <input
+                                      value={listener.redirectPath}
+                                      onChange={(e) => updateListener(listener.id, { redirectPath: e.target.value })}
+                                      className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
+                                    />
+                                    <p className="text-[11px] text-muted-foreground mt-0.5">Maximum 128 characters. Allowed characters are a-z, A-Z, 0-9; the following special characters: _-.$/~"'@:+; & (using &amp;); and wildcards (* and ?).</p>
+                                  </div>
+                                  <div>
+                                    <div className="text-sm font-medium mb-1">Query</div>
+                                    <div className="text-xs text-muted-foreground">Specify a query or retain the original query by using. Not case sensitive.</div>
+                                    <input
+                                      value={listener.redirectQuery}
+                                      onChange={(e) => updateListener(listener.id, { redirectQuery: e.target.value })}
+                                      className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
+                                    />
+                                    <p className="text-[11px] text-muted-foreground mt-0.5">Maximum 128 characters.</p>
+                                  </div>
+                                </div>
+                              )}
+                              <div className="mt-3">
+                                <div className="text-sm font-medium mb-1">Status code</div>
+                                <select className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm">
+                                  <option>301 - Permanently moved</option>
+                                  <option>302 - Found</option>
+                                </select>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+
+                      {isAlb && listener.action === "fixed-response" && (
+                        <div className="border-l-2 border-border pl-4">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <div className="text-sm font-medium mb-0.5">Response code</div>
+                              <p className="text-xs text-muted-foreground mb-1.5">The type of message you want to send.</p>
                               <input
-                                type="checkbox"
-                                checked={listener.customHostPath}
-                                onChange={(e) => updateListener(listener.id, { customHostPath: e.target.checked })}
-                                className="mt-1 accent-primary"
+                                type="text"
+                                inputMode="numeric"
+                                value={listener.fixedResponseCode}
+                                onChange={(e) => {
+                                  const cleaned = sanitizeStatusCode(e.target.value);
+                                  updateListener(listener.id, { fixedResponseCode: cleaned });
+                                  if (isValidStatusCode(cleaned)) {
+                                    setFixedResponseErrorIds((prev) => prev.filter((id) => id !== listener.id));
+                                  }
+                                }}
+                                className={`w-full bg-input/40 border rounded-md px-3 py-2 text-sm ${fixedResponseErrorIds.includes(listener.id) ? "border-red-500 ring-2 ring-red-200" : "border-border"
+                                  }`}
                               />
-                              <div>
-                                <div className="text-sm">Custom host, path, query</div>
-                                <div className="text-xs text-muted-foreground">Select to modify host, path and query. If no changes are made, settings from the request URL are retained.</div>
-                              </div>
-                            </label>
-                            {listener.customHostPath && (
-                              <div className="mt-3 pl-6 grid grid-cols-1 gap-3">
-                                <div>
-                                  <div className="text-sm font-medium mb-1">Host</div>
-                                  <div className="text-xs text-muted-foreground">Specify a host or retain the original host by using. Not case sensitive.</div>
-                                  <input
-                                    value={listener.redirectHost}
-                                    onChange={(e) => updateListener(listener.id, { redirectHost: e.target.value })}
-                                    className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
-                                  />
-                                  <p className="text-[11px] text-muted-foreground mt-0.5">Maximum 128 characters. Allowed characters are a-z, A-Z, 0-9; the following special characters: -.; and wildcards (* and ?). At least one “.” is required. Only alphabetical characters are allowed after the final “.” character.</p>
+                              {submitted && fixedResponseErrorIds.includes(listener.id) ? (
+                                <div className="mt-2 flex items-start gap-2 text-xs text-red-600">
+                                  <XCircle size={14} className="mt-0.5 shrink-0" />
+                                  <span>Response code must be a valid HTTP status code (2xx, 4xx, or 5xx).</span>
                                 </div>
-                                <div>
-                                  <div className="text-sm font-medium mb-1">Path</div>
-                                  <div className="text-xs text-muted-foreground">Specify a path or retain the original path by using. Case sensitive.</div>
-                                  <input
-                                    value={listener.redirectPath}
-                                    onChange={(e) => updateListener(listener.id, { redirectPath: e.target.value })}
-                                    className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
-                                  />
-                                  <p className="text-[11px] text-muted-foreground mt-0.5">Maximum 128 characters. Allowed characters are a-z, A-Z, 0-9; the following special characters: _-.$/~"'@:+; & (using &amp;); and wildcards (* and ?).</p>
-                                </div>
-                                <div>
-                                  <div className="text-sm font-medium mb-1">Query</div>
-                                  <div className="text-xs text-muted-foreground">Specify a query or retain the original query by using. Not case sensitive.</div>
-                                  <input
-                                    value={listener.redirectQuery}
-                                    onChange={(e) => updateListener(listener.id, { redirectQuery: e.target.value })}
-                                    className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
-                                  />
-                                  <p className="text-[11px] text-muted-foreground mt-0.5">Maximum 128 characters.</p>
-                                </div>
-                              </div>
-                            )}
-                            <div className="mt-3">
-                              <div className="text-sm font-medium mb-1">Status code</div>
-                              <select className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm">
-                                <option>301 - Permanently moved</option>
-                                <option>302 - Found</option>
+                              ) : (
+                                <p className="text-[11px] text-muted-foreground mt-0.5">2xx, 4xx, 5xx</p>
+                              )}
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium mb-0.5">Content type</div>
+                              <p className="text-xs text-muted-foreground mb-1.5">The format of your message.</p>
+                              <select
+                                value={listener.fixedResponseContentType}
+                                onChange={(e) => updateListener(listener.id, { fixedResponseContentType: e.target.value })}
+                                className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
+                              >
+                                <option value="text/plain">text/plain</option>
+                                <option value="text/html">text/html</option>
+                                <option value="application/json">application/json</option>
+                                <option value="application/javascript">application/javascript</option>
+                                <option value="text/css">text/css</option>
                               </select>
                             </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-
-                    {isAlb && listener.action === "fixed-response" && (
-                      <div className="border-l-2 border-border pl-4">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <div className="text-sm font-medium mb-0.5">Response code</div>
-                            <p className="text-xs text-muted-foreground mb-1.5">The type of message you want to send.</p>
-                            <input
-                              type="text"
-                              inputMode="numeric"
-                              value={listener.fixedResponseCode}
-                              onChange={(e) => {
-                                const cleaned = sanitizeStatusCode(e.target.value);
-                                updateListener(listener.id, { fixedResponseCode: cleaned });
-                                if (isValidStatusCode(cleaned)) {
-                                  setFixedResponseErrorIds((prev) => prev.filter((id) => id !== listener.id));
-                                }
-                              }}
-                              className={`w-full bg-input/40 border rounded-md px-3 py-2 text-sm ${fixedResponseErrorIds.includes(listener.id) ? "border-red-500 ring-2 ring-red-200" : "border-border"
-                                }`}
+                          </div>
+                          <div className="mt-3">
+                            <div className="text-sm font-medium">Response body - <span className="italic font-normal">optional</span></div>
+                            <p className="text-xs text-muted-foreground mb-1.5">Enter your response message.</p>
+                            <textarea
+                              value={listener.fixedResponseBody}
+                              onChange={(e) => updateListener(listener.id, { fixedResponseBody: e.target.value })}
+                              className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm min-h-[90px]"
                             />
-                            {fixedResponseErrorIds.includes(listener.id) ? (
-                              <div className="mt-2 flex items-start gap-2 text-xs text-red-600">
-                                <XCircle size={14} className="mt-0.5 shrink-0" />
-                                <span>Response code must be a valid HTTP status code (2xx, 4xx, or 5xx).</span>
-                              </div>
-                            ) : (
-                              <p className="text-[11px] text-muted-foreground mt-0.5">2xx, 4xx, 5xx</p>
-                            )}
-                          </div>
-                          <div>
-                            <div className="text-sm font-medium mb-0.5">Content type</div>
-                            <p className="text-xs text-muted-foreground mb-1.5">The format of your message.</p>
-                            <select
-                              value={listener.fixedResponseContentType}
-                              onChange={(e) => updateListener(listener.id, { fixedResponseContentType: e.target.value })}
-                              className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm"
-                            >
-                              <option value="text/plain">text/plain</option>
-                              <option value="text/html">text/html</option>
-                              <option value="application/json">application/json</option>
-                              <option value="application/javascript">application/javascript</option>
-                              <option value="text/css">text/css</option>
-                            </select>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">1024 character maximum</p>
                           </div>
                         </div>
-                        <div className="mt-3">
-                          <div className="text-sm font-medium">Response body - <span className="italic font-normal">optional</span></div>
-                          <p className="text-xs text-muted-foreground mb-1.5">Enter your response message.</p>
-                          <textarea
-                            value={listener.fixedResponseBody}
-                            onChange={(e) => updateListener(listener.id, { fixedResponseBody: e.target.value })}
-                            className="w-full bg-input/40 border border-border rounded-md px-3 py-2 text-sm min-h-[90px]"
-                          />
-                          <p className="text-[11px] text-muted-foreground mt-0.5">1024 character maximum</p>
-                        </div>
-                      </div>
-                    )}
+                      )}
 
 
-                    {/* <div className="mt-5 pt-5 border-t border-border">
+                      {/* <div className="mt-5 pt-5 border-t border-border">
                     {/* <div className="mt-5 pt-5 border-t border-border">
                       <h3 className="text-sm font-medium mb-1">Listener tags - <span className="italic font-normal text-muted-foreground">optional</span></h3>
                       <TagEditor tags={listener.tags} onChange={(tagId, field, value) => updateListenerTag(listener.id, tagId, field, value)} onRemove={(tagId) => removeListenerTag(listener.id, tagId)} />
@@ -1568,66 +1748,66 @@ export function LoadBalancerCreate({ kind }: Props) {
                       </button>
                       <p className="text-[11px] text-muted-foreground mt-2">You can add up to {50 - listener.tags.length} more tags.</p>
                     </div> */}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          <button type="button" onClick={addListener} className="inline-flex items-center gap-1 text-xs px-4 py-1.5 border border-primary/60 text-primary rounded-full hover:bg-primary/10 font-medium">
-            Add listener
-          </button>
-          <p className="text-[11px] text-muted-foreground"> You can add up to {remainingListeners} more listeners.</p>
-        </Section>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button type="button" onClick={addListener} className="inline-flex items-center gap-1 text-xs px-4 py-1.5 border border-primary/60 text-primary rounded-full hover:bg-primary/10 font-medium">
+              Add listener
+            </button>
+            <p className="text-[11px] text-muted-foreground"> You can add up to {remainingListeners} more listeners.</p>
+          </Section>
 
-        {/* Tags */}
-        {/* <Section id="load-balancer-tags"> */}
-        {/* <Collapsible title="Load balancer tags - optional" defaultOpen>
+          {/* Tags */}
+          {/* <Section id="load-balancer-tags"> */}
+          {/* <Collapsible title="Load balancer tags - optional" defaultOpen>
             <TagEditor tags={loadBalancerTags} onChange={updateLoadBalancerTag} onRemove={(tagId) => setLoadBalancerTags((prev) => prev.filter((tag) => tag.id !== tagId))} />
             {/* <button type="button" onClick={() => setLoadBalancerTags((prev) => [...prev, createTagRow()])} className="inline-flex items-center gap-1 text-xs px-4 py-1.5 border border-primary/60 text-primary rounded-full hover:bg-primary/10 font-medium">
               Add new tag
             </button> */}
-        {/* </Collapsible> */}
-        {/* </Section> */}
+          {/* </Collapsible> */}
+          {/* </Section> */}
 
-        {/* Summary */}
-        <Section id="review" title="Review">
-          <p className="text-xs text-muted-foreground mb-4">
-            Review the load balancer configurations and make changes if needed. After you finish reviewing the configurations, choose <span className="font-medium text-foreground">Create load balancer</span>.
-          </p>
-          <div className="border border-border rounded-md p-4 bg-card/40">
-            <div className="flex items-center justify-between mb-1">
-              <div className="text-sm font-semibold">Summary</div>
-            </div>
+          {/* Summary */}
+          <Section id="review" title="Review">
             <p className="text-xs text-muted-foreground mb-4">
-              Review and confirm your configurations.
+              Review the load balancer configurations and make changes if needed. After you finish reviewing the configurations, choose <span className="font-medium text-foreground">Create load balancer</span>.
             </p>
-            <div className="grid grid-cols-4 gap-4 text-xs">
-              <SumCol title="Basic configuration" editable onEdit={() => scrollToSection("basic-configuration", true)}>
-                <div>Name: <a className="text-primary">{name || "—"}</a></div>
-                <div>Scheme: {scheme}</div>
-                <div>IP address type: {ipType}</div>
-              </SumCol>
-              <SumCol title="Network mapping" editable onEdit={() => scrollToSection("network-mapping")}>
-                <div>VPC: <span className="text-primary">{vpc.split(" ")[0]}</span></div>
-                <div>Public IPv4 IPAM pool: -</div>
-                <div>Availability Zones and subnets: {azs.length ? azs.join(", ") : "-"}</div>
-              </SumCol>
-              <SumCol title="Security groups" editable onEdit={() => scrollToSection("security-groups")}>
-                {sgs.map((g) => (
-                  <div key={g}>
-                    <a className="text-primary">{g.match(/sg-[a-z0-9]+/)?.[0] ?? "sg-xxxxx"}</a>
-                  </div>
-                ))}
-              </SumCol>
-              <SumCol title="Listeners and routing" editable onEdit={() => scrollToSection("listeners-routing")}>
-                <div>{primaryListener.protocol}:{primaryListener.port} | {primaryListener.action === "forward" ? "Forward to target group" : primaryListener.action === "redirect" ? "Redirect to URL" : "Return fixed response"}</div>
-                {listeners.length > 1 && <div>{listeners.length - 1} additional listener{listeners.length > 2 ? "s" : ""}</div>}
-              </SumCol>
-            </div>
+            <div className="border border-border rounded-md p-4 bg-card/40">
+              <div className="flex items-center justify-between mb-1">
+                <div className="text-sm font-semibold">Summary</div>
+              </div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Review and confirm your configurations.
+              </p>
+              <div className="grid grid-cols-4 gap-4 text-xs">
+                <SumCol title="Basic configuration" editable onEdit={() => scrollToSection("basic-configuration", true)}>
+                  <div>Name: <a className="text-primary">{name || "—"}</a></div>
+                  <div>Scheme: {scheme}</div>
+                  <div>IP address type: {ipType}</div>
+                </SumCol>
+                <SumCol title="Network mapping" editable onEdit={() => scrollToSection("network-mapping")}>
+                  <div>VPC: <span className="text-primary">{vpc.split(" ")[0]}</span></div>
+                  <div>Public IPv4 IPAM pool: -</div>
+                  <div>Availability Zones and subnets: {azs.length ? azs.join(", ") : "-"}</div>
+                </SumCol>
+                <SumCol title="Security groups" editable onEdit={() => scrollToSection("security-groups")}>
+                  {sgs.map((g) => (
+                    <div key={g}>
+                      <a className="text-primary">{g.match(/sg-[a-z0-9]+/)?.[0] ?? "sg-xxxxx"}</a>
+                    </div>
+                  ))}
+                </SumCol>
+                <SumCol title="Listeners and routing" editable onEdit={() => scrollToSection("listeners-routing")}>
+                  <div>{primaryListener.protocol}:{primaryListener.port} | {primaryListener.action === "forward" ? "Forward to target group" : primaryListener.action === "redirect" ? "Redirect to URL" : "Return fixed response"}</div>
+                  {listeners.length > 1 && <div>{listeners.length - 1} additional listener{listeners.length > 2 ? "s" : ""}</div>}
+                </SumCol>
+              </div>
 
 
 
-            {/* <div className="mt-4 pt-4 border-t border-border grid grid-cols-2 gap-4 text-xs">
+              {/* <div className="mt-4 pt-4 border-t border-border grid grid-cols-2 gap-4 text-xs">
               <SumCol title="Service integrations" editable onEdit={() => scrollToSection("service-integrations")}>
                 {isAlb && <div>Amazon CloudFront + AWS Web Application Firewall (WAF): -</div>}
                 {isAlb && <div>AWS <a className="text-primary hover:underline">WAF</a>: -</div>}
@@ -1637,165 +1817,158 @@ export function LoadBalancerCreate({ kind }: Props) {
                 <div>{loadBalancerTags.length ? `${loadBalancerTags.length} tag${loadBalancerTags.length > 1 ? "s" : ""}` : "-"}</div>
               </SumCol>
             </div> */}
-          </div>
-
-        </Section>
-        <section className="glass-panel rounded-xl p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <FileText className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-semibold">Business Justification</h2>
-          </div>
-
-          <div className="space-y-3">
-            <Textarea
-              id="justification"
-              className={`w-full resize-none overflow-y-auto rounded-md border bg-background px-3 py-1 text-sm ${justificationError ? "border-red-500 ring-1 ring-red-200" : "border-input"
-                }`}
-              placeholder="Provide a brief justification for this VM request."
-              value={justifications}
-              onChange={(e) => {
-                const value = e.target.value;
-                setJustifications(value);
-                if (justificationTouched) setJustificationError(value.trim().length > 0 && value.trim().length < 20);
-              }}
-              onBlur={() => {
-                setJustificationTouched(true);
-                setJustificationError(justifications.trim().length > 0 && justifications.trim().length < 20);
-              }}
-              rows={3}
-              maxLength={250}
-            />
-            <div className="flex justify-between items-center">
-              {justificationError ? (
-                <div className="text-xs text-red-600">
-                  Business justification must contain at least 20 characters.
-                </div>
-              ) : <span />}
-              <p className="text-xs text-muted-foreground">{justifications.length}/250</p>
             </div>
-          </div>
-        </section>
 
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-          <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
-            <div className="p-4 pb-4 border-b">
-              <DialogHeader className="text-center items-center">
-                <DialogTitle className="text-xl font-semibold text-foreground">
-                  Confirm Load Balancer Creation
-                </DialogTitle>
-                <DialogDescription className="text-muted-foreground mt-2">
-                  Please review the load balancer settings before creating it.
-                </DialogDescription>
-              </DialogHeader>
+          </Section>
+          <section className="glass-panel rounded-xl p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <FileText className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold">Business Justification</h2>
             </div>
-            <div className="space-y-4 mt-4 text-sm overflow-y-auto model-scroll-hide flex-1 px-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                  <p className="text-xs text-muted-foreground mb-1">Load balancer type</p>
-                  <p className="font-medium text-foreground">{kind}</p>
-                </div>
-                <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                  <p className="text-xs text-muted-foreground mb-1">Scheme</p>
-                  <p className="font-medium text-foreground">{scheme}</p>
-                </div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                  <p className="text-xs text-muted-foreground mb-1">Load balancer name</p>
-                  <p className="font-medium text-foreground">{name}</p>
-                </div>
-                <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                  <p className="text-xs text-muted-foreground mb-1">IP type</p>
-                  <p className="font-medium text-foreground">{ipType}</p>
-                </div>
+            <div className="space-y-3">
+              <Textarea
+                id="justification"
+                className={`w-full resize-none overflow-y-auto rounded-md border bg-background px-3 py-1 text-sm ${justificationError ? "border-red-500 ring-1 ring-red-200" : "border-input"
+                  }`}
+                placeholder="Provide a brief justification for this VM request."
+                value={justifications}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setJustifications(value);
+                  if (submitted) setJustificationError(value.trim().length < 20);
+                }}
+                rows={3}
+                maxLength={250}
+              />
+              <div className="flex justify-between items-center">
+                {submitted && justificationError ? (
+                  <div className="text-xs text-red-600">
+                    Business justification must contain at least 20 characters.
+                  </div>
+                ) : <span />}
+                <p className="text-xs text-muted-foreground">{justifications.length}/250</p>
               </div>
+            </div>
+          </section>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                  <p className="text-xs text-muted-foreground mb-1">VPC</p>
-                  <p className="font-medium text-foreground">{vpc}</p>
-                </div>
-                <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                  <p className="text-xs text-muted-foreground mb-1">Availability Zones</p>
-                  <p className="font-medium text-foreground">{azs.length ? azs.join(", ") : "-"}</p>
-                </div>
+          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+            <DialogContent
+              className="sm:max-w-lg max-h-[85vh] flex flex-col"
+              onInteractOutside={(event) => event.preventDefault()}>
+              <div className="p-4 pb-4 border-b">
+                <DialogHeader className="text-center items-center">
+                  <DialogTitle className="text-xl font-semibold text-foreground">
+                    Confirm Load Balancer Creation
+                  </DialogTitle>
+                  <DialogDescription className="text-muted-foreground mt-2">
+                    Please review the load balancer settings before creating it.
+                  </DialogDescription>
+                </DialogHeader>
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                  <p className="text-xs text-muted-foreground mb-1">Security groups</p>
-                  <p className="font-medium text-foreground">{sgs.join(", ")}</p>
+              <div className="space-y-4 mt-4 text-sm overflow-y-auto model-scroll-hide flex-1 px-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-xs text-muted-foreground mb-1">Load balancer type</p>
+                    <p className="font-medium text-foreground">{kind}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-xs text-muted-foreground mb-1">Scheme</p>
+                    <p className="font-medium text-foreground">{scheme}</p>
+                  </div>
                 </div>
-                <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                  <p className="text-xs text-muted-foreground mb-1">Listeners</p>
-                  <p className="font-medium text-foreground">{listeners.length} listener{listeners.length === 1 ? "" : "s"}</p>
-                </div>
-              </div>
 
-              <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                <p className="text-xs text-muted-foreground mb-2">Listener details</p>
-                <div className="space-y-3">
-                  {listeners.map((listener) => (
-                    <div key={listener.id} className="rounded-md border border-border p-3 bg-background/50">
-                      <div className="flex items-center justify-between text-sm font-medium">
-                        <span>{listener.protocol}:{listener.port}</span>
-                        <span className="text-muted-foreground">{listener.action === "forward" ? "Forward" : listener.action === "redirect" ? "Redirect" : "Fixed response"}</span>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-xs text-muted-foreground mb-1">Load balancer name</p>
+                    <p className="font-medium text-foreground">{name}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-xs text-muted-foreground mb-1">IP type</p>
+                    <p className="font-medium text-foreground">{ipType}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-xs text-muted-foreground mb-1">VPC</p>
+                    <p className="font-medium text-foreground">{vpc}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-xs text-muted-foreground mb-1">Availability Zones</p>
+                    <p className="font-medium text-foreground">{azs.length ? azs.join(", ") : "-"}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-xs text-muted-foreground mb-1">Security groups</p>
+                    <p className="font-medium text-foreground">{sgs.join(", ")}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-xs text-muted-foreground mb-1">Listeners</p>
+                    <p className="font-medium text-foreground">{listeners.length} listener{listeners.length === 1 ? "" : "s"}</p>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                  <p className="text-xs text-muted-foreground mb-2">Listener details</p>
+                  <div className="space-y-3">
+                    {listeners.map((listener) => (
+                      <div key={listener.id} className="rounded-md border border-border p-3 bg-background/50">
+                        <div className="flex items-center justify-between text-sm font-medium">
+                          <span>{listener.protocol}:{listener.port}</span>
+                          <span className="text-muted-foreground">{listener.action === "forward" ? "Forward" : listener.action === "redirect" ? "Redirect" : "Fixed response"}</span>
+                        </div>
+                        <div className="mt-2 text-xs text-muted-foreground space-y-1">
+                          <div>Target group count: {listener.targetGroups.length}</div>
+                          <div>Tags: {listener.tags.length}</div>
+                        </div>
                       </div>
-                      <div className="mt-2 text-xs text-muted-foreground space-y-1">
-                        <div>Target group count: {listener.targetGroups.length}</div>
-                        <div>Tags: {listener.tags.length}</div>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                  <p className="text-xs text-muted-foreground mb-1">Business Justification</p>
+                  <p className="font-medium text-foreground">{justifications || "-"}</p>
                 </div>
               </div>
 
-              <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                <p className="text-xs text-muted-foreground mb-1">Load balancer tags</p>
-                <p className="font-medium text-foreground">{loadBalancerTags.length ? loadBalancerTags.map((t) => `${t.key}:${t.value}`).join(", ") : "-"}</p>
+              <div className="flex justify-end gap-3 pt-4 border-t border-border">
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsDialogOpen(false)}
+                    disabled={isSubmitting}
+                  >
+                    Go Back & Edit
+                  </Button>
+
+                  <Button
+                    onClick={handleConfirm}
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? "Submitting..." : "Confirm & Create"}
+                  </Button>
+                </DialogFooter>
               </div>
-              <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                <p className="text-xs text-muted-foreground mb-1">Business Justification</p>
-                <p className="font-medium text-foreground">{justifications || "-"}</p>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4 border-t border-border">
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setIsDialogOpen(false)}
-                  disabled={isSubmitting}
-                >
-                  Go Back & Edit
-                </Button>
-
-                <Button
-                  onClick={handleConfirm}
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? "Submitting..." : "Confirm & Create"}
-                </Button>
-              </DialogFooter>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
 
 
 
-        {/* Footer actions */}
-        <div className="mt-6 flex justify-end gap-2">
-          <Button variant="outline" onClick={() => navigate("/aws/load-balancers")}>Cancel</Button>
-          <span title={disabledReason ?? undefined}>
-            <Button
-              onClick={submit}
-              disabled={!isFormComplete}
-              className="bg-warning text-warning-foreground hover:bg-warning/90 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Create Load Balancer
-            </Button>
-          </span>
+          {/* Footer actions */}
+          <div className="mt-6 flex justify-end gap-2">
+            <Button variant="outline" onClick={() => navigate("/aws/load-balancers")}>Cancel</Button>
+            <span title={disabledReason ?? undefined}>
+              <Button
+                onClick={submit}
+              >
+                Create Load Balancer
+              </Button>
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -1985,25 +2158,22 @@ function IntegrationCard({
 
 function AlbHowItWorks() {
   return (
-    <img
-      src="https://a.b.cdn.console.awsstatic.com/a/v1/4W7DRZLCHOQQABQG7A5U4FUW3YT6NW5XVQYTZPECJILICUXBQ5FA/2026-06-18T03-17-56_07d174ccb00f33e/Static/01030e35e897efab51b7c20523feb957.svg"
-      alt="ALB how it works"
-      className="w-full h-full object-contain"
-      width={320}
-      height={320}
+    <div
+      role="img"
+      aria-label="ALB how it works"
+      className="w-full h-full text-foreground [&>svg]:w-full [&>svg]:h-full [&>svg]:object-contain"
+      dangerouslySetInnerHTML={{ __html: albHowItWorksSvg }}
     />
   );
 }
 
 function NlbHowItWorks() {
   return (
-    <img
-      src="https://a.b.cdn.console.awsstatic.com/a/v1/4W7DRZLCHOQQABQG7A5U4FUW3YT6NW5XVQYTZPECJILICUXBQ5FA/2026-06-18T03-17-56_07d174ccb00f33e/Static/782fe33b3ac3872a65cf305d3bf9ed42.svg"
-      alt="NLB how it works"
-      className="w-full h-full object-contain"
-      width={320}
-      height={320}
+    <div
+      role="img"
+      aria-label="NLB how it works"
+      className="w-full h-full text-foreground [&>svg]:w-full [&>svg]:h-full [&>svg]:object-contain"
+      dangerouslySetInnerHTML={{ __html: nlbHowItWorksSvg }}
     />
   );
 }
-

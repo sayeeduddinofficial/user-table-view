@@ -2,6 +2,13 @@ import axios from "axios";
 import { env } from "@/lib/env";
 import { useAppStore } from "../store/appStore";
 
+function dispatchAuthLogout(reason: string) {
+  localStorage.removeItem('token');
+  localStorage.removeItem('clientIp');
+  sessionStorage.setItem('logout_reason', reason);
+  window.dispatchEvent(new Event('auth:unauthorized'));
+}
+
 let refreshPromise: Promise<string> | null = null;
 
 export async function refreshAuthToken(): Promise<string | null> {
@@ -31,8 +38,7 @@ export async function refreshAuthToken(): Promise<string | null> {
       return newToken;
     } catch (error: any) {
       console.error('[refreshAuthToken] Failed:', error.response?.data?.message || error.message);
-      // If refresh fails, remove invalid token
-      localStorage.removeItem('token');
+      dispatchAuthLogout('SESSION_EXPIRED');
       return null;
     } finally {
       refreshPromise = null;
@@ -69,6 +75,14 @@ const IP_CACHE_DURATION = 5 * 60 * 1000;
 async function getClientIp(): Promise<string> {
   const now = Date.now();
   if (cachedClientIp && (now - ipCacheTimestamp) < IP_CACHE_DURATION) return cachedClientIp;
+
+  const storedIp = localStorage.getItem('clientIp');
+  if (storedIp) {
+    cachedClientIp = storedIp;
+    ipCacheTimestamp = now;
+    return storedIp;
+  }
+
   try {
     const res = await fetch('https://api.ipify.org?format=json');
     const data = await res.json();
@@ -81,13 +95,13 @@ async function getClientIp(): Promise<string> {
 }
 if (!interceptorAttached) {
   axios.interceptors.request.use(async (config) => {
-    const token = localStorage.getItem('token');
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
+    const token = localStorage.getItem("token");
+    if (token) {
+      config.headers.set("Authorization", `Bearer ${token}`);
     }
     const ip = await getClientIp();
-    if (ip && config.headers) {
-      config.headers['x-client-ip'] = ip;
+    if (ip) {
+      config.headers.set("x-client-ip", ip);
     }
     return config;
   });
@@ -100,30 +114,47 @@ if (!interceptorAttached) {
       // ROLE_CHANGED — logout only on non-/me endpoints (user-initiated or polling API calls)
       const isMeEndpoint = error.config?.url?.includes('/api/auth/me');
       if (error.response?.status === 401 && error.response?.data?.code === 'ROLE_CHANGED' && !isMeEndpoint) {
-        localStorage.removeItem('token');
-        sessionStorage.setItem('logout_reason', 'ROLE_CHANGED');
-        window.location.replace('/login');
+        dispatchAuthLogout('ROLE_CHANGED');
         return Promise.reject(error);
       }
 
+      const isAuthExpiredError = error.response?.status === 401 && (
+        error.response?.data?.code === 'TOKEN_EXPIRED_BUT_ACTIVE' ||
+        error.response?.data?.code === 'TOKEN_EXPIRED' ||
+        error.response?.data?.code === 'UNAUTHORIZED' ||
+        error.response?.data?.code === 'INVALID_TOKEN'
+      );
+
       // Token expired but user was active — refresh and retry
-      if (
-        error.response?.status === 401 &&
-        error.response?.data?.code === 'TOKEN_EXPIRED_BUT_ACTIVE' &&
-        !originalRequest._retry
-      ) {
+      if (isAuthExpiredError && error.response?.data?.code === 'TOKEN_EXPIRED_BUT_ACTIVE' && originalRequest && !originalRequest._retry) {
         originalRequest._retry = true;
-        
+
         const newToken = await refreshAuthToken();
         if (newToken) {
-          originalRequest.headers.Authorization = `Bearer ${newToken}`;
-          return axios(originalRequest);
+          const retryConfig = {
+            ...originalRequest,
+            headers: {
+              ...originalRequest.headers,
+              Authorization: `Bearer ${newToken}`,
+            },
+          };
+
+          if (axios.defaults.headers.common) {
+            axios.defaults.headers.common.Authorization = `Bearer ${newToken}`;
+          }
+
+          return axios(retryConfig);
         }
+      }
+
+      if (isAuthExpiredError) {
+        dispatchAuthLogout('SESSION_EXPIRED');
+        return Promise.reject(error);
       }
       
       if (
         error.response?.status === 403 &&
-        !error.config.url.includes("/api/auth/me")
+        originalRequest?.url && !originalRequest.url.includes("/api/auth/me")
       ) {
         const { refreshCurrentUser } = useAppStore.getState();
         await refreshCurrentUser();

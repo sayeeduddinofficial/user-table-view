@@ -260,9 +260,7 @@ function RequestItem({
         <span className="text-xs text-muted-foreground">
           {formatDistanceToNow(
             parseBackendTimestamp(
-              (request.status === "destroyed" || request.status === "destroying") && request.updated_at
-                ? request.updated_at
-                : request.created_at
+              request.updated_at ?? request.created_at
             ),
             { addSuffix: true }
           )}

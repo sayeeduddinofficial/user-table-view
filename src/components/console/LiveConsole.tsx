@@ -52,10 +52,11 @@ const NOT_READY_PHRASES = ["logs not available yet", "no logs available"];
 const hasDestroyLogs = (logText: string): boolean =>
   /DESTROY\s+LOGS/i.test(logText) || 
   /VPC\s+CLI\s+TERMINATION\s+LOGS/i.test(logText) ||
-  /LOAD\s+BALANCER\s+CLI\s+TERMINATION\s+LOGS/i.test(logText);
+  /LOAD\s+BALANCER\s+CLI\s+TERMINATION\s+LOGS/i.test(logText) ||
+  /INSTANCE\s+TERMINATION\s+LOGS/i.test(logText);
 
 const hasRetryLogs = (logText: string): boolean =>
-  /TERMINATE\s+RETRY\s+ATTEMPT/i.test(logText);
+  /RETRY\s+ATTEMPT/i.test(logText);
 
 type ArchiveFetchKey = { requestId: string; status: string } | null;
 
@@ -65,6 +66,7 @@ export function LiveConsole() {
   const { alert, confirm } = useDialog();
   const hasFetchedArchiveRef = useRef<ArchiveFetchKey>(null);
   const isConnectingRef = useRef(false);
+  const lastSseAttemptRef = useRef<number>(0);
   const archiveStreamingRef = useRef(false);
   const activeServiceRef = useRef<string | null>(null);
   const activeOperationRef = useRef<string | null>(null);
@@ -85,6 +87,7 @@ export function LiveConsole() {
   const [currentLogIndex, setCurrentLogIndex] = useState(0);
   const [allLogs, setAllLogs] = useState<TerraformLog[]>([]);
   const pausedLogsRef = useRef<TerraformLog[]>([]);
+  const sseCompletedRef = useRef(false);
 
   // Use hooks for API calls
   const { data: requestMeta } = useRequestDetails(activeRequestId, activeService ?? undefined);
@@ -101,7 +104,17 @@ export function LiveConsole() {
     "retrying",
     "retrying_terminate",
     "destroying",
-  ]; 
+  ];
+
+  // For vpc-terminate-service, 'completed' is a transient state (VPC was
+  // provisioned successfully) that will transition to 'destroying'. Treat it
+  // as non-terminal so we keep polling and connect to SSE once destroying starts.
+  const effectiveTerminalStatuses = activeService === "vpc-terminate-service"
+    ? TERMINAL_STATUSES.filter((s) => s !== "completed")
+    : TERMINAL_STATUSES;
+  const effectiveProvisioningStatuses = activeService === "vpc-terminate-service"
+    ? [...PROVISIONING_STATUSES, "completed"]
+    : PROVISIONING_STATUSES;
 
 
 
@@ -112,7 +125,7 @@ useEffect(() => {
 }, [activeService]);
 
 useEffect(() => {
-  const metadataOperation = activeService === "route53-service" &&
+  const metadataOperation = ["route53-service", "s3-service"].includes(activeService ?? "") &&
     (requestMeta?.action === "delete" || requestMeta?.last_operation === "delete" ||
       requestMeta?.last_operation === "destroy" ||
       ["terminated", "destroyed", "terminating", "destroying"].includes(requestMeta?.status ?? ""))
@@ -153,13 +166,15 @@ useEffect(() => {
     liveSseLogsRef.current = [];
     liveStreamHadRetryRef.current = false;
     isConnectingRef.current = false;
+    lastSseAttemptRef.current = 0;
     hasFetchedArchiveRef.current = null;
+    sseCompletedRef.current = false;
 
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
-  }, [effectiveRequestId]);
+  }, [effectiveRequestId, activeService]);
 
 
 
@@ -181,7 +196,8 @@ useEffect(() => {
       lowerMsg.includes("success") ||
       lowerMsg.includes("completed") ||
       lowerMsg.includes("✅") ||
-      lowerMsg.includes("🎉")
+      lowerMsg.includes("🎉") ||
+      lowerMsg.includes("[triggered by]")
     )
       return "success";
     return "info";
@@ -233,11 +249,18 @@ useEffect(() => {
     ): Promise<FetchResult> => {
       try {
         setLoading(true);
-        const logsData = await fetchRequestLogsApi(
+        // const logsData = await fetchRequestLogsApi(
+        //   requestId,
+        //   activeServiceRef.current ?? undefined,
+        //   activeOperationRef.current ?? undefined,
+        // );
+
+          const logsData = await fetchRequestLogsApi(
           requestId,
-          activeServiceRef.current ?? undefined,
+          isLiveOnlyService(activeServiceRef.current ?? undefined) ? undefined : activeServiceRef.current ?? undefined,
           activeOperationRef.current ?? undefined,
         );
+
         const logText: string = logsData.logs || "";
         const isPlaceholder =
           !logText.trim() ||
@@ -253,9 +276,8 @@ useEffect(() => {
         // (create.log / delete.log) instead of a single combined log with
         // "CREATE LOGS" / "DESTROY LOGS" section markers, so the marker
         // checks below only apply to services that use the combined format.
-        const usesCombinedLogFile = !["s3-service", "route53-service"].includes(
-          activeServiceRef.current ?? "",
-        );
+        const usesCombinedLogFile = activeServiceRef.current !== "route53-service" &&
+          activeServiceRef.current !== "s3-service";
         if (
           usesCombinedLogFile &&
           (targetStatus === "terminated" || targetStatus === "destroyed") &&
@@ -269,7 +291,7 @@ useEffect(() => {
         }
         if (
           usesCombinedLogFile &&
-          targetStatus === "terminated" &&
+          (targetStatus === "terminated" || targetStatus === "destroyed" || targetStatus === "completed") &&
           liveStreamHadRetryRef.current &&
           !hasRetryLogs(logText)
         ) {
@@ -322,7 +344,7 @@ useEffect(() => {
 
   // Connect to SSE endpoint using fetch with ReadableStream
   const connectToLiveLogs = useCallback(
-    async (requestId: string) => {
+    async (requestId: string, onComplete?: () => void) => {
       console.log("🔌 Connecting to live logs for:", requestId);
 
       // Clear previous logs
@@ -343,7 +365,32 @@ useEffect(() => {
         );
 
         if (!response.ok) {
-          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          // For vpc-terminate-service, a 400 while status is still 'completed'
+          // means the destroy hasn't started yet — release the connecting lock
+          // so the next status poll can retry connecting once 'destroying' is seen.
+          if (response.status === 400 && activeServiceRef.current === "vpc-terminate-service") {
+            console.log("[LiveConsole] vpc-terminate SSE not ready yet (400), will retry on next status poll");
+            isConnectingRef.current = false;
+            setIsLiveMode(false);
+            return;
+          }
+          // For lb-service / lb-cli-terminate-service, a 400 means the operation
+          // already completed and logs are in S3 — release the lock so the status
+          // poll triggers archive fetch.
+          if (response.status === 400 && (
+            activeServiceRef.current === "lb-service" ||
+            activeServiceRef.current === "lb-cli-terminate-service"
+          )) {
+            console.log("[LiveConsole] lb SSE not available (400) — switching to archive");
+            isConnectingRef.current = false;
+            setIsLiveMode(false);
+            return;
+          }
+          // Any other non-ok response — release lock and stop live mode
+          console.log(`[LiveConsole] SSE returned ${response.status} — releasing lock`);
+          isConnectingRef.current = false;
+          setIsLiveMode(false);
+          return;
         }
 
         if (!response.body) {
@@ -400,15 +447,15 @@ useEffect(() => {
 
                 if (data.type === "complete") {
                   console.log("🏁 Provisioning complete:", data.status);
-               setIsLiveMode(false);
-                  // Note: requestMeta is now from hook, status updates automatically
+                  sseCompletedRef.current = true;
+                  setIsLiveMode(false);
                   break;
                 }
 
                 // Regular log message
                 if (data.message) {
                   const cleanMessage = stripAnsiCodes(stripTimestamp(data.message));
-                 if (/TERMINATE\s+RETRY\s+ATTEMPT/i.test(cleanMessage)) {
+                 if (/RETRY\s+ATTEMPT/i.test(cleanMessage)) {
                     liveStreamHadRetryRef.current = true;
                   }
 
@@ -442,6 +489,10 @@ useEffect(() => {
       } finally {
         console.log("🔌 SSE FINALLY CALLED");
         isConnectingRef.current = false;
+        // For liveOnly services, fetch archive logs after SSE stream ends
+        if (sseCompletedRef.current && onComplete) {
+          onComplete();
+        }
       }
     },
     [],
@@ -451,25 +502,98 @@ useEffect(() => {
   useEffect(() => {
     if (!effectiveRequestId || !requestMeta) return;
 
-    const status = requestMeta.status;
-    const isLiveOnlyActive = isLiveOnlyService(activeService ?? undefined);
+    if (!effectiveRequestId) return;
 
-    if (PROVISIONING_STATUSES.includes(status) || isLiveOnlyActive) {
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-        abortControllerRef.current = null;
+  const isLiveOnlyActive = isLiveOnlyService(activeService ?? undefined);
+
+  // liveOnly services (e.g. ec2-service) connect to SSE immediately —
+  // no requestMeta needed because status is irrelevant for them.
+  if (isLiveOnlyActive) {
+    const currentStatus = requestMeta?.status;
+    const isAlreadyTerminal = currentStatus && (currentStatus === "terminated" || currentStatus === "failed");
+
+    // If the request is already in a terminal state, skip SSE and fetch archive logs directly
+    if (isAlreadyTerminal) {
+      const fetchKey: ArchiveFetchKey = { requestId: effectiveRequestId, status: currentStatus };
+      const alreadyFetched =
+        hasFetchedArchiveRef.current?.requestId === fetchKey.requestId &&
+        hasFetchedArchiveRef.current?.status === fetchKey.status;
+      if (!alreadyFetched) {
+        hasFetchedArchiveRef.current = fetchKey;
+        setIsLiveMode(false);
+        const tryFetch = async (attemptsLeft: number) => {
+          const result = await fetchCompletedLogs(effectiveRequestId, currentStatus, []);
+          console.log(`[LiveConsole] ec2 terminal archive fetch result="${result}" attemptsLeft=${attemptsLeft}`);
+          if (result === "ready" || result === "error") return;
+          if (attemptsLeft > 0) {
+            hasFetchedArchiveRef.current = null;
+            setTimeout(() => {
+              hasFetchedArchiveRef.current = fetchKey;
+              tryFetch(attemptsLeft - 1);
+            }, 3000);
+          }
+        };
+        tryFetch(12);
       }
+      return;
+    }
 
-      if (!isConnectingRef.current) {
+    if (!sseCompletedRef.current) {
+      const now = Date.now();
+      if (!isConnectingRef.current && now - lastSseAttemptRef.current > 5000) {
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+          abortControllerRef.current = null;
+        }
         isConnectingRef.current = true;
-        // Reset so the NEXT terminal state triggers a fresh S3 fetch
+        lastSseAttemptRef.current = now;
         hasFetchedArchiveRef.current = null;
-         setDisplayedLogs([]);
-         setAllLogs([]);
+        setDisplayedLogs([]);
+        setAllLogs([]);
+        setIsLiveMode(true);
+        const capturedRequestId = effectiveRequestId;
+        const sseSnapshot = () => [...liveSseLogsRef.current];
+        connectToLiveLogs(capturedRequestId, () => {
+          const snapshot = sseSnapshot();
+          const tryFetch = async (attemptsLeft: number) => {
+            const result = await fetchCompletedLogs(capturedRequestId, "completed", snapshot);
+            console.log(`[LiveConsole] ec2 archive fetch result="${result}" attemptsLeft=${attemptsLeft}`);
+            if (result === "ready" || result === "error") return;
+            if (attemptsLeft > 0) {
+              setTimeout(() => tryFetch(attemptsLeft - 1), 3000);
+            }
+          };
+          tryFetch(12);
+        });
+      }
+    }
+    return;
+  }
+
+  if (!requestMeta) return;       
+
+    const status = requestMeta.status;
+    // const isLiveOnlyActive = isLiveOnlyService(activeService ?? undefined);
+
+    if (effectiveProvisioningStatuses.includes(status) || isLiveOnlyActive) {
+      // Only connect if not already streaming and enough time has passed since
+      // last attempt (5s debounce prevents reconnect loops on 400 responses).
+      const now = Date.now();
+      const msSinceLastAttempt = now - lastSseAttemptRef.current;
+      if (!isConnectingRef.current && msSinceLastAttempt > 5000) {
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+          abortControllerRef.current = null;
+        }
+        isConnectingRef.current = true;
+        lastSseAttemptRef.current = now;
+        hasFetchedArchiveRef.current = null;
+        setDisplayedLogs([]);
+        setAllLogs([]);
         setIsLiveMode(true);
         connectToLiveLogs(effectiveRequestId);
       }
-    } else if (TERMINAL_STATUSES.includes(status)) {
+    } else if (effectiveTerminalStatuses.includes(status)) {
       // Use a compound key so "completed" and "terminated" are treated as
       // distinct fetch targets for the same requestId.
       const fetchKey: ArchiveFetchKey = {
@@ -491,11 +615,11 @@ useEffect(() => {
           abortControllerRef.current = null;
         }
 
-        if (isLiveOnlyService(activeServiceRef.current ?? undefined)) {
-          const sseSnapshot = [...liveSseLogsRef.current];
-          setDisplayedLogs(sseSnapshot);
-          return;
-        }
+        // if (isLiveOnlyService(activeServiceRef.current ?? undefined)) {
+        //   const sseSnapshot = [...liveSseLogsRef.current];
+        //   setDisplayedLogs(sseSnapshot);
+        //   return;
+        // }
 
         const sseSnapshot = [...liveSseLogsRef.current];
         const tryFetch = async (attemptsLeft: number) => {
@@ -611,6 +735,13 @@ useEffect(() => {
       });
     }
 
+    if (prev === "retrying_terminate" && current === "destroyed") {
+      alert({
+        title: `Request ${requestMeta.requestId} destroyed successfully`,
+        severity: "success",
+      });
+    }
+
     if (prev === "terminating" && current === "terminated") {
       alert({
         title: `Request ${requestMeta.requestId} terminated successfully`,
@@ -684,7 +815,8 @@ useEffect(() => {
             disabled={
               requestMeta?.status !== "completed" &&
               requestMeta?.status !== "terminated" &&
-              requestMeta?.status !== "failed"
+              requestMeta?.status !== "failed" &&
+              requestMeta?.status !== "destroyed"
             }
           >
             {isPaused ? (
@@ -701,7 +833,9 @@ useEffect(() => {
               isAwsDisconnected ||
               (requestMeta?.status !== "completed" &&
                 requestMeta?.status !== "terminated" &&
-                requestMeta?.status !== "failed")
+                requestMeta?.status !== "failed" &&
+                 requestMeta?.status !== "destroyed"
+              )
             }
             onClick={() => handleClearLogs(requestMeta!.requestId)}
             className="h-8 w-8"
@@ -717,7 +851,8 @@ useEffect(() => {
             disabled={
               requestMeta?.status !== "completed" &&
               requestMeta?.status !== "terminated" &&
-              requestMeta?.status !== "failed"
+              requestMeta?.status !== "failed" && 
+              requestMeta?.status !== "destroyed"
             }
           >
             <Download className="h-4 w-4" />

@@ -23,7 +23,7 @@ export function VMFilterBar({
 }: Props) {
   const navigate = useNavigate();
   return (
-    <Card className="sticky top-16 z-30 bg-card/80 backdrop-blur border-border/50 p-0 mb-2">
+    <Card className="sticky top-16 z-30 glass-panel backdrop-blur border-border/50 p-0">
       <CardContent className="py-0 px-0">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center justify-end p-4 px-6 flex-wrap flex-1">
           <div className="relative flex-1">

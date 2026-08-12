@@ -7,7 +7,7 @@ import { useMemo, useState } from "react";
 import { Search, Users as UsersIcon, ShieldCheck, ShieldAlert, User as UserIcon } from "lucide-react";
 import { useAuth } from "@/hooks/useLogin";
 // import { isAdmin } from "@/utils/roles";
-import { useDialog } from "@/components/ui/dialog-context";
+//import { useDialog } from "@/components/ui/dialog-context";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import {
@@ -39,7 +39,7 @@ import type { User } from "@/types";
 
 export function UserManagement() {
   const { user: authUser } = useAuth();
-  const { confirm } = useDialog();
+  //const { confirm } = useDialog();
   // const admin = isAdmin(authUser?.role);
 
   // React Query hooks
@@ -53,7 +53,15 @@ export function UserManagement() {
   // const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"all" | "SuperAdmin" | "SplunkOps.Admin" | "SplunkOps.User">("all");
+  const [roleFilter, setRoleFilter] = useState<
+    | "all"
+    | "SuperAdmin"
+    | "SplunkOps.Admin"
+    | "SplunkOps.User"
+    | "SplunkOps.Auditor"
+    | "SplunkOps.Stakeholder"
+    | "SplunkOps.Approver"
+  >("all");
 
   // ── Handlers ─────────────────────────────────────────────────────────────
   // async function handleCreate(values: UserFormValues) {
@@ -82,6 +90,12 @@ export function UserManagement() {
         displayName: values.name,
         // role: values.role,
         maxVMs: values.maxVMs,
+        maxBuckets: values.maxBuckets,
+        maxVpcs: values.maxVpcs,
+        maxLoadBalancers: values.maxLoadBalancers,
+        maxEksClusters: values.maxEksClusters,
+        maxDnsRecords: values.maxDnsRecords,
+        maxRdsClusters: values.maxRdsClusters,
         allowedInstanceTypes: values.allowedInstanceTypes,
         allowedCategories: Array.from(new Set(values.allowedCategories)) as number[],
         adminEmail: authUser?.email,
@@ -122,6 +136,9 @@ export function UserManagement() {
     SuperAdmin: users.filter((u) => u.role === "SuperAdmin").length,
     "SplunkOps.Admin": users.filter((u) => u.role === "SplunkOps.Admin").length,
     "SplunkOps.User": users.filter((u) => u.role === "SplunkOps.User").length,
+    "SplunkOps.Auditor": users.filter((u) => u.role === "SplunkOps.Auditor").length,
+    "SplunkOps.Stakeholder": users.filter((u) => u.role === "SplunkOps.Stakeholder").length,
+    "SplunkOps.Approver": users.filter((u) => u.role === "SplunkOps.Approver").length,
   }), [users]);
 
   const filteredUsers = useMemo(() => {
@@ -218,6 +235,9 @@ export function UserManagement() {
             <SelectItem value="SuperAdmin">Super Admin</SelectItem>
             <SelectItem value="SplunkOps.Admin">Admin</SelectItem>
             <SelectItem value="SplunkOps.User">User</SelectItem>
+            <SelectItem value="SplunkOps.Auditor">Auditor</SelectItem>
+            <SelectItem value="SplunkOps.Stakeholder">Stakeholder</SelectItem>
+            <SelectItem value="SplunkOps.Approver">Approver</SelectItem>
           </SelectContent>
         </Select>
       </div>

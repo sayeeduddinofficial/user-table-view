@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate, Link } from "react-router-dom";
 import { ChevronRight, FileText, ChevronDown, Settings, ServerCog } from "lucide-react";
 import { fetchVpcListApi, fetchVpcDetailsApi } from "@/services/vpcService";
+import { checkEksClusterName } from "@/services/eksClusterService";
 import { getClientIp } from "@/utils/getClientIP";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -24,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AWS_REGIONS, KUBERNETES_VERSIONS } from "@/types";
+import { Input } from "../ui/input";
 
 type ConfigurationMode = "quick" | "custom";
 
@@ -92,6 +94,29 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
   const [showConfirm, setShowConfirm] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [nameError, setNameError] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [nameExistsError, setNameExistsError] = useState("");
+  const [nameCheckLoading, setNameCheckLoading] = useState(false);
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const justificationRef = useRef<HTMLDivElement>(null);
+
+  // Load VPCs if not already loaded
+  useEffect(() => {
+    if (!name.trim()) { setNameExistsError(""); return; }
+    setNameCheckLoading(true);
+    setNameExistsError("");
+    const timer = setTimeout(async () => {
+      try {
+        const { exists } = await checkEksClusterName(name.trim(), regionCode);
+        setNameExistsError(exists ? `Cluster name "${name.trim()}" already exists in ${regionCode}.` : "");
+      } catch {
+        // silently ignore
+      } finally {
+        setNameCheckLoading(false);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [name, regionCode]);
 
   // Load VPCs if not already loaded
   useEffect(() => {
@@ -185,29 +210,6 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
 
   const create = async () => {
     if (isSubmitting) return;
-    if (!name.trim()) {
-      setNameError("Cluster name is required");
-      alert({ title: "Cluster name is required", severity: "error" });
-      return;
-    }
-    if (nameError) {
-      alert({ title: nameError, severity: "error" });
-      return;
-    }
-    if (!vpc) {
-      alert({ title: "Please select a VPC", severity: "error" });
-      return;
-    }
-    if (subnetIds.length === 0) {
-      alert({ title: "Please select at least one subnet", severity: "error" });
-      return;
-    }
-    if (businessJustification.trim().length < 20) {
-      setJustificationTouched(true);
-      setJustificationError(true);
-      alert({ title: "Business justification must contain at least 20 characters.", severity: "error" });
-      return;
-    }
 
     try {
       setIsSubmitting(true);
@@ -301,7 +303,7 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
         <div>
           <Header
             title="Configure cluster"
-            subtitle="Amazon EKS clusters provisioned via Terraform into existing VPCs"
+            subtitle="Managed Kubernetes clusters for containerized applications."
             showSearch={false}
           />
 
@@ -375,7 +377,8 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
   label="Name"
   hint="Use the auto-generated name or enter a unique name for this cluster. This property cannot be changed after the cluster is created."
 >
-  <input
+  <Input
+    ref={nameInputRef}
     value={name}
     onChange={(e) => {
       const value = e.target.value;
@@ -401,6 +404,13 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
   />
   {nameError && (
     <p className="mt-1 text-xs text-destructive">{nameError}</p>
+  )}
+  {!nameError && (
+    nameCheckLoading
+      ? <p className="mt-1 text-xs text-muted-foreground">Checking...</p>
+      : nameExistsError
+        ? <p className="mt-1 text-xs text-destructive">{nameExistsError}</p>
+        : null
   )}
 </Field>
 
@@ -478,7 +488,7 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
           </Field>
         </section>
 
-        <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/40 p-6 mb-6">
+        <div ref={justificationRef} id="eks-justification" className="mt-6 rounded-xl glass-panel p-6 mb-6">
           <div className="flex items-center gap-2 mb-4">
             <FileText className="h-5 w-5 text-blue-500" />
             <h3 className="text-lg font-semibold text-white">
@@ -489,7 +499,7 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
           <div className="relative">
             <Textarea
               id="justification"
-              className={`resize-none overflow-y-auto ${justificationTouched && justificationError ? "border-red-500 ring-1 ring-red-200" : ""}`}
+              className="resize-none overflow-y-auto"
               placeholder="Provide a brief justification for this EKS request."
               value={businessJustification}
               onChange={(e) => {
@@ -517,28 +527,39 @@ export function CreateEks({ onClose }: { onClose?: () => void } = {}) {
         </div>
 
         <div className="flex items-center justify-end gap-3 pb-8">
-          <button
+          <Button
             onClick={close}
-            className="text-sm text-primary hover:underline px-3 py-2"
+            variant="outline"
           >
             Cancel
-          </button>
+          </Button>
           <Button
             onClick={() => {
+              setSubmitted(true);
               setJustificationTouched(true);
-              setJustificationError(businessJustification.trim().length < 20);
-              if (!name.trim() || !vpc || subnetIds.length === 0 || businessJustification.trim().length < 20) return;
+              if (!name.trim()) setNameError("Cluster name is required");
+              const nameErr = !!nameError || (!name.trim()) || !!nameExistsError || nameCheckLoading;
+              const justErr = businessJustification.trim().length < 20;
+              setJustificationError(justErr);
+              if (nameErr || !vpc || subnetIds.length === 0 || justErr) {
+                setTimeout(() => {
+                  if (nameErr) nameInputRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+                  else if (justErr) justificationRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }, 0);
+                return;
+              }
               setShowConfirm(true);
             }}
-            disabled={!name.trim() || !!nameError || !vpc || subnetIds.length === 0 || businessJustification.trim().length < 20}
           >
-            Create
+            Create EKS
           </Button>
         </div>
       </div>
 
       <Dialog open={showConfirm} onOpenChange={setShowConfirm}>
-        <DialogContent className="max-w-3xl bg-slate-950 border-slate-800">
+        <DialogContent 
+          className="max-w-3xl bg-slate-950 border-slate-800"
+          onInteractOutside={(event) => event.preventDefault()}>
           <DialogHeader>
             <DialogTitle>Confirm EKS Creation</DialogTitle>
             <DialogDescription>

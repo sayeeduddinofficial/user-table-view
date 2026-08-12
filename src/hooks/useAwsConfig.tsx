@@ -6,8 +6,8 @@ export const useAwsConfig = () => {
   return useQuery<AwsConfigResponse>({
     queryKey: ["aws-config"],
     queryFn: fetchAwsConfig,
-    refetchInterval: 10000,
-    staleTime: 1000 * 30,
+    refetchInterval: 60000,
+    staleTime: 1000 * 55,
     gcTime: 1000 * 60 * 5,
     refetchOnWindowFocus: true,
   });

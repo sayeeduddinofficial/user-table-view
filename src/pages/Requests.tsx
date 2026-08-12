@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Search, RefreshCw, Eye, Trash2, Plus, RotateCcw } from "lucide-react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { Header } from "@/components/layout/Header";
 import { useDialog } from "@/components/ui/dialog-context";
 import {
@@ -29,14 +29,24 @@ import {
   fetchVMRequestsApi,
   fetchVMRequestApi,
   fetchVpcRequestApi,
+  fetchEksRequestApi,
   retryVMRequestApi,
   retryTerminateVMRequestApi,
+  retryLbProvisionApi,
+  retryLbTerminateApi,
+  retryTerminateVpcRequestApi,
+  retryBucketProvisionApi,
   deleteVMRequestApi,
   deleteVpcRequestApi,
   deleteLbRequestApi,
   SERVICE_LABELS,
   SERVICE_OPTIONS,
   deleteRdsRequestApi,
+  // retryRdsProvisionApi,
+  // retryRdsTerminateApi,
+   RETRY_PROVISION_API,
+  RETRY_TERMINATE_API,
+
   type VMRequest as Request,
 } from "@/components/requests/vmRequestsApi";
 import { DataTable, type Column } from "@/components/common/DataTable";
@@ -71,6 +81,10 @@ const statusConfig: Record<string, { color: string; label: string }> = {
     color: "bg-gray-500/20 text-gray-400 border-gray-500/30",
     label: "Terminated",
   },
+  "retry provisioning": {
+    color: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30",
+    label: "Retry Provisioning",
+  },
   retrying: {
     color: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30",
     label: "Retrying",
@@ -81,6 +95,16 @@ const statusConfig: Record<string, { color: string; label: string }> = {
   },
 };
 
+const getRequestActivityTime = (req: Request) => {
+  const createdAt = parseBackendTimestamp(req.created_at).getTime();
+  const updatedAt = req.updated_at ? parseBackendTimestamp(req.updated_at).getTime() : NaN;
+  if (Number.isFinite(updatedAt)) {
+    return Math.max(createdAt, updatedAt);
+  }
+  return createdAt;
+};
+
+const sortRequestsByLatestActivity = (items: Request[]) => [...items].sort((a, b) => getRequestActivityTime(b) - getRequestActivityTime(a));
 
 export default function VMRequests() {
   const [open, setOpen] = useState(false);
@@ -118,23 +142,28 @@ export default function VMRequests() {
       const result = await fetchVMRequestsApi({
         page: currentPage,
         limit: 10,
-        status: statusFilter !== "all" ? statusFilter : undefined,
+        status: statusFilter === "all" || statusFilter === "retrying" ? undefined : statusFilter,
         service: serviceFilter !== "all" ? serviceFilter : undefined,
         search: searchQuery.trim() || undefined,
       });
 
-      const visibleData = result.data.filter(
-        (req) => !(req.service === "s3-service" && req.status === "failed")
-      );
+      const filteredData =
+        statusFilter === "retrying"
+          ? result.data.filter((req) =>
+              ["retrying", "retrying_terminate"].includes(req.status)
+            )
+          : result.data;
 
-      setRequests(visibleData);
+      const sortedData = sortRequestsByLatestActivity(filteredData);
+      setRequests(sortedData);
       setPagination(result.pagination);
 
-      visibleData.forEach((req) => {
+      sortedData.forEach((req) => {
         if (
           req.status === "pending" ||
           req.status === "provisioning" ||
           req.status === "retrying" ||
+          req.status === "retry provisioning" ||
           req.status === "destroying" ||
           req.status === "retrying_terminate"
         ) {
@@ -157,6 +186,14 @@ export default function VMRequests() {
       watchers.current = {};
     };
   }, [page, statusFilter, serviceFilter]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      setRequests((prev) => sortRequestsByLatestActivity(prev));
+    }, 60000);
+
+    return () => window.clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const currentUser = useAppStore.getState().currentUser;
@@ -196,22 +233,26 @@ export default function VMRequests() {
       try {
         const data = service === "vpc-service"
           ? await fetchVpcRequestApi(requestId)
-          : await fetchVMRequestApi(requestId);
+          : service === "eks-cluster-service"
+            ? await fetchEksRequestApi(requestId)
+            : await fetchVMRequestApi(requestId);
         const normalized = data.status; // already normalized by the api layer
         if (data.status) {
           setRequests((prev) =>
-            prev.map((r) => {
-              if (r.request_id !== requestId) return r;
-              if (r.status === "destroying" && normalized === "provisioning")
-                return r;
-              return {
-                ...r,
-                status: normalized,
-                ...(data.updated_at ? { updated_at: data.updated_at } : {}),
-                // Keep last_operation in sync so button logic stays correct
-                ...(data.last_operation !== undefined ? { last_operation: data.last_operation } : {}),
-              };
-            }),
+            sortRequestsByLatestActivity(
+              prev.map((r) => {
+                if (r.request_id !== requestId) return r;
+                if (r.status === "destroying" && normalized === "provisioning")
+                  return r;
+                return {
+                  ...r,
+                  status: normalized,
+                  ...(data.updated_at ? { updated_at: data.updated_at } : {}),
+                  // Keep last_operation in sync so button logic stays correct
+                  ...(data.last_operation !== undefined ? { last_operation: data.last_operation } : {}),
+                };
+              })
+            )
           );
         }
 
@@ -271,10 +312,11 @@ export default function VMRequests() {
             req.status === "pending" ||
             req.status === "provisioning" ||
             req.status === "retrying" ||
+            req.status === "retry provisioning" ||
             req.status === "destroying" ||
             req.status === "retrying_terminate"
           ) {
-            watchRequest(req.request_id);
+            watchRequest(req.request_id, req.service);
           }
         });
       }
@@ -290,17 +332,23 @@ export default function VMRequests() {
 
   // ─── FIXED: Retry now only works for "failed" status, updates to "retrying",
   //            then redirects to the LiveConsole page ───────────────────────────
-  const retryRequest = async (requestId: string) => {
+  const retryRequest = async (requestId: string, service?: string) => {
     const confirmed = await confirm({
-      title: `Do you want to retry provisioning this VM?`,
+      title: "Do you want to retry provisioning the resources for this request?",
       icon: "retry",
     });
 
     if (!confirmed) return;
 
     try {
-      await retryVMRequestApi(requestId);
-
+   //   if (service === 'rds-service') {
+    //   await retryRdsProvisionApi(requestId);
+    // } else {
+    //   await retryVMRequestApi(requestId);
+    // }
+     const retryFn = (service ? RETRY_PROVISION_API[service] : undefined) ?? retryVMRequestApi;
+    await retryFn(requestId);
+      
       alert({
         title: "Retry Provisioning in Progress",
         severity: "loading",
@@ -308,16 +356,18 @@ export default function VMRequests() {
 
       // Update status to "retrying" immediately in the list
       setRequests((prev) =>
-        prev.map((r) =>
-          r.request_id === requestId ? { ...r, status: "retrying" } : r,
+        sortRequestsByLatestActivity(
+          prev.map((r) =>
+            r.request_id === requestId ? { ...r, status: service === "s3-service" ? "retry provisioning" : "retrying" } : r,
+          )
         ),
       );
 
       // Start polling watcher for this request
-      watchRequest(requestId);
+      watchRequest(requestId,service);
 
       // Set the active request in the store so LiveConsole picks it up
-      setActiveRequest(requestId);
+      setActiveRequest(requestId,service);
 
       // Redirect to the console page to show live logs
       navigate("/console");
@@ -331,7 +381,7 @@ export default function VMRequests() {
   };
 
 
-  const retryTerminateRequest = async (requestId: string) => {
+  const retryTerminateRequest = async (requestId: string, service?: string) => {
     const confirmed = await confirm({
       title: `Do you want to retry terminating the resources for this request?`,
       icon: "destroy",
@@ -340,25 +390,41 @@ export default function VMRequests() {
     if (!confirmed) return;
 
     try {
-      await retryTerminateVMRequestApi(requestId);
+    //   if (service === 'rds-service') {
+    //   await retryRdsTerminateApi(requestId);
+    // } else {
+    //   await retryTerminateVMRequestApi(requestId);
+    // }
 
+    const retryFn = (service ? RETRY_TERMINATE_API[service] : undefined) ?? retryTerminateVMRequestApi;
+    await retryFn(requestId);
+    
       alert({
         title: "Retry Terminate in Progress",
         severity: "loading",
       });
 
-      // Update status to "destroying" immediately in the list
+      // Update status immediately so the UI reflects the retry path
       setRequests((prev) =>
-        prev.map((r) =>
-          r.request_id === requestId ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" } : r,
+        sortRequestsByLatestActivity(
+          prev.map((r) =>
+            r.request_id === requestId
+              ? {
+                  ...r,
+                  status: "destroying",
+                  logs_cleared_at: null,
+                  last_operation: "destroy",
+                }
+              : r,
+          )
         ),
       );
 
       // Start polling watcher for this request
-      watchRequest(requestId);
+      watchRequest(requestId,service);
 
       // Set the active request in the store so LiveConsole picks it up
-      setActiveRequest(requestId);
+      setActiveRequest(requestId, service);
 
       // Redirect to the console page to show live logs
       navigate("/console");
@@ -395,14 +461,28 @@ export default function VMRequests() {
     try {
       if (service === "vpc-service") {
         await deleteVpcRequestApi(requestId);
+        setRequests((prev) =>
+          sortRequestsByLatestActivity(
+            prev.map((r) =>
+              r.request_id === requestId
+                ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
+                : r,
+            )
+          ),
+        );
+        watchRequest(requestId, service);
+        setActiveRequest(requestId, service);
+        navigate("/console");
       }
       else if (service === "lb-service") {
         await deleteLbRequestApi(requestId);          // ← add this
         setRequests((prev) =>
-          prev.map((r) =>
-            r.request_id === requestId
-              ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
-              : r,
+          sortRequestsByLatestActivity(
+            prev.map((r) =>
+              r.request_id === requestId
+                ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
+                : r,
+            )
           ),
         );
         watchRequest(requestId, service);
@@ -412,10 +492,12 @@ export default function VMRequests() {
       else if (service === "s3-service") {
         await deleteBucketApi(requestId);
         setRequests((prev) =>
-          prev.map((r) =>
-            r.request_id === requestId
-              ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
-              : r,
+          sortRequestsByLatestActivity(
+            prev.map((r) =>
+              r.request_id === requestId
+                ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
+                : r,
+            )
           ),
         );
         watchRequest(requestId, service);
@@ -424,10 +506,12 @@ export default function VMRequests() {
       } else if (service === "route53-service") {
         await deleteRoute53Record(requestId); // now resolves via request_id
         setRequests((prev) =>
-          prev.map((r) =>
-            r.request_id === requestId
-              ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
-              : r,
+          sortRequestsByLatestActivity(
+            prev.map((r) =>
+              r.request_id === requestId
+                ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
+                : r,
+            )
           ),
         );
         watchRequest(requestId, service);
@@ -437,10 +521,12 @@ export default function VMRequests() {
      else if (service === "eks-cluster-service") {
       await deleteEksClusterService(requestId);
       setRequests((prev) =>
-        prev.map((r) =>
-          r.request_id === requestId
-            ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
-            : r,
+        sortRequestsByLatestActivity(
+          prev.map((r) =>
+            r.request_id === requestId
+              ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
+              : r,
+          )
         ),
       );
       watchRequest(requestId, service);
@@ -450,10 +536,12 @@ export default function VMRequests() {
     else if (service === "rds-service") {
   await deleteRdsRequestApi(requestId);
   setRequests((prev) =>
-    prev.map((r) =>
-      r.request_id === requestId
-        ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
-        : r,
+    sortRequestsByLatestActivity(
+      prev.map((r) =>
+        r.request_id === requestId
+          ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
+          : r,
+      )
     ),
   );
   watchRequest(requestId, service);
@@ -466,13 +554,17 @@ export default function VMRequests() {
 
         if (deleteResult?.status === "SUCCESS") {
           setRequests((prev) =>
-            prev.map((r) =>
-              r.request_id === requestId
-                ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
-                : r,
+            sortRequestsByLatestActivity(
+              prev.map((r) =>
+                r.request_id === requestId
+                  ? { ...r, status: "destroying", logs_cleared_at: null, last_operation: "destroy" }
+                  : r,
+              )
             ),
           );
-          watchRequest(requestId);
+          watchRequest(requestId, service);
+          setActiveRequest(requestId, service);
+          navigate("/console");
         }
       }
       fetchRequests(page);
@@ -562,14 +654,7 @@ export default function VMRequests() {
       header: "Requested",
       render: (req) => (
         <span className="text-sm text-muted-foreground">
-          {formatDistanceToNow(
-            parseBackendTimestamp(
-              (req.status === "destroyed" || req.status === "destroying") && req.updated_at
-                ? req.updated_at
-                : req.created_at
-            ),
-            { addSuffix: true }
-          )}
+          {formatDistanceToNow(getRequestActivityTime(req), { addSuffix: true })}
         </span>
       ),
     },
@@ -578,25 +663,36 @@ export default function VMRequests() {
       header: <span className="flex justify-end">Actions</span>,
       render: (req) => {
         const isTerminateFailed = req.status === "failed" && req.last_operation === "destroy";
-        const canRetry = req.status === "failed";
+        const MAX_RETRIES = 3;
+        const provisionRetriesExhausted = (req.provision_retry_count ?? 0) >= MAX_RETRIES;
+        const terminateRetriesExhausted = (req.terminate_retry_count ?? 0) >= MAX_RETRIES;
+        const canRetry = req.status === "failed" && (
+          isTerminateFailed ? !terminateRetriesExhausted : !provisionRetriesExhausted
+        );
         const canDestroy = req.status === "completed" || (req.status === "failed" && !isTerminateFailed);
         const logsCleared = !!req.logs_cleared_at;
+        // If any activity ran AFTER the logs were cleared, new logs exist.
+        // This covers: destroy/delete operations AND individual EC2 instance
+        // terminations (vm-service) which only update requests.updated_at.
+        const hasNewLogsAfterClear = logsCleared && req.updated_at &&
+          new Date(req.updated_at) > new Date(req.logs_cleared_at!);
+        const eyeDisabled = (logsCleared && !hasNewLogsAfterClear && !req.has_terminating_vms) || isAwsDisconnected;
         return (
           <div className="flex items-center justify-end gap-1">
             <Button
               variant="ghost"
               size="icon"
-              className={`h-8 w-8 transition-colors ${logsCleared || isAwsDisconnected
+              className={`h-8 w-8 transition-colors ${eyeDisabled
                   ? "text-muted-foreground/30 cursor-not-allowed"
                   : "text-muted-foreground hover:text-primary"
                 }`}
-              disabled={logsCleared || isAwsDisconnected}
+              disabled={eyeDisabled}
               onClick={() => {
-                if (logsCleared) return;
-                const operation = req.service === "route53-service"
+                if (eyeDisabled) return;
+                const operation = ["route53-service", "s3-service"].includes(req.service ?? "")
                   ? ((req.action || req.last_operation || "").toLowerCase() === "delete" ||
                     (req.action || req.last_operation || "").toLowerCase() === "destroy" ||
-                    req.status === "destroyed" || req.status === "destroying"
+                    req.status === "destroyed" || req.status === "destroying" || req.status === "terminated" || req.status === "terminating"
                       ? "delete"
                       : "create")
                   : undefined;
@@ -604,10 +700,10 @@ export default function VMRequests() {
                 navigate("/console");
               }}
               tooltip={
-                logsCleared
-                  ? "Logs have been cleared"
-                  : isAwsDisconnected
-                    ? "AWS Disconnected"
+                isAwsDisconnected
+                  ? "AWS Disconnected"
+                  : logsCleared && !hasNewLogsAfterClear
+                    ? "Logs have been cleared"
                     : "View Live Console"
               }
             >
@@ -626,18 +722,25 @@ export default function VMRequests() {
               onClick={() => {
                 if (!canRetry) return;
                 isTerminateFailed
-                  ? retryTerminateRequest(req.request_id)
-                  : retryRequest(req.request_id);
+                  ? retryTerminateRequest(req.request_id, req.service)
+                  : retryRequest(req.request_id, req.service);
               }}
-              tooltip={
-                isAwsDisconnected
-                  ? "AWS Disconnected"
-                  : canRetry
-                    ? isTerminateFailed
-                      ? "Retry Terminate"
-                      : "Retry Provisioning"
-                    : "Retry is only available for failed requests"
-              }
+              tooltip={(() => {
+                if (isAwsDisconnected) return "AWS Disconnected";
+                const MAX_RETRIES = 3;
+                if (isTerminateFailed) {
+                  const used = req.terminate_retry_count ?? 0;
+                  const remaining = MAX_RETRIES - used;
+                  if (terminateRetriesExhausted) return `Retry Terminate — ${used}/${MAX_RETRIES} attempts used (limit reached)`;
+                  return `Retry Terminate — ${used}/${MAX_RETRIES} attempts used`;
+                } else {
+                  const used = req.provision_retry_count ?? 0;
+                  const remaining = MAX_RETRIES - used;
+                  if (provisionRetriesExhausted) return `Retry Provisioning — ${used}/${MAX_RETRIES} attempts used (limit reached)`;
+                  if (req.status !== "failed") return "Retry is only available for failed requests";
+                  return `Retry Provisioning — ${used}/${MAX_RETRIES} attempts used`;
+                }
+              })()}
             >
               <RotateCcw className="h-4 w-4" />
             </Button>
@@ -676,8 +779,8 @@ export default function VMRequests() {
     <TooltipProvider>
       <div>
         <Header
-          title="VM Requests"
-          subtitle="Manage and track all provisioning requests"
+          title="Requests"
+          subtitle="Manage and track all requests"
           showNewRequest={false}
           showSearch={false}
         />
@@ -685,7 +788,7 @@ export default function VMRequests() {
           {/* Filters */}
           <Card
             className="sticky top-16 z-30 
-          bg-card/80 backdrop-blur 
+          glass-panel backdrop-blur 
           border-border/50 p-0"
           >
             <CardContent className="py-0 px-0">
@@ -709,7 +812,6 @@ export default function VMRequests() {
                       <SelectItem value="provisioning">Provisioning</SelectItem>
                       <SelectItem value="completed">Completed</SelectItem>
                       <SelectItem value="retrying">Retrying</SelectItem>
-                      <SelectItem value="retrying_terminate">Retrying Terminate</SelectItem>
                       <SelectItem value="failed">Failed</SelectItem>
                       <SelectItem value="destroying">Terminating</SelectItem>
                       <SelectItem value="destroyed">Terminated</SelectItem>

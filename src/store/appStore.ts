@@ -39,6 +39,7 @@ interface AppState {
   triggerRequestsRefresh: () => void;
   setVpcs: (vpcs: any[]) => void;
   addVpc: (vpc: any) => void;
+  updateVpc: (id: string, updates: Partial<any>) => void;
   deleteVpc: (id: string) => void;
 }
 const API_BASE = env.auth;
@@ -80,7 +81,7 @@ export const useAppStore = create<AppState>()(
         try {
          const response = await axios.get(`${API_BASE}/api/auth/me`); 
 
-          const user = response?.data?.user;
+          const user = response?.data?.data?.user;
 
           if (!user) {
             set({ authLoading: false });
@@ -167,6 +168,11 @@ export const useAppStore = create<AppState>()(
       setVpcs: (vpcs) => set({ vpcs }),
 
       addVpc: (vpc) => set((state) => ({ vpcs: [vpc, ...state.vpcs] })),
+
+      updateVpc: (id, updates) =>
+        set((state) => ({
+          vpcs: state.vpcs.map((v) => (v.id === id ? { ...v, ...updates } : v)),
+        })),
 
       deleteVpc: (id) =>
         set((state) => ({

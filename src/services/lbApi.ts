@@ -17,6 +17,58 @@ export type TargetGroupListItem = {
   healthCheckProtocol: string;
   healthCheckPort: string;
 };
+
+// Add alongside your existing TgItem / TargetGroupListItem types
+
+export type CreateTgTargetPayload = { instance_id: string; port: number };
+
+export type InstanceItem = {
+  id: string;
+  instanceId: string;
+  name: string;
+  state: string;
+  securityGroups: string;
+  zone: string;
+  subnetId: string;
+  privateIpv4: string;
+};
+
+export type CreateTgPayload = {
+  user_id: number;
+  name: string;
+  protocol: string;
+  port: number;
+  vpc_id: string;
+  region: string;
+  target_type: 'instance' | 'ip' | 'lambda';
+  protocol_version?: 'HTTP1' | 'HTTP2' | 'GRPC';
+  health_check_protocol?: string;
+  health_check_path?: string;
+  targets?: CreateTgTargetPayload[];
+};
+
+export type ManagedTargetGroup = {
+  id: string;
+  user_id: number;
+  name: string;
+  arn: string | null;
+  target_type: string;
+  protocol: string;
+  port: number;
+  protocol_version: string | null;
+  vpc_id: string;
+  region: string;
+  health_check_protocol: string | null;
+  health_check_path: string | null;
+  status: string;
+  is_used:boolean;
+  used_by:{ id: string; name: string }[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateTgResponse = { data: ManagedTargetGroup };
+
 export type CertItem = { arn: string; domain: string; status: string };
 export type EipItem = { allocationId: string; publicIp: string };
 export type AzItem = { name: string; zoneId: string };
@@ -79,13 +131,28 @@ export const lbApi = {
     apiClient.get<{ exists: boolean; loadBalancers: ExistingLbItem[] }>(
       BASE, '/load-balancers/check-existing', { region }
     ),
-  checkProvisioning: (userId: number,  type?: 'application' | 'network') =>
+  checkProvisioning: (userId: number, type?: 'application' | 'network') =>
     apiClient.get<{ exists: boolean; loadBalancer: ProvisioningLbItem | null }>(
       BASE, '/load-balancers/check-provisioning', { user_id: String(userId), ...(type ? { type } : {}) }
     ),
   checkLbName: (name: string, region: string) =>
     apiClient.get<{ exists: boolean }>(BASE, '/load-balancers/check-name', { name, region }),
-
+  // Add inside the lbApi object, near your other target-group methods
+  createTargetGroup: (payload: CreateTgPayload) =>
+    apiClient.post<CreateTgResponse>(BASE, '/target-groups', payload),
+  listManagedTargetGroups: () =>
+    apiClient.get<{ data: ManagedTargetGroup[] }>(BASE, '/target-groups/managed', {}),
+  getManagedTargetGroupById: (id: string) =>
+    apiClient.get<{ data: ManagedTargetGroup & { targets: { instance_id: string; port: number }[] } }>(
+      BASE, `/target-groups/managed/${id}`, {}
+    ),
+  deleteManagedTargetGroup: (id: string) =>
+    apiClient.delete<{ message: string; data: ManagedTargetGroup }>(BASE, `/target-groups/managed/${id}`),
+  // inside lbApi object
+  instances: (region: string, vpcId: string) =>
+    apiClient.get<{ instances: InstanceItem[] }>(BASE, '/instances', { region, vpcId }),
+  checkTgName: (name: string, region: string) =>
+  apiClient.get<{ exists: boolean }>(BASE, '/target-groups/check-name', { name, region }),
 };
 
 export type LbItem = {

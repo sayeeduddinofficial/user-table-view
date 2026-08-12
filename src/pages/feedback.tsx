@@ -29,6 +29,7 @@ import {
   X,
 } from "lucide-react";
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Dialog,
   DialogContent,
@@ -87,10 +88,12 @@ export default function feedback() {
   const [errors, setErrors] = useState({ type: "", priority: "", title: "", description: "" });
   const [viewingFeedbackId, setViewingFeedbackId] = useState<string | null>(null);
   const [viewingFeedbackTitle, setViewingFeedbackTitle] = useState("");
+  const location = useLocation();
+  const isFeedbackRoute = location.pathname === "/feedback";
 
-  const { data: feedbackList = [] } = useMyFeedback();
+  const { data: feedbackList = [] } = useMyFeedback(isFeedbackRoute);
   const submitMutation = useSubmitFeedback();
-  const { data: attachmentItems = [], isLoading: loadingAttachments } = useAttachments(viewingFeedbackId);
+  const { data: attachmentItems = [], isLoading: loadingAttachments } = useAttachments(viewingFeedbackId, isFeedbackRoute && !!viewingFeedbackId);
 
   const handleFileChange = (newFiles: FileList | null) => {
     if (!newFiles) return;

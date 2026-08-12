@@ -36,6 +36,13 @@ export interface DashboardOverviewResponse {
   totalResources: number;
   activeResources: number;
   provisioningResources: number;
+  resourceTrend?: {
+    value: number;
+    display: string;
+    tooltip: string;
+    positive: boolean;
+    showTooltip?: boolean;
+  };
   averageProvisionTime: {
     formatted: string;
     averageMs: number;

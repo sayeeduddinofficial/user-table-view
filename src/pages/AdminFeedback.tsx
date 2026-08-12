@@ -31,6 +31,7 @@ import {
   Download,
 } from "lucide-react";
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 // import { ROLE_LABELS } from "@/types";
 import { useDialog } from "@/components/ui/dialog-context";
 import { useAllFeedback, useAttachments, useReviewFeedback, useDownloadAttachment } from "@/hooks/useFeedback";
@@ -79,9 +80,11 @@ export default function AdminFeedback() {
   const [selectedFeedback, setSelectedFeedback] = useState<FeedbackRow | null>(null);
   const [adminNotes, setAdminNotes] = useState("");
   const [newStatus, setNewStatus] = useState("");
+  const location = useLocation();
+  const isAdminFeedbackRoute = location.pathname === "/admin/feedback";
 
-  const { data: feedbackList = [], isLoading: loading } = useAllFeedback();
-  const { data: attachments = [] } = useAttachments(selectedFeedback?.id ?? null);
+  const { data: feedbackList = [], isLoading: loading } = useAllFeedback(isAdminFeedbackRoute);
+  const { data: attachments = [] } = useAttachments(selectedFeedback?.id ?? null, isAdminFeedbackRoute && !!selectedFeedback?.id);
   const reviewMutation = useReviewFeedback();
   const downloadMutation = useDownloadAttachment();
 

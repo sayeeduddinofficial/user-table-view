@@ -160,20 +160,10 @@ export function QuotaRequestsManagement() {
 
   function canApproveRequest(req: QuotaRequest) {
     if (!currentUser) return false;
-
-    // Super Admin can approve everything
-    if (currentUser.role === "SuperAdmin") {
-      return true;
-    }
-
-    // Admin can approve only USER requests
-    if (
-      currentUser.role === "SplunkOps.Admin" &&
-      req.requested_by_role === "SplunkOps.User"
-    ) {
-      return true;
-    }
-
+    if (currentUser.role === "SuperAdmin") return true;
+    if (currentUser.role === "SplunkOps.Admin" && req.requested_by_role === "SplunkOps.User") return true;
+    // Approver can approve requests where they are the assigned manager
+    if (currentUser.role === "SplunkOps.Approver" && req.manager_email === currentUser.email) return true;
     return false;
   }
 

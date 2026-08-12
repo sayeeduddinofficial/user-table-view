@@ -18,7 +18,6 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
-  subtitle: string;
   data: DataPoint[];
   variant: 'bar' | 'area';
   color: string;
@@ -45,7 +44,7 @@ const SERVICE_COLORS: Record<string, string> = {
   eks: "#EDC948",
 };
 
-export function KpiDetailDialog({ open, onOpenChange, title, subtitle, data, variant, color, prefix = '' }: Props) {
+export function KpiDetailDialog({ open, onOpenChange, title, data, variant, color, prefix = '' }: Props) {
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload?.length) return null;
 
@@ -83,7 +82,6 @@ export function KpiDetailDialog({ open, onOpenChange, title, subtitle, data, var
       <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle className="text-xl font-semibold">{title}</DialogTitle>
-          <p className="text-sm text-muted-foreground mt-1.5">{subtitle}</p>
         </DialogHeader>
         <div className="mt-6 bg-muted/20 rounded-xl p-6 border border-border/40">
           <ResponsiveContainer width="100%" height={360}>
@@ -189,7 +187,7 @@ export function KpiDetailDialog({ open, onOpenChange, title, subtitle, data, var
                     </span>
                   )}
                 />
-                {title === "Total Resources (window)" ? (
+                {title === "Total Resources" ? (
                   <>
                     <Area
                       type="monotone"

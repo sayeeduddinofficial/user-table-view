@@ -12,6 +12,12 @@ export const isSuperAdmin = (role?: Role | string) =>
 export const isAdminUser = (role?: Role | string) =>
   role === "SplunkOps.Admin";
 
+export const isApprover = (role?: Role | string) =>
+  role === "SplunkOps.Approver";
+
+export const canApproveRequests = (role?: Role | string) =>
+  role === "SplunkOps.Admin" || role === "SuperAdmin" || role === "SplunkOps.Approver";
+
 export const canViewDashboard = (role?: Role | string) =>
   role === "SplunkOps.Admin" || role === "SuperAdmin" || role === "SplunkOps.Stakeholder";
 
