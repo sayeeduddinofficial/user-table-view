@@ -7,12 +7,21 @@
  * AuthProvider (in useLogin.tsx) is the single place that calls
  * handleRedirectPromise(). MSAL only allows that promise to be consumed once —
  * if this page consumed it first, AuthProvider would receive null and the
- * backend token exchange would never happen, leaving the page stuck here forever.
+ * backend token exchange would never happen.
  *
- * This component is intentionally a passive loading screen.
- * AuthProvider handles the redirect, exchanges tokens with the backend,
- * sets the user, and navigates away — at which point this page disappears.
+ * This component is a passive loading screen that navigates away once auth
+ * state is resolved:
+ *   - If a user session exists → go to the post-login landing page.
+ *   - If auth finished loading and there is still no user → go to /login.
+ *
+ * This prevents the user from getting stuck on this page when they arrive here
+ * via the browser back button (MSAL's handleRedirectPromise returns null for
+ * an already-consumed auth code, so AuthProvider's Case A never fires, but the
+ * existing localStorage JWT still restores the session — nothing else would
+ * navigate away from /microsoft/redirect).
  */
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";

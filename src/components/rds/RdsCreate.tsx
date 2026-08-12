@@ -295,13 +295,14 @@ export function RdsCreate() {
         <Link to="/aws/rds" className="hover:text-foreground transition-colors">
           RDS
         </Link>
+        <Link to="/aws/rds" className="hover:text-foreground transition-colors">
+          RDS
+        </Link>
         <ChevronRight size={14} />
         <span className="text-foreground">Create DB Cluster</span>
       </div>
 
       <div className="max-w-5xl mx-auto pb-10 px-6 space-y-6">
-
-        {/* Page header */}
         <section className="glass-panel rounded-xl p-6">
           <div className="flex items-center gap-2 mb-2">
             <Layers className="h-5 w-5 text-primary" />
@@ -329,11 +330,10 @@ export function RdsCreate() {
 
           {/* Configuration details collapsible */}
           <button
-            onClick={() => setOpen((v) => !v)}
+            onClick={() => setDetailsOpen((v) => !v)}
             className="w-full flex items-center gap-2 text-lg font-semibold text-foreground hover:text-primary transition-colors"
           >
-            {open ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-
+            {detailsOpen ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
             Configuration Details
           </button>
 
@@ -389,7 +389,6 @@ export function RdsCreate() {
             </div>
           )}
 
-          {/* Pricing note */}
           <p className="text-xs text-muted-foreground mt-5">
             *Aurora Capacity Unit (ACU) pricing is $0.12 per ACU-Hour and
             storage is $0.10 per GB-month.
@@ -410,28 +409,16 @@ export function RdsCreate() {
               id="justification"
               className={`w-full resize-none overflow-y-auto rounded-md border bg-background px-3 py-1 text-sm border-input`}
               placeholder="Provide a brief justification for this RDS request."
-              value={justifications}
-              onChange={(e) => {
-                const value = e.target.value;
-                setJustifications(value);
-
-                // After the field has been blurred once,
-                // validate as the user fixes the input.
-                if (justificationTouched) {
-                  setJustificationError(value.trim().length < 20);
-                }
-              }}
-              onBlur={() => {
-                setJustificationTouched(true);
-                setJustificationError(justifications.trim().length < 20);
-              }}
+              value={form.values.justification}
+              onChange={(e) => form.handleJustificationChange(e.target.value)}
+              onBlur={form.handleJustificationBlur}
               rows={3}
               maxLength={250}
             />
             <div className="flex justify-between items-center">
-              {justificationTouched && justificationError ? (
+              {showJustificationError ? (
                 <div className="text-xs text-red-600">
-                  Business justification must contain at least 20 characters.
+                  Business justification must contain at least {MIN_JUSTIFICATION_LENGTH} characters.
                 </div>
               ) : (
                 <span />
