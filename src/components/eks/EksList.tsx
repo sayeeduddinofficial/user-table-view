@@ -130,7 +130,7 @@ export function EksList() {
       .sort()
       .reverse()[0] ?? "—";
   const activeCount = clusters.filter((c) => c.status === "ACTIVE").length;
-  const provisioning = filtered.filter((c) => c.status === "PENDING").length;
+  // const provisioning = filtered.filter((c) => c.status === "PENDING").length;
 
   const [dialog, setDialog] = useState<{
     icon?: "destroy" | "retry" | "info";
@@ -327,7 +327,7 @@ export function EksList() {
                 </TooltipTrigger>
                 {quotaReached && (
                   <TooltipContent side="top">
-                    <p>Maximum 1 EKS limit reached.</p>
+                    <p>Maximum {MAX_EKS} EKS limit reached.</p>
                   </TooltipContent>
                 )}
               </Tooltip>

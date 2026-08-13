@@ -126,3 +126,20 @@ export async function deleteRdsInstance(requestId: string, instanceIdentifier: s
   );
 }
 
+
+export type RdsQuotaIncreasePayload = {
+  requestedQuota: number;
+  reason: string;
+  approverEmail: string;
+};
+
+export async function requestRdsQuotaIncrease(
+  userId: number | string | undefined,
+  payload: RdsQuotaIncreasePayload
+): Promise<void> {
+  await apiClient.post<{ success: boolean; message?: string }>(
+    env.rds,
+    `/rds-quota/${userId}/request`,
+    { ...payload }
+  );
+}

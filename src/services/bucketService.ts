@@ -100,7 +100,7 @@ export async function fetchBucketsApi(): Promise<BucketItem[]> {
 }
 
 export async function createBucketApi(payload: CreateBucketRequest): Promise<CreateBucketResponse> {
-  return apiClient.post<CreateBucketResponse>(env.bucketService, 'buckets', payload);
+  return apiClient.post<CreateBucketResponse, CreateBucketRequest>(env.bucketService, 'buckets', payload);
 }
 
 export async function deleteBucketApi(requestId: string): Promise<DeleteBucketResponse> {
@@ -117,5 +117,22 @@ export async function checkBucketNameApi(
     `check-name?bucketName=${encodeURIComponent(
       bucketName
     )}&region=${region}&namespace=${namespace}`
+  );
+}
+
+export interface S3QuotaIncreasePayload {
+  requestedQuota: number;
+  reason: string;
+  approverEmail: string;
+}
+
+export async function requestS3QuotaIncrease(
+  userId: number | string | undefined,
+  payload: S3QuotaIncreasePayload
+): Promise<void> {
+  await apiClient.post<{ success?: boolean; message?: string }>(
+    env.bucketService,
+    `s3-quota/${userId}/request`,
+    { ...payload }
   );
 }

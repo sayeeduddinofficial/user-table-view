@@ -14,7 +14,7 @@ export function RdsDetail() {
   const { cluster, loading } = useRdsCluster(requestId);
   const [tab, setTab] = useState<DetailTab>("connectivity");
   const [connectUsing, setConnectUsing] = useState<ConnectUsing>("code");
-  const [psqlPlatform, setPsqlPlatform] = useState<"macos" | "linux" | "windows">("macos");
+  const [psqlPlatform, setPsqlPlatform] = useState<"macos" | "amazon-linux" | "ubuntu" | "rhel" | "suse" | "debian" | "windows">("macos");
   // const [connectTo, setConnectTo] = useState("Writer");
   const [showTokenDialog, setShowTokenDialog] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -58,9 +58,11 @@ export function RdsDetail() {
         masterUsername: cluster.master_username ?? "",
         port: instance.port ?? cluster.port ?? 5432,
         availabilityZone: instance.availability_zone ?? "—",
-        subnets: Array.isArray(instance.subnets_json) ? instance.subnets_json as string[] : [],
+        subnets: Array.isArray(instance.subnets_json)
+          ? instance.subnets_json.map((s) => s.SubnetIdentifier)
+          : [],
         certificateAuthority: instance.ca_certificate_identifier ?? "",
-        certificateAuthorityDate: instance.ca_certificate_expiry ?? "",
+        certificateAuthorityDate: String(instance.ca_certificate_expiry ?? ""),
       }
     : {
         endpoint: cluster.endpoint ?? "",
@@ -72,7 +74,7 @@ export function RdsDetail() {
         availabilityZone: primaryInstance?.availability_zone ?? "—",
         subnets: primaryInstance?.availability_zone ? [primaryInstance.availability_zone] : [],
         certificateAuthority: primaryInstance?.ca_certificate_identifier ?? "",
-        certificateAuthorityDate: cluster.created_at ?? "",
+        certificateAuthorityDate: String(cluster.created_at ?? ""),
       };
 
   const endpoints = isInstance ? [] : [
@@ -131,7 +133,11 @@ export function RdsDetail() {
                   onClick={() => copyToClipboard(mockToken, "token")}
                   className="shrink-0 p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
                 >
-                  {copiedKey === "token" ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                  {copiedKey === "token" ? (
+                    <Check size={14} className="text-green-500" />
+                  ) : (
+                    <Copy size={14} />
+                  )}
                 </button>
               </div>
             </div>
@@ -263,17 +269,27 @@ export function RdsDetail() {
                     </label>
                     <Select
                       value={psqlPlatform}
-                      onValueChange={(v) =>
-                        setPsqlPlatform(v as "macos" | "linux" | "windows")
-                      }
+                     onValueChange={(v) => setPsqlPlatform(v as "macos" | "amazon-linux" | "ubuntu" | "rhel" | "suse" | "debian" | "windows")}
                     >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="macos">psql (macOS)</SelectItem>
-                        <SelectItem value="linux">psql (Linux)</SelectItem>
-                        <SelectItem value="windows">psql (Windows)</SelectItem>
+                        <SelectItem value="amazon-linux">
+                          psql (Amazon Linux)
+                        </SelectItem>
+                        <SelectItem value="ubuntu">
+                          psql (Ubuntu 26.04)
+                        </SelectItem>
+                        <SelectItem value="rhel">psql (RHEL 10)</SelectItem>
+                        <SelectItem value="suse">
+                          psql (SUSE Linux Enterprise Server 16)
+                        </SelectItem>
+                        <SelectItem value="debian">psql (Debian 13)</SelectItem>
+                        <SelectItem value="windows">
+                          psql (Windows Server 2025)
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -300,6 +316,19 @@ export function RdsDetail() {
                     Follow the steps below to paste the code of each step in
                     your tool and run the commands.
                   </p>
+                  <div className="flex gap-2.5 rounded-lg border border-blue-500/30 bg-blue-500/[0.04] px-3 py-2.5 mb-5">
+                    <Info
+                      size={16}
+                      className="text-blue-400 shrink-0 mt-[2px]"
+                    />
+                    <p className="text-sm leading-relaxed font-normal text-muted-foreground">
+                      Use any{" "}
+                      <span className="font-semibold text-foreground">
+                        PrudentOps-provisioned VM
+                      </span>{" "}
+                      to connect to this RDS cluster.
+                    </p>
+                  </div>
                   <div className="space-y-4">
                     {getConnectionSteps(
                       psqlPlatform,
@@ -325,7 +354,11 @@ export function RdsDetail() {
                               }
                               className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
                             >
-                              {copiedKey === `step-${idx}` ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                              {copiedKey === `step-${idx}` ? (
+                                <Check size={14} className="text-green-500" />
+                              ) : (
+                                <Copy size={14} />
+                              )}
                             </button>
                           </div>
                           <pre className="bg-muted/20 border border-border rounded p-3 font-mono text-xs text-foreground overflow-x-auto whitespace-pre-wrap">
@@ -410,10 +443,20 @@ export function RdsDetail() {
                           >
                             <td className="px-5 py-3">
                               <div className="flex items-center gap-2">
-                                {copiedKey === `ep-${idx}`
-                                  ? <Check size={14} className="text-green-500 shrink-0" />
-                                  : <Copy size={14} className="text-muted-foreground cursor-pointer hover:text-primary shrink-0" onClick={() => copyToClipboard(ep.name, `ep-${idx}`)} />
-                                }
+                                {copiedKey === `ep-${idx}` ? (
+                                  <Check
+                                    size={14}
+                                    className="text-green-500 shrink-0"
+                                  />
+                                ) : (
+                                  <Copy
+                                    size={14}
+                                    className="text-muted-foreground cursor-pointer hover:text-primary shrink-0"
+                                    onClick={() =>
+                                      copyToClipboard(ep.name, `ep-${idx}`)
+                                    }
+                                  />
+                                )}
                                 <span className="font-mono text-xs text-primary">
                                   {ep.name}
                                 </span>
@@ -486,10 +529,23 @@ export function RdsDetail() {
                         label="Amazon Resource Name (ARN)"
                         value={
                           <div className="flex items-start gap-1">
-                            {copiedKey === "instance-arn"
-                              ? <Check size={12} className="text-green-500 mt-0.5 shrink-0" />
-                              : <Copy size={12} className="text-muted-foreground cursor-pointer hover:text-primary mt-0.5 shrink-0" onClick={() => copyToClipboard(instance.instance_arn ?? "", "instance-arn")} />
-                            }
+                            {copiedKey === "instance-arn" ? (
+                              <Check
+                                size={12}
+                                className="text-green-500 mt-0.5 shrink-0"
+                              />
+                            ) : (
+                              <Copy
+                                size={12}
+                                className="text-muted-foreground cursor-pointer hover:text-primary mt-0.5 shrink-0"
+                                onClick={() =>
+                                  copyToClipboard(
+                                    instance.instance_arn ?? "",
+                                    "instance-arn",
+                                  )
+                                }
+                              />
+                            )}
                             <span className="text-xs  break-all">
                               {instance.instance_arn ?? "—"}
                             </span>
@@ -547,7 +603,7 @@ export function RdsDetail() {
                       />
                       <ConfigField
                         label="Resource ID"
-                        value={cluster.resource_id ?? "—"}
+                        value={String(cluster.resource_id ?? "—")}
                       />
                       <ConfigField
                         label="Cluster storage configuration"
@@ -557,10 +613,23 @@ export function RdsDetail() {
                         label="Amazon Resource Name (ARN)"
                         value={
                           <div className="flex items-start gap-1">
-                            {copiedKey === "cluster-arn"
-                              ? <Check size={12} className="text-green-500 mt-0.5 shrink-0" />
-                              : <Copy size={12} className="text-muted-foreground cursor-pointer hover:text-primary mt-0.5 shrink-0" onClick={() => copyToClipboard(cluster.cluster_arn ?? "", "cluster-arn")} />
-                            }
+                            {copiedKey === "cluster-arn" ? (
+                              <Check
+                                size={12}
+                                className="text-green-500 mt-0.5 shrink-0"
+                              />
+                            ) : (
+                              <Copy
+                                size={12}
+                                className="text-muted-foreground cursor-pointer hover:text-primary mt-0.5 shrink-0"
+                                onClick={() =>
+                                  copyToClipboard(
+                                    cluster.cluster_arn ?? "",
+                                    "cluster-arn",
+                                  )
+                                }
+                              />
+                            )}
                             <span className="text-xs break-all">
                               {cluster.cluster_arn ?? "—"}
                             </span>
@@ -742,7 +811,7 @@ export function RdsDetail() {
                       value={
                         cluster.kms_key_id ? (
                           <span className="text-primary text-xs">
-                            {cluster.kms_key_id}
+                            {String(cluster.kms_key_id)}
                           </span>
                         ) : (
                           "AWS owned KMS key"
@@ -798,7 +867,6 @@ function FieldWithCopy({ label, value }: { label: string; value: string }) {
 
 function AdditionalConfigurations({
   connectivityData,
-  copyToClipboard,
 }: {
   connectivityData: { endpoint: string; port: number; availabilityZone: string; subnets: string[]; certificateAuthority: string; certificateAuthorityDate: string };
   copyToClipboard: (text: string, key: string) => void;
@@ -876,7 +944,7 @@ function ConfigField({ label, value }: { label: string; value: React.ReactNode }
 
 
 function getConnectionSteps(
-  platform: "macos" | "linux" | "windows",
+  platform: "macos" | "amazon-linux" | "ubuntu" | "rhel" | "suse" | "debian" | "windows",
   endpoint: string,
   masterUsername: string,
   databaseName: string,
@@ -884,15 +952,39 @@ function getConnectionSteps(
   secretArn: string,
   region: string
 ): { label: string; code: string }[] {
-  const isWindows = platform === "windows";
-
   const downloadCert = {
     label: "Download SSL certificate",
     code: "curl -o global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem",
   };
 
-  if (isWindows) {
+  const setHost = {
+    label: "Set RDS host",
+    code: `export RDSHOST="${endpoint}"`,
+  };
+
+  const connectPsql = {
+    label: "Connect to RDS",
+    code: `psql "host=$RDSHOST port=${port} dbname=${databaseName} user=${masterUsername} sslmode=verify-full sslrootcert=./global-bundle.pem password=$(aws secretsmanager get-secret-value --secret-id '${secretArn}' --region ${region} --query SecretString --output text | jq -r '.password')"`,
+  };
+
+  if (platform === "windows") {
     return [
+      {
+      label: "Install PostgreSQL 17 or later",
+      code: "psql --version",
+    },
+    {
+      label: "Install AWS CLI",
+      code: `msiexec.exe /i https://awscli.amazonaws.com/AWSCLIV2.msi`,
+    },
+    {
+      label: "Add AWS CLI to PATH",
+      code: `$awsPath = "C:\\Users\\Administrator\\AppData\\Local\\Programs\\Amazon\\AWSCLIV2"\n[Environment]::SetEnvironmentVariable(\n    "Path",\n    [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + $awsPath,\n    "Machine"\n)`,
+    },
+    {
+      label: "Restart PowerShell",
+      code: "aws --version",
+    },
       downloadCert,
       {
         label: "Connect using psql",
@@ -901,7 +993,151 @@ function getConnectionSteps(
     ];
   }
 
-  // macOS and Linux — same snippet
+  if (platform === "amazon-linux") {
+    return [
+      {
+        label: "Update system packages",
+        code: "sudo dnf update -y\nsudo dnf upgrade -y",
+      },
+      {
+        label: "Verify AWS CLI",
+        code: "aws --version",
+      },
+      {
+        label: "Install PostgreSQL client",
+        code: "sudo dnf install -y postgresql17",
+      },
+      {
+        label: "Verify PostgreSQL",
+        code: "psql --version",
+      },
+      downloadCert,
+      setHost,
+      connectPsql,
+    ];
+  }
+
+  if (platform === "ubuntu") {
+    return [
+      {
+        label: "Update system packages",
+        code: "sudo apt update -y\nsudo apt upgrade -y",
+      },
+       {
+      label: "Install AWS CLI",
+      code: "sudo apt install -y awscli jq",
+    },
+      {
+        label: "Verify AWS CLI",
+        code: "aws --version",
+      },
+      {
+        label: "Install PostgreSQL client",
+        code: "sudo apt install -y postgresql-client",
+      },
+      {
+        label: "Verify PostgreSQL",
+        code: "psql --version",
+      },
+      downloadCert,
+      setHost,
+      connectPsql,
+    ];
+  }
+
+  if (platform === "rhel") {
+    return [
+      {
+        label: "Update system packages",
+        code: "sudo dnf update -y\nsudo dnf upgrade -y",
+      },
+      {
+      label: "Install AWS CLI",
+      code: "sudo dnf install -y awscli jq",
+    },
+      {
+        label: "Verify AWS CLI",
+        code: "aws --version",
+      },
+      {
+        label: "Install PostgreSQL client",
+        code: "sudo dnf install -y postgresql18-server",
+      },
+      {
+        label: "Verify PostgreSQL",
+        code: "psql --version",
+      },
+      downloadCert,
+      setHost,
+      connectPsql,
+    ];
+  }
+
+  if (platform === "suse") {
+    return [
+      {
+      label: "Refresh package repositories",
+      code: "sudo zypper refresh",
+    },
+    {
+      label: "Install required tools",
+      code: "sudo zypper install -y curl unzip jq",
+    },
+    {
+      label: "Download AWS CLI",
+      code: `curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"`,
+    },
+    {
+      label: "Extract AWS CLI",
+      code: "unzip awscliv2.zip",
+    },
+    {
+      label: "Install AWS CLI",
+      code: "sudo ./aws/install",
+    },
+    {
+      label: "Verify AWS CLI",
+      code: "aws --version",
+    },
+    {
+      label: "Install PostgreSQL client",
+      code: "sudo zypper install -y postgresql17",
+    },
+    {
+      label: "Verify PostgreSQL",
+      code: "psql --version",
+    },
+      downloadCert,
+      setHost,
+      connectPsql,
+    ];
+  }
+
+  if (platform === "debian") {
+    return [
+      {
+      label: "Update system packages",
+      code: "sudo apt update\nsudo apt upgrade -y",
+    },
+    {
+      label: "Verify AWS CLI",
+      code: "aws --version",
+    },
+    {
+      label: "Install PostgreSQL client and jq",
+      code: "sudo apt install -y postgresql-client jq",
+    },
+    {
+      label: "Verify PostgreSQL",
+      code: "psql --version",
+    },
+      downloadCert,
+      setHost,
+      connectPsql,
+    ];
+  }
+
+  // macOS
   return [
     downloadCert,
     {

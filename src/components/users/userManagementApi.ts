@@ -82,28 +82,6 @@ export async function fetchUsersApi(): Promise<User[]> {
   return users.map(normalizeUser);
 }
 
-// ── Create user ──────────────────────────────────────────────────────────────
-  // export interface CreateUserPayload {
-  //   displayName: string;
-  //   email: string;
-  //   entraObjectId?: string;
-  //   role: string;
-  //   maxVMs: number;
-  //   allowedInstanceTypes: string[];
-  //   allowedCategories: number[];
-  //   timeZone: string;
-  //   workStartTime: string;
-  //   workEndTime: string;
-  // }
-
-// export async function createUserApi(payload: CreateUserPayload): Promise<CreateUserResponse> {
-//   return apiClient.post<CreateUserResponse>(
-//     env.userManagement,
-//     "/api/users/users",
-//     payload
-//   );
-// }
-
 // ── Update user ──────────────────────────────────────────────────────────────
 export interface UpdateUserPayload {
   displayName?: string;
@@ -130,36 +108,3 @@ export async function updateUserApi(userId: string, payload: UpdateUserPayload):
     payload
   );
 }
-
-// ── Delete user ──────────────────────────────────────────────────────────────
-// export async function deleteUserApi(userId: string): Promise<DeleteUserResponse> {
-//   return apiClient.delete<DeleteUserResponse>(
-//     env.userManagement,
-//     `/api/users/users/${userId}`
-//   );
-// }
-
-// ── Reinvite user ────────────────────────────────────────────────────────────
-// export async function reinviteUserApi(userId: string): Promise<ReinviteUserResponse> {
-//   const response = await apiClient.post<ApiResponse<{ emailSent: boolean }>>(
-//     env.userManagement,
-//     `/api/users/users/${userId}/reinvite`
-//   );
-  
-//   return {
-//     success: true,
-//     message: response.message || "Reinvitation email sent",
-//     emailSent: response.data?.emailSent ?? false,
-//   };
-// }
-
-// ── Deactivate / Reactivate ──────────────────────────────────────────────────
-// export async function setUserActiveApi(
-//   entraObjectId: string,
-//   action: "deactivate" | "reactivate",
-// ): Promise<ToggleUserActiveResponse> {
-//   return apiClient.post<ToggleUserActiveResponse>(
-//     env.userManagement,
-//     `/api/users/users/${entraObjectId}/${action}`
-//   );
-// }

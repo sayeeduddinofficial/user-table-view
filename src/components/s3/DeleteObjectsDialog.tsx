@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { AlertTriangle, ExternalLink, Folder, FileText, Search } from "lucide-react";
+import { AlertTriangle, Folder, FileText, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {

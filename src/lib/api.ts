@@ -135,15 +135,15 @@ class ApiClient {
     }
   }
 
-  async post<T>(
+  async post<T, B = Record<string, unknown>>(
     baseUrl: string,
     path: string,
-    params?: Record<string, string>,
+    body?: B,
   ): Promise<T> {
     try {
       const headers = await this.getAuthHeader();
 
-      const response = await axios.post<T>(`${baseUrl}${path}`, params, {
+      const response = await axios.post<T>(`${baseUrl}${path}`, body, {
         headers,
       });
 
@@ -152,7 +152,7 @@ class ApiClient {
       return this.handleAxiosError(error, async () => {
         const headers = await this.getAuthHeader();
 
-        const response = await axios.post<T>(`${baseUrl}${path}`, params, {
+        const response = await axios.post<T>(`${baseUrl}${path}`, body, {
           headers,
         });
 
@@ -161,15 +161,15 @@ class ApiClient {
     }
   }
 
-  async patch<T>(
+  async patch<T, B = Record<string, unknown>>(
     baseUrl: string,
     path: string,
-    params?: Record<string, string>,
+    body?: B,
   ): Promise<T> {
     try {
       const headers = await this.getAuthHeader();
 
-      const response = await axios.patch<T>(`${baseUrl}${path}`, params, {
+      const response = await axios.patch<T>(`${baseUrl}${path}`, body, {
         headers,
       });
 
@@ -178,7 +178,7 @@ class ApiClient {
       return this.handleAxiosError(error, async () => {
         const headers = await this.getAuthHeader();
 
-        const response = await axios.patch<T>(`${baseUrl}${path}`, params, {
+        const response = await axios.patch<T>(`${baseUrl}${path}`, body, {
           headers,
         });
 
@@ -187,15 +187,15 @@ class ApiClient {
     }
   }
 
-  async put<T>(
+  async put<T, B = Record<string, unknown>>(
     baseUrl: string,
     path: string,
-    params?: Record<string, string>,
+    body?: B,
   ): Promise<T> {
     try {
       const headers = await this.getAuthHeader();
 
-      const response = await axios.put<T>(`${baseUrl}${path}`, params, {
+      const response = await axios.put<T>(`${baseUrl}${path}`, body, {
         headers,
       });
 
@@ -204,7 +204,7 @@ class ApiClient {
       return this.handleAxiosError(error, async () => {
         const headers = await this.getAuthHeader();
 
-        const response = await axios.put<T>(`${baseUrl}${path}`, params, {
+        const response = await axios.put<T>(`${baseUrl}${path}`, body, {
           headers,
         });
 

@@ -1,5 +1,14 @@
 import type { Role } from "@/types";
 
+export const ROLE_LABELS: Record<string, string> = {
+  SuperAdmin: "Super Admin",
+  "SplunkOps.Admin": "Admin",
+  "SplunkOps.User": "User",
+  "SplunkOps.Auditor": "Auditor",
+  "SplunkOps.Stakeholder": "Stakeholder",
+  "SplunkOps.Approver": "Approver",
+};
+
 export const isAdmin = (role?: Role | string) =>
   role === "SplunkOps.Admin" || role === "SuperAdmin";
 

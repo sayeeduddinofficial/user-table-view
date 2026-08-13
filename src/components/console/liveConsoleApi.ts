@@ -114,6 +114,7 @@ export async function fetchActiveRequestsApi(): Promise<ActiveRequest[]> {
 // fall back to vm-request-service's generic lookup below.
 interface ServiceEndpoints {
   base: string;
+  logsBase?: string;
   details?: (requestId: string) => string;
   logs?: (requestId: string, operation?: string) => string;
   download?: (requestId: string) => string;
@@ -180,7 +181,8 @@ const SERVICE_ENDPOINTS: Record<string, ServiceEndpoints> = {
   },
   "lb-cli-terminate-service": {
     base: env.lbService,
-    logs: (id) => `/load-balancers/by-request/${id}/logs`,
+    logsBase: env.vmRequest,
+    logs: (id) => `/api/vm-requests/${id}/logs`,
     live: (id) => `/load-balancers/by-request/${id}/sdk-terminate/logs/live`,
   },
 
@@ -257,7 +259,7 @@ export async function fetchRequestLogsApi(
     }
 
     const response = await apiClient.get<any>(
-      endpoints.base,
+      endpoints.logsBase ?? endpoints.base,
       endpoints.logs(requestId)
     );
     // s3-service returns { requestId, logs, status } directly (not wrapped in { data })
@@ -332,7 +334,7 @@ export async function downloadRequestLogsApi(requestId: string, service?: string
     const downloadPath = endpoints.download
       ? endpoints.download(requestId)
       : `${endpoints.logs!(requestId)}/download`;
-    const downloadUrl = `${endpoints.base}${downloadPath}`;
+    const downloadUrl = `${endpoints.logsBase ?? endpoints.base}${downloadPath}`;
     
     const headers = await apiClient.getAuthHeaders();
     const response = await fetch(downloadUrl, { headers });

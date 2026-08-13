@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ChevronRight, RefreshCw } from "lucide-react";
+import { ChevronRight, Plug, RefreshCw } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { Button } from "@/components/ui/button";
 import { useDialog } from "@/components/ui/dialog-context";
@@ -12,6 +12,7 @@ import { ResourcesTab } from "./ResourcesTab";
 import { TagsTab } from "./TagsTab";
 import { EMPTY_VALUE, Field, StatusText } from "./eksShared";
 import { formatMetric, formatSupportPeriod } from "./eksUtils";
+import { EksConnectDialog } from "./EksConnectDialog";
 import type { DetailTab, EksClusterDetail } from "./eksTypes";
 
 export type { EksClusterDetail } from "./eksTypes";
@@ -42,6 +43,7 @@ export function EksDetails({ eksId: propId, embedded = false }: EksDetailsProps)
   const [tab, setTab] = useState<DetailTab>("overview");
   const [cluster, setCluster] = useState<EksClusterDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
 
   const { alert } = useDialog();
 
@@ -96,17 +98,37 @@ export function EksDetails({ eksId: propId, embedded = false }: EksDetailsProps)
           <h1 className="text-lg font-semibold">
             {cluster?.cluster_name ?? clusterName}
           </h1>
-          <Button
-            variant="outline"
-            size="icon"
-            className="rounded-full shrink-0"
-            onClick={handleRefresh}
-            disabled={loading}
-            aria-label="Refresh cluster details"
-          >
-            <RefreshCw size={14} />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              className="rounded-full shrink-0"
+              onClick={handleRefresh}
+              disabled={loading}
+              aria-label="Refresh cluster details"
+            >
+              <RefreshCw size={14} />
+            </Button>
+            <Button
+              className="shrink-0"
+              disabled={!cluster}
+              onClick={() => setConnectOpen(true)}
+            >
+              <Plug size={14} className="mr-1.5" />
+              Connect
+            </Button>
+          </div>
         </div>
+
+        {cluster && (
+          <EksConnectDialog
+            open={connectOpen}
+            onOpenChange={setConnectOpen}
+            clusterName={cluster.cluster_name}
+            region={cluster.region ?? ""}
+            kubernetesVersion={cluster.kubernetes_version}
+          />
+        )}
 
         {loading && (
           <div className="text-sm text-muted-foreground">

@@ -38,7 +38,7 @@ const MAX_RDS_QUOTA = 10;
 export function RdsQuotaIncreaseDialog({
     open, onOpenChange, currentMaxRds, usedRds,
     requestedquota, setrequestedquota, reason, setreason,
-    submitquota, quotaError, setQuotaError, touched, setTouched,
+    submitquota, quotaError, setQuotaError, setTouched,
     isMAxREached, onSubmit,
 }: Props) {
     // Use the new manager hook that handles both active managers and Super Admin fallback

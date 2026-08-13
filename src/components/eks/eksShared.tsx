@@ -42,20 +42,27 @@ export function StatusText({ status }: { status?: string | null }) {
   );
 }
 
-export function CopyText({ text }: { text: string }) {
+// Shared copy-to-clipboard behavior — one place for the "copied" flash
+// state + timeout logic, reused by CopyText and CommandBlock below.
+export function useCopyToClipboard(resetDelayMs = 1500) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!copied) return;
-
-    const timeout = window.setTimeout(() => setCopied(false), 1500);
+    const timeout = window.setTimeout(() => setCopied(false), resetDelayMs);
     return () => window.clearTimeout(timeout);
-  }, [copied]);
+  }, [copied, resetDelayMs]);
 
-  const handleCopy = () => {
+  const copy = (text: string) => {
     navigator.clipboard.writeText(text);
     setCopied(true);
   };
+
+  return { copied, copy };
+}
+
+export function CopyText({ text }: { text: string }) {
+  const { copied, copy } = useCopyToClipboard();
 
   return (
     <span className="inline-flex items-start gap-1.5">
@@ -64,7 +71,7 @@ export function CopyText({ text }: { text: string }) {
       ) : (
         <button
           type="button"
-          onClick={handleCopy}
+          onClick={() => copy(text)}
           aria-label="Copy to clipboard"
           className="mt-1 shrink-0 text-muted-foreground hover:text-foreground"
         >
@@ -73,6 +80,172 @@ export function CopyText({ text }: { text: string }) {
       )}
       <span className="break-all">{text}</span>
     </span>
+  );
+}
+
+/** Numbered step badge used to label sections inside multi-step flows (e.g. Connect dialog). */
+export function StepBadge({
+  step,
+  title,
+}: {
+  step: number;
+  title: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 mb-2.5">
+      <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-blue-500/10 text-[11px] font-semibold text-blue-400">
+        {step}
+      </span>
+      <span className="text-xs font-semibold uppercase tracking-wide text-foreground">
+        {title}
+      </span>
+    </div>
+  );
+}
+
+// Quoted where the family name contains a space — unquoted multi-word font
+// names are invalid CSS and get silently dropped by some browsers.
+const MONO_FONT_STACK =
+  "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace";
+
+/**
+ * A titled, copyable, terminal-styled command block.
+ * Used by the EKS Connect dialog for every install/verification command,
+ * so OS-specific content can vary while the chrome stays identical.
+ */
+export function CommandBlock({
+  label,
+  code,
+  icon,
+}: {
+  label: string;
+  code: string;
+  icon?: React.ReactNode;
+}) {
+  const { copied, copy } = useCopyToClipboard();
+
+  return (
+   <div
+  className="
+    overflow-hidden
+    rounded-lg
+    border
+
+    border-gray-200
+    bg-white
+
+    dark:border-[#202631]
+    dark:bg-[#0e1219]
+  "
+>
+      {/* Command title */}
+      <div className="flex items-center justify-between 
+    bg-white
+
+    dark:border-[#202631]
+    dark:bg-[#0e1219] px-3 py-2">
+        <div className="flex items-center gap-2 text-xs font-medium text-foreground">
+          {icon}
+          <span>{label}</span>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => copy(code)}
+          className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          {copied ? (
+            <>
+              <Check size={12} className="text-success" />
+              Copied
+            </>
+          ) : (
+            <>
+              <Copy size={12} />
+              Copy
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Terminal */}
+      <pre
+        className="
+  m-0
+  overflow-x-auto
+  whitespace-pre-wrap
+  break-all
+  rounded-md
+  px-3
+  py-2.5
+  text-xs
+  leading-relaxed
+
+  bg-gray-50
+  text-gray-700
+
+  dark:bg-[#0d1118]
+  dark:text-muted-foreground
+"
+        style={{ fontFamily: MONO_FONT_STACK }}
+      >
+        <code style={{ fontFamily: MONO_FONT_STACK }}>{code}</code>
+      </pre>
+    </div>
+  );
+}
+
+/**
+ * A compact command row — just the code and a copy icon, no separate title
+ * bar. Used inside NumberedStep, where the step title is already shown above
+ * the command, so repeating it in a CommandBlock-style header would be redundant.
+ */
+export function CodeBlock({ code }: { code: string }) {
+  const { copied, copy } = useCopyToClipboard();
+
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-lg border border-[#202631] bg-[#0e1219] px-3 py-2.5">
+      <pre
+        className="m-0 flex-1 overflow-x-auto whitespace-pre-wrap break-all text-xs leading-relaxed text-muted-foreground"
+        style={{ fontFamily: MONO_FONT_STACK }}
+      >
+        <code style={{ fontFamily: MONO_FONT_STACK }}>{code}</code>
+      </pre>
+      <button
+        type="button"
+        onClick={() => copy(code)}
+        aria-label="Copy command"
+        className="mt-0.5 shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+      >
+        {copied ? <Check size={14} className="text-success" /> : <Copy size={14} />}
+      </button>
+    </div>
+  );
+}
+
+/** One individually numbered setup step: "N. Title" + optional note + a single command. */
+export function NumberedStep({
+  index,
+  title,
+  note,
+  code,
+}: {
+  index: number;
+  title: string;
+  note?: string;
+  code: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-baseline gap-2">
+        <span className="text-xs font-semibold text-blue-400 shrink-0">{index}.</span>
+        <span className="text-sm font-medium text-foreground">{title}</span>
+      </div>
+      {note && <p className="text-xs text-muted-foreground pl-5">{note}</p>}
+      <div className="pl-5">
+        <CodeBlock code={code} />
+      </div>
+    </div>
   );
 }
 

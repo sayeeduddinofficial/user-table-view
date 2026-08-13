@@ -1,28 +1,19 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useDialog } from "@/components/ui/dialog-context";
-import { Database, Lock, RefreshCw, Search, Trash2, History, Monitor, ArrowUpCircle } from "lucide-react";
+import { Database, Lock, RefreshCw, Search, Trash2, History, ArrowUpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Loader } from "@/components/common/Loader";
-import { S3Bucket, encryptionLabel, regionLabel } from "@/utils/s3.utils";
-import { CopyIconButton } from "@/components/s3/shared";
+import { S3Bucket, encryptionLabel, formatS3Date, regionLabel } from "@/utils/s3.utils";
+import { CopyIconButton, StatCard } from "@/components/s3/shared";
 import { useAppStore } from "@/store/appStore";
 import { S3QuotaIncreaseDialog } from "@/components/s3/S3QuotaIncreaseDialog";
-import { env } from "@/lib/env";
-import { getClientIp } from "@/utils/getClientIP";
+import { useS3Quota } from "@/hooks/useS3Quota";
 
-function formatDate(value?: string): string {
-  const date = value ? new Date(value) : new Date();
-  if (Number.isNaN(date.valueOf())) return "—";
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(date);
-}
+const MIN_SPIN_MS = 500;
 
 export function BucketsTable({
   buckets, loading, onDelete, onRefresh,
@@ -37,25 +28,16 @@ export function BucketsTable({
   const currentUser = useAppStore((s) => s.currentUser);
   const refreshCurrentUser = useAppStore((s) => s.refreshCurrentUser);
   useEffect(() => {
-   if (!currentUser) refreshCurrentUser();
+    refreshCurrentUser();
   }, []);
   const MAX_BUCKETS = currentUser?.maxBuckets ?? 1;
   const userBucketCount = buckets.filter(
-    (b: any) =>
-      Number(b.userId) === Number(currentUser?.id) ||
-      Number(b.user_id) === Number(currentUser?.id)
+    (b) => Number(b.userId) === Number(currentUser?.id)
   ).length;
   const hasReachedQuota = userBucketCount >= MAX_BUCKETS;
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
-  const [showQuotaDialog, setShowQuotaDialog] = useState(false);
-  const [requestedquota, setrequestedquota] = useState(0);
-  const [reason, setreason] = useState("");
-  const [submitquota, setsubmitquota] = useState(false);
-  const [quotaError, setQuotaError] = useState("");
-  const [touched, setTouched] = useState(false);
-  console.log(currentUser);
-  const MIN_SPIN_MS = 500;
+  const quota = useS3Quota(MAX_BUCKETS);
   const handleRefresh = async () => {
     setRefreshing(true);
     const start = Date.now();
@@ -93,18 +75,6 @@ export function BucketsTable({
     ),
   };
 
-  const statusBadge = (r: S3Bucket) => {
-    const status = r.meta.status?.toUpperCase();
-    if (status === "FAILED") {
-      return <Badge variant="outline" className="bg-destructive/15 text-destructive border-destructive/30">Failed</Badge>;
-    }
-    if (status === "PENDING" || status === "PROVISIONING") {
-      return <Badge variant="outline" className="bg-blue-500/15 text-blue-400 border-blue-500/30">Provisioning</Badge>;
-    }
-
-    return <Badge variant="outline" className="bg-success/15 text-success border-success/30">Completed</Badge>;
-  };
-
   return (
     <div className="space-y-4">
       {/* Stat cards */}
@@ -134,7 +104,7 @@ export function BucketsTable({
             variant="outline"
             size="sm"
             className="ml-auto border-primary text-primary bg-primary/10 text-xs whitespace-nowrap hover:bg-primary hover:text-white"
-            onClick={() => setShowQuotaDialog(true)}
+            onClick={() => quota.setOpen(true)}
           >
             <ArrowUpCircle className="h-3.5 w-3.5 mr-1" />
             Request Increase
@@ -247,9 +217,8 @@ export function BucketsTable({
                     <td className="px-5 py-4 whitespace-nowrap text-muted-foreground ">{regionLabel(r.region)}</td>
 
                     <td className="px-5 py-4 whitespace-nowrap text-muted-foreground">
-                      {formatDate(r.createdAt)}
+                      {formatS3Date(r.createdAt)}
                     </td>
-                    {/* <td className="px-5 py-4 whitespace-nowrap">{statusBadge(r)}</td> */}
                     <td className="px-5 py-4 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">
                         <CopyIconButton
@@ -277,89 +246,22 @@ export function BucketsTable({
         </div>
       </div>
       <S3QuotaIncreaseDialog
-        open={showQuotaDialog}
-        onOpenChange={setShowQuotaDialog}
+        open={quota.open}
+        onOpenChange={quota.setOpen}
         currentMaxBuckets={MAX_BUCKETS}
         usedBuckets={userBucketCount}
-        requestedquota={requestedquota}
-        setrequestedquota={setrequestedquota}
-        reason={reason}
-        setreason={setreason}
-        submitquota={submitquota}
-        quotaError={quotaError}
-        setQuotaError={setQuotaError}
-        touched={touched}
-        setTouched={setTouched}
+        requestedquota={quota.requestedQuota}
+        setrequestedquota={quota.setRequestedQuota}
+        reason={quota.reason}
+        setreason={quota.setReason}
+        submitquota={quota.submitting}
+        quotaError={quota.quotaError}
+        setQuotaError={quota.setQuotaError}
+        touched={quota.touched}
+        setTouched={quota.setTouched}
         isMAxREached={false}
-        onSubmit={async (approverEmail) => {
-          if (!currentUser?.id) return;
-
-          try {
-            setsubmitquota(true);
-            const token = localStorage.getItem("token");
-            const response = await fetch(
-              `${env.bucketService}s3-quota/${currentUser?.id}/request`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${token}`,
-                  "x-client-ip": (await getClientIp()) || "",
-                },
-                body: JSON.stringify({
-                  requestedQuota: requestedquota - MAX_BUCKETS,
-                  reason,
-                  approverEmail,
-                }),
-              }
-            );
-
-            const data = await response.json();
-
-            if (!response.ok) {
-              throw new Error(
-                data?.message ||
-                data?.error ||
-                "Failed to submit S3 quota request"
-              );
-            }
-
-            alert({
-              title: "S3 quota request submitted successfully",
-              severity: "success",
-            });
-            await refreshCurrentUser();
-            setShowQuotaDialog(false);
-            setrequestedquota(0);
-            setreason("");
-            setQuotaError("");
-            setTouched(false);
-
-          } catch (error: any) {
-            alert({
-              title: "Failed",
-              description:
-                error?.message ||
-                "Failed to submit S3 quota request",
-              severity: "error",
-            });
-          } finally {
-            setsubmitquota(false);
-          }
-        }}
+        onSubmit={quota.submit}
       />
-    </div>
-  );
-}
-
-function StatCard({ icon, value, label, color }: { icon: React.ReactNode; value: number; label: string; color: string }) {
-  return (
-    <div className="flex-1 min-w-[140px] flex items-center gap-3 rounded-lg border border-border/50 bg-card/50 backdrop-blur px-4 py-3 hover:border-primary/30 transition-colors">
-      <div className={`flex h-10 w-10 items-center justify-center rounded-lg shrink-0 ${color}`}>{icon}</div>
-      <div>
-        <p className="text-2xl font-bold text-foreground leading-tight">{value}</p>
-        <p className="text-xs text-muted-foreground">{label}</p>
-      </div>
     </div>
   );
 }

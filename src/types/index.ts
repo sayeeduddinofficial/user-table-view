@@ -246,28 +246,7 @@ export const INSTANCE_TYPES: InstanceTypeOption[] = [
     vcpu: 4,
     memory: "32 GB",
     category: "memory",
-  },
-  {
-    value: "mac2.metal",
-    label: "mac2.metal",
-    vcpu: 12,
-    memory: "32 GB",
-    category: "mac",
-  },
-  {
-    value: "mac2-m2.metal",
-    label: "mac2-m2.metal",
-    vcpu: 12,
-    memory: "24 GB",
-    category: "mac",
-  },
-  {
-    value: "mac2-m2pro.metal",
-    label: "mac2-m2pro.metal",
-    vcpu: 12,
-    memory: "32 GB",
-    category: "mac",
-  },
+  }
 ];
 
 export const AWS_REGIONS = [
@@ -562,7 +541,7 @@ export const ACTION_DISPLAY_LABELS: Record<string, string> = {
   RUNTIME_EXTENSION_APPROVED: "Approved Runtime Extension",
   RUNTIME_EXTENSION_REJECTED: "Rejected Runtime Extension",
   USER_PROFILE_UPDATED: "Profile Updated",
-  USER_QUOTA_UPDATED: "Updated VM Quota",
+  USER_QUOTA_UPDATED: "Updated User Quotas",
   USER_SCHEDULE_UPDATED: "Schedule Updated",
   USER_INSTANCE_TYPES_UPDATED: "Instance Types Updated",
   USER_CATEGORIES_UPDATED: "Categories Updated",

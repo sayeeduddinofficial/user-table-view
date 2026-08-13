@@ -22,20 +22,11 @@ import {
 } from "@/components/icons/aws-icons";
 import { cn } from "@/lib/utils";
 import { CATEGORY_OPTIONS } from "@/types";
-import { isAdmin } from "@/utils/roles";
+import { isAdmin, ROLE_LABELS } from "@/utils/roles";
 import type { User } from "@/types";
 import { formatTime, getTimeZoneAbbreviation } from "@/utils/workSchedule";
 
 // ── Role display helpers ─────────────────────────────────────────────────────
-const ROLE_DISPLAY: Record<string, string> = {
-  SuperAdmin: "Super Admin",
-  "SplunkOps.Admin": "Admin",
-  "SplunkOps.User": "User",
-  "SplunkOps.Auditor": "Auditor",
-  "SplunkOps.Stakeholder": "Stakeholder",
-  "SplunkOps.Approver": "Approver",
-};
-
 const ROLE_BADGE_CLASS: Record<string, string> = {
   SuperAdmin: "border-purple-500 text-purple-400 bg-purple-500/10",
   "SplunkOps.Admin": "border-blue-500 text-blue-400 bg-blue-500/10",
@@ -148,7 +139,7 @@ export function UserCard({
                 )}
               >
                 {(userIsSuperAdmin || userIsAdmin) && <Shield className="h-3 w-3" />}
-                {ROLE_DISPLAY[user.role] ?? user.role}
+                {ROLE_LABELS[user.role] ?? user.role}
               </Badge>
 
               {statusBadge && (
@@ -165,66 +156,6 @@ export function UserCard({
             <Button variant="ghost" size="icon" onClick={onEdit} tooltip="Edit User">
               <Pencil className="h-4 w-4" />
             </Button>
-
-            {/* {user.status === "INVITED" && (
-              <Button
-                variant="ghost"
-                size="icon"
-                tooltip="Reinvite User"
-                onClick={async () => {
-                  const ok = await confirm({
-                    title: `Send a new invitation email to "${user.name}" (${user.email})?`,
-                    icon: "info",
-                  });
-                  if (ok) onReinvite();
-                }}
-              >
-                <UserRoundPlus className="h-4 w-4 text-yellow-500" />
-              </Button>
-            )} */}
-
-            {/* {user.status === "ACTIVE" &&
-              !isSelf &&
-              !(viewerIsSuperAdmin && userIsSuperAdmin) && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  tooltip="Deactivate User"
-                  className="text-destructive hover:text-destructive"
-                  onClick={async () => {
-                    const ok = await confirm({
-                      title: `Deactivate user "${user.name}"?`,
-                      icon: "destroy",
-                    });
-                    if (ok) onDeactivate();
-                  }}
-                >
-                  <UserX className="h-4 w-4" />
-                </Button>
-              )} */}
-
-            {/* {user.status === "DEACTIVATED" && (
-              <Button
-                variant="ghost"
-                size="icon"
-                tooltip="Reactivate User"
-                onClick={onReactivate}
-              >
-                <UserCheck className="h-4 w-4 text-green-500" />
-              </Button>
-            )} */}
-
-            {/* {!isSelf && !(viewerIsSuperAdmin && userIsSuperAdmin) && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onDelete}
-                tooltip="Delete User"
-                className="text-destructive hover:text-destructive"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            )} */}
           </div>
         )}
         </div>

@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useDialog } from "@/components/ui/dialog-context";
-import { isAdmin } from "@/utils/roles";
+import { isAdmin, ROLE_LABELS } from "@/utils/roles";
 import {
   TIMEZONES,
   to24Hour,
@@ -29,7 +29,6 @@ import {
   DEFAULT_SHIFT_BY_TIMEZONE,
 } from "@/utils/workSchedule";
 import { TimePicker } from "@/utils/TimePicker";
-// import { AzureAdUserSearch } from "./AzureAdSearch";
 import { INSTANCE_TYPES, CATEGORY_OPTIONS } from "@/types";
 import type { User, Role, CategoryType } from "@/types";
 
@@ -63,26 +62,13 @@ interface UserFormProps {
   onCancel: () => void;
 }
 
-const ROLE_LABELS: Record<string, string> = {
-  SuperAdmin: "Super Admin",
-  "SplunkOps.Admin": "Admin",
-  "SplunkOps.User": "User",
-  "SplunkOps.Auditor": "Auditor",
-  "SplunkOps.Stakeholder": "Stakeholder",
-  "SplunkOps.Approver": "Approver",
-};
-
 // ── Component ────────────────────────────────────────────────────────────────
 export function UserForm({ user, onSubmit, onCancel }: UserFormProps) {
   const { alert } = useDialog();
   const { user: authUser } = useAuth();
-  // const isSuperAdmin = authUser?.role === "SuperAdmin";
   const isAdminAccess = isAdmin(authUser?.role);
-  // const isSelf = authUser?.email === user?.email;
-  // const editingSuperAdmin = user?.role === "SuperAdmin";
 
   // ── Field state ────────────────────────────────────────────────────────
-  // const [entraObjectId, setEntraObjectId] = useState(user?.entraObjectId ?? "");
   const [name, setName] = useState(user?.name ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
   const [role, setRole] = useState<Role>(user?.role ?? "SplunkOps.User");
@@ -211,7 +197,6 @@ export function UserForm({ user, onSubmit, onCancel }: UserFormProps) {
         id: user?.id ?? `user-${Date.now().toString(36)}`,
         name,
         email: email.trim().toLowerCase(),
-        // entraObjectId: user?.entraObjectId ?? entraObjectId,
         role,
         maxVMs,
         currentVMs: user?.currentVMs ?? 0,
@@ -247,40 +232,16 @@ export function UserForm({ user, onSubmit, onCancel }: UserFormProps) {
           />
         </div>
 
-        {/* {!user ? (
-          <AzureAdUserSearch
-            disabled={isSubmitting}
-            onSelect={(azUser) => {
-              setEmail(azUser.mail);
-              setEntraObjectId(azUser.id);
-            }}
-          />
-        ) : ( */}
-          <div className="space-y-2">
-            <Label htmlFor="email">Email *</Label>
-            <Input id="email" type="email" value={email} disabled />
-          </div>
-        {/* ) */}
+        <div className="space-y-2">
+          <Label htmlFor="email">Email *</Label>
+          <Input id="email" type="email" value={email} disabled />
+        </div>
       </div>
 
       {/* Role */}
       <div className="space-y-2">
         <Label>Role</Label>
-        {/* {editingSuperAdmin ? ( */}
-          {/* // <Input value="Super Admin" disabled />
-        // ) : isSuperAdmin && !isSelf ? (
-        //   <Select value={role} onValueChange={(v) => setRole(v as Role)}>
-        //     <SelectTrigger>
-        //       <SelectValue />
-        //     </SelectTrigger>
-        //     <SelectContent>
-        //       <SelectItem value="SplunkOps.User">User</SelectItem>
-        //       <SelectItem value="SplunkOps.Admin">Admin</SelectItem>
-        //     </SelectContent>
-        //   </Select>
-        // ) : ( */}
-          <Input value={ROLE_LABELS[role] ?? role} disabled />
-        {/* )} */}
+        <Input value={ROLE_LABELS[role] ?? role} disabled />
       </div>
 
       {/* Timezone */}

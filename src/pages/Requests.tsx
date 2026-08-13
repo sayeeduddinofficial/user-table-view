@@ -53,7 +53,8 @@ import { DataTable, type Column } from "@/components/common/DataTable";
 import ChooseServices from "@/components/dialogs/ChooseServices";
 import { fetchVpcListApi } from "@/services/vpcService";
 import { deleteBucketApi } from "@/services/bucketService";
-import {  deleteEksClusterService } from "@/services/eksClusterService";
+import { deleteEksClusterService } from "@/services/eksClusterService";
+import { fetchUsersApi } from "@/components/users/userManagementApi";
 
 
 const statusConfig: Record<string, { color: string; label: string }> = {
@@ -115,6 +116,8 @@ export default function VMRequests() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [serviceFilter, setServiceFilter] = useState<string>("all");
+  const [userFilter, setUserFilter] = useState<string>("all");
+  const [users, setUsers] = useState<{ id: string; name: string }[]>([]);
   const [page, setPage] = useState(1);
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [pagination, setPagination] = useState({
@@ -123,6 +126,8 @@ export default function VMRequests() {
   const watchers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const watcherAttempts = useRef<Record<string, number>>({});
   const { refreshCurrentUser, setActiveRequest } = useAppStore();
+  const currentUser = useAppStore((s) => s.currentUser);
+  const isAdmin = currentUser?.role === "SplunkOps.Admin" || currentUser?.role === "SuperAdmin";
   const navigate = useNavigate();
   const { data: awsConfig } = useAwsConfig();
 
@@ -145,6 +150,7 @@ export default function VMRequests() {
         status: statusFilter === "all" || statusFilter === "retrying" ? undefined : statusFilter,
         service: serviceFilter !== "all" ? serviceFilter : undefined,
         search: searchQuery.trim() || undefined,
+        userId: isAdmin && userFilter !== "all" ? userFilter : undefined,
       });
 
       const filteredData =
@@ -176,7 +182,7 @@ export default function VMRequests() {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter, serviceFilter, searchQuery]);
+  }, [page, statusFilter, serviceFilter, searchQuery, userFilter]);
 
   useEffect(() => {
     isMounted.current = true;
@@ -185,7 +191,7 @@ export default function VMRequests() {
       Object.values(watchers.current).forEach(clearTimeout);
       watchers.current = {};
     };
-  }, [page, statusFilter, serviceFilter]);
+  }, [page, statusFilter, serviceFilter, userFilter]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -205,6 +211,13 @@ export default function VMRequests() {
       })
       .catch(() => { });
   }, []);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    fetchUsersApi()
+      .then((list) => setUsers(list.map((u) => ({ id: u.id, name: u.name }))))
+      .catch(() => {});
+  }, [isAdmin]);
 
   // Debounce search — skip on initial mount to avoid double fetch
   useEffect(() => {
@@ -828,6 +841,19 @@ export default function VMRequests() {
                       ))}
                     </SelectContent>
                   </Select>
+                  {isAdmin && (
+                    <Select value={userFilter} onValueChange={(v) => { setUserFilter(v); setPage(1); }}>
+                      <SelectTrigger className="w-[160px] bg-background/50">
+                        <SelectValue placeholder="All Users" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Users</SelectItem>
+                        {users.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                   <Button variant="outline" className="gap-2" onClick={() => fetchRequests(page)}>
                     <RefreshCw className="h-4 w-4" />
                     Refresh

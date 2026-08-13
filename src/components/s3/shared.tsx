@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Check, Copy, Info, LucideIcon, Settings } from "lucide-react";
+import { Check, Copy, Info, LucideIcon } from "lucide-react";
 import { useDialog } from "@/components/ui/dialog-context";
 import { Button } from "@/components/ui/button";
 
@@ -161,6 +161,18 @@ export function DetailField({ label, value, mono, copy, help }: { label: string;
       {help && <p className="text-xs text-muted-foreground mb-1">{help}</p>}
       <div className={`text-sm break-all ${mono ? "font-mono text-xs" : ""}`}>
         {copy ? <CopyText text={value} /> : (value ?? "—")}
+      </div>
+    </div>
+  );
+}
+
+export function StatCard({ icon, value, label, color }: { icon: React.ReactNode; value: number; label: string; color: string }) {
+  return (
+    <div className="flex-1 min-w-[140px] flex items-center gap-3 rounded-lg border border-border/50 bg-card/50 backdrop-blur px-4 py-3 hover:border-primary/30 transition-colors">
+      <div className={`flex h-10 w-10 items-center justify-center rounded-lg shrink-0 ${color}`}>{icon}</div>
+      <div>
+        <p className="text-2xl font-bold text-foreground leading-tight">{value}</p>
+        <p className="text-xs text-muted-foreground">{label}</p>
       </div>
     </div>
   );

@@ -106,13 +106,14 @@ export function LiveConsole() {
     "destroying",
   ];
 
-  // For vpc-terminate-service, 'completed' is a transient state (VPC was
-  // provisioned successfully) that will transition to 'destroying'. Treat it
+  // For vpc-terminate-service and lb-cli-terminate-service, 'completed' is a transient state
+  // (resource was provisioned successfully) that will transition to 'destroying'. Treat it
   // as non-terminal so we keep polling and connect to SSE once destroying starts.
-  const effectiveTerminalStatuses = activeService === "vpc-terminate-service"
+  const isTransientCompleteService = activeService === "vpc-terminate-service" || activeService === "lb-cli-terminate-service";
+  const effectiveTerminalStatuses = isTransientCompleteService
     ? TERMINAL_STATUSES.filter((s) => s !== "completed")
     : TERMINAL_STATUSES;
-  const effectiveProvisioningStatuses = activeService === "vpc-terminate-service"
+  const effectiveProvisioningStatuses = isTransientCompleteService
     ? [...PROVISIONING_STATUSES, "completed"]
     : PROVISIONING_STATUSES;
 
@@ -277,7 +278,8 @@ useEffect(() => {
         // "CREATE LOGS" / "DESTROY LOGS" section markers, so the marker
         // checks below only apply to services that use the combined format.
         const usesCombinedLogFile = activeServiceRef.current !== "route53-service" &&
-          activeServiceRef.current !== "s3-service";
+          activeServiceRef.current !== "s3-service" &&
+          activeServiceRef.current !== "lb-cli-terminate-service";
         if (
           usesCombinedLogFile &&
           (targetStatus === "terminated" || targetStatus === "destroyed") &&
@@ -591,7 +593,22 @@ useEffect(() => {
         setDisplayedLogs([]);
         setAllLogs([]);
         setIsLiveMode(true);
-        connectToLiveLogs(effectiveRequestId);
+        if (isTransientCompleteService) {
+          const capturedRequestId = effectiveRequestId;
+          const sseSnapshot = () => [...liveSseLogsRef.current];
+          connectToLiveLogs(capturedRequestId, () => {
+            const snapshot = sseSnapshot();
+            const tryFetch = async (attemptsLeft: number) => {
+              const result = await fetchCompletedLogs(capturedRequestId, "destroyed", snapshot);
+              console.log(`[LiveConsole] lb-terminate archive fetch result="${result}" attemptsLeft=${attemptsLeft}`);
+              if (result === "ready" || result === "error") return;
+              if (attemptsLeft > 0) setTimeout(() => tryFetch(attemptsLeft - 1), 3000);
+            };
+            tryFetch(12);
+          });
+        } else {
+          connectToLiveLogs(effectiveRequestId);
+        }
       }
     } else if (effectiveTerminalStatuses.includes(status)) {
       // Use a compound key so "completed" and "terminated" are treated as

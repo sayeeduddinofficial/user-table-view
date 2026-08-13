@@ -79,10 +79,6 @@ export function CreateBucketWizard({ onCancel, onSubmit }: {
     setBucketNameCheckLoading(true);
 
     bucketNameCheckTimer.current = setTimeout(() => {
-      console.log("Bucket Check", {
-        fullBucketName,
-        region: form.region,
-      });
       checkBucketNameApi(
         isRegional
           ? form.namePrefix

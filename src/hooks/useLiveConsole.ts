@@ -30,7 +30,7 @@ const TERMINAL_REQUEST_STATUSES = new Set([
 ]);
 
 // For these services 'completed' is transient — keep polling until 'destroyed'.
-const TRANSIENT_COMPLETED_SERVICES = new Set(['vpc-terminate-service', 'ec2-service']);
+const TRANSIENT_COMPLETED_SERVICES = new Set(['vpc-terminate-service', 'ec2-service', 'lb-cli-terminate-service']);
 
 // ── Fetch Active Requests ────────────────────────────────────────────────────
 export function useActiveRequests() {

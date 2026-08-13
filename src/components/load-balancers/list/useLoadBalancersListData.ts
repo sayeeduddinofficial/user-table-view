@@ -8,7 +8,9 @@ import { lbApi, type LbItem, type ExistingLbItem, type ProvisioningLbItem } from
 import { getLbStatusColor, getLbStatusLabel, formatLbDate } from "@/components/load-balancers/lbShared";
 import type { LbRow } from "./LbMainTable";
 
-export function useLoadBalancersListData(userId: number | string | undefined, maxLbs: number) {
+export function useLoadBalancersListData(userId: number | string | undefined) {
+  const normalizedUserId = userId === undefined || userId === null ? NaN : Number(userId);
+
   const [lbs, setLbs] = useState<LbItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [globalFilter, setGlobalFilter] = useState("");
@@ -38,31 +40,31 @@ export function useLoadBalancersListData(userId: number | string | undefined, ma
   useEffect(() => { fetchLbs(true); }, []);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!Number.isFinite(normalizedUserId)) return;
     setCheckingProvisioning(true);
     Promise.all([
-      lbApi.checkProvisioning(userId, "application").catch(() => ({ exists: false, loadBalancer: null })),
-      lbApi.checkProvisioning(userId, "network").catch(() => ({ exists: false, loadBalancer: null })),
+      lbApi.checkProvisioning(normalizedUserId, "application").catch(() => ({ exists: false, loadBalancer: null })),
+      lbApi.checkProvisioning(normalizedUserId, "network").catch(() => ({ exists: false, loadBalancer: null })),
     ])
       .then(([albRes, nlbRes]) => {
         setProvisioningAlb(albRes.loadBalancer ?? null);
         setProvisioningNlb(nlbRes.loadBalancer ?? null);
       })
       .finally(() => setCheckingProvisioning(false));
-  }, [userId]);
+  }, [normalizedUserId]);
 
   useEffect(() => {
     const hasPendingLb = Boolean(
       provisioningAlb || provisioningNlb || lbs.some((lb) => ["pending", "provisioning", "creating"].includes(String(lb.status || "").toLowerCase()))
     );
 
-    if (!userId || !hasPendingLb) return;
+    if (!Number.isFinite(normalizedUserId) || !hasPendingLb) return;
 
     const interval = window.setInterval(() => {
       void fetchLbs(false);
       Promise.all([
-        lbApi.checkProvisioning(userId, "application").catch(() => ({ exists: false, loadBalancer: null })),
-        lbApi.checkProvisioning(userId, "network").catch(() => ({ exists: false, loadBalancer: null })),
+        lbApi.checkProvisioning(normalizedUserId, "application").catch(() => ({ exists: false, loadBalancer: null })),
+        lbApi.checkProvisioning(normalizedUserId, "network").catch(() => ({ exists: false, loadBalancer: null })),
       ])
         .then(([albRes, nlbRes]) => {
           setProvisioningAlb(albRes.loadBalancer ?? null);
@@ -71,7 +73,7 @@ export function useLoadBalancersListData(userId: number | string | undefined, ma
     }, 10000);
 
     return () => window.clearInterval(interval);
-  }, [userId, provisioningAlb, provisioningNlb, lbs]);
+  }, [normalizedUserId, provisioningAlb, provisioningNlb, lbs]);
 
   const firstRegion = lbs[0]?.region;
   useEffect(() => {
@@ -116,6 +118,7 @@ export function useLoadBalancersListData(userId: number | string | undefined, ma
 
   return {
     lbs,
+    setLbs,
     loading,
     globalFilter,
     setGlobalFilter,

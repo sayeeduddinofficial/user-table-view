@@ -1,150 +1,22 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactElement } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Search, Plus, RefreshCw, Trash2, Database, Server, Minus, CheckCircle2,
-  AlertCircle, Clock, Monitor, ArrowUpCircle
+  Search, Plus, RefreshCw, Trash2, Database, Server, Minus, ArrowUpCircle
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Header } from "@/components/layout/Header";
 import { Input } from "@/components/ui/input";
-import { toast } from "sonner";
 import { useDialog } from "@/components/ui/dialog-context";
 import { useRdsClusters, useDeleteRdsCluster } from "@/hooks/useRds";
-import { type RdsClusterApi } from "@/services/rdsService";
+import { requestRdsQuotaIncrease } from "@/services/rdsService";
 import { useAppStore } from "@/store/appStore";
 import { RdsQuotaIncreaseDialog } from "@/components/rds/RdsQuotaIncreaseDialog";
-import { env } from "@/lib/env";
-import { getClientIp } from "@/utils/getClientIP";
-// import { useResourceAvailability } from "@/hooks/useResourceAvailability";
 import { AuroraIcon } from "@/components/icons/aws-icons";
+import type { RdsRow } from "@/components/rds/rdsTypes";
+import { clusterToRows, isProvisioningStatus } from "@/components/rds/rdsUtils";
+import { RoleBadge, StatCard, StatusBadge } from "@/components/rds/rdsShared";
 
-export type RdsEngine = "Aurora MySQL" | "Aurora PostgreSQL" | "MySQL" | "PostgreSQL" | "MariaDB" | "Oracle" | "SQL Server";
-export type RdsRole = "Regional cluster" | "Writer instance" | "Reader instance" | "Standalone";
-export type RdsStatus = "Available" | "Creating" | "Deleting" | "Stopped" | "Modifying" | "Provisioning" | "Terminating" | "Terminated";
-
-export type RdsRow = {
-  id: string;
-  requestId: string;
-  dbIdentifier: string;
-  status: RdsStatus;
-  role: RdsRole;
-  engine: RdsEngine;
-  engineVersion: string;
-  upgradeRollout: string;
-  region: string;
-  size: string;
-  created: string;
-  isCluster: boolean;
-  clusterId?: string;
-};
-
-const formatDate = (date: Date) => {
-  const day = date.getDate().toString().padStart(2, '0');
-  const month = date.toLocaleString('en-US', { month: 'short' });
-  const year = date.getFullYear();
-  return `${day} ${month} ${year}`;
-};
-
-function normaliseEngine(engine: string): RdsEngine {
-  const e = engine.toLowerCase();
-  if (e.includes("aurora") && e.includes("mysql")) return "Aurora MySQL";
-  if (e.includes("aurora") && e.includes("postgres")) return "Aurora PostgreSQL";
-  if (e.includes("mysql")) return "MySQL";
-  if (e.includes("postgres")) return "PostgreSQL";
-  if (e.includes("mariadb")) return "MariaDB";
-  if (e.includes("oracle")) return "Oracle";
-  if (e.includes("sqlserver") || e.includes("sql server")) return "SQL Server";
-  return "PostgreSQL";
-}
-
-function normaliseStatus(status: string): RdsStatus {
-  const s = status.toLowerCase();
-  if (s === "available") return "Available";
-  if (s === "creating" || s === "provisioning") return "Provisioning";
-  if (s === "deleting" || s === "destroying") return "Terminating";
-  if (s === "stopped") return "Stopped";
-  if (s === "modifying") return "Modifying";
-  if (s === "deleted" || s === "destroyed") return "Terminated";
-  return "Available";
-}
-
-function clusterToRows(cluster: RdsClusterApi): RdsRow[] {
-  const clusterRow: RdsRow = {
-    id: cluster.request_id,
-    requestId: cluster.request_id,
-    dbIdentifier: cluster.cluster_identifier,
-    status: normaliseStatus(cluster.cluster_status),
-    role: "Regional cluster",
-    engine: normaliseEngine(cluster.engine),
-    engineVersion: cluster.engine_version,
-    upgradeRollout: cluster.upgrade_rollout_order ?? "—",
-    region: cluster.region,
-    size: `${cluster.instances.length} ${cluster.instances.length === 1 ? "Instance" : "Instances"}`,
-    created: cluster.cluster_created_at ? formatDate(new Date(cluster.cluster_created_at)) : "—",
-    isCluster: true,
-  };
-
-  const instanceRows: RdsRow[] = cluster.instances.map((inst) => ({
-    id: `${cluster.request_id}__${inst.instance_identifier}`,
-    requestId: cluster.request_id,
-    dbIdentifier: inst.instance_identifier,
-    status: normaliseStatus(inst.status),
-    role: inst.instance_role === "WRITER" ? "Writer instance" : "Reader instance",
-    engine: normaliseEngine(cluster.engine),
-    engineVersion: inst.engine_version ?? cluster.engine_version,
-    upgradeRollout: inst.upgrade_rollout_order ?? "—",
-    region: inst.availability_zone ?? cluster.region,
-    size: inst.instance_class,
-    created: inst.created_at ? formatDate(new Date(inst.created_at)) : "—",
-    isCluster: false,
-    clusterId: cluster.request_id,
-  }));
-
-  return [clusterRow, ...instanceRows];
-}
-
-function StatusBadge({ status }: { status: RdsStatus }) {
-  const map: Record<RdsStatus, { cls: string; icon: ReactNode }> = {
-    Available: { cls: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20", icon: <CheckCircle2 size={11} /> },
-    Provisioning: { cls: "bg-blue-500/10 text-blue-400 border-blue-500/20", icon: <Clock size={11} /> },
-    Terminating: { cls: "bg-orange-500/10 text-orange-400 border-red-500/20", icon: <AlertCircle size={11} /> },
-    Stopped: { cls: "bg-amber-500/10 text-amber-400 border-amber-500/20", icon: <AlertCircle size={11} /> },
-    Modifying: { cls: "bg-purple-500/10 text-purple-400 border-purple-500/20", icon: <Clock size={11} /> },
-  };
-  const { cls, icon } = map[status] ?? map.Available;
-  return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border ${cls}`}>
-      {icon} {status}
-    </span>
-  );
-}
-
-function RoleBadge({ role }: { role: RdsRole }) {
-  const map: Record<RdsRole, string> = {
-    "Regional cluster": "bg-primary/10 text-primary border-primary/20",
-    "Writer instance": "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
-    "Reader instance": "bg-violet-500/10 text-violet-400 border-violet-500/20",
-    "Standalone": "bg-orange-500/10 text-orange-400 border-orange-500/20",
-  };
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border ${map[role]}`}>
-      {role}
-    </span>
-  );
-}
-
-function StatCard({ icon, iconBg, value, label }: { icon: ReactNode; iconBg: string; value: number | string; label: string }) {
-  return (
-    <div className="flex-1 min-w-[140px] flex items-center gap-3 rounded-lg border border-border/50 bg-card/50 backdrop-blur px-4 py-3 hover:border-primary/30 transition-colors">
-      <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${iconBg}`}>{icon}</div>
-      <div>
-        <p className="text-2xl font-bold text-foreground leading-tight">{value}</p>
-        <p className="text-xs text-muted-foreground">{label}</p>
-      </div>
-    </div>
-  );
-}
 
 export function RdsList() {
   const nav = useNavigate();
@@ -163,17 +35,15 @@ export function RdsList() {
     refreshCurrentUser();
   }, []);
   const MAX_RDS = currentUser?.maxRdsClusters ?? 0;
-  const userClusterCount = apiClusters.filter(
-    (cluster: any) =>
-      Number(cluster.user_id) === Number(currentUser?.id) ||
-      Number(cluster.userId) === Number(currentUser?.id)
-  ).length;
+  const isOwnedByCurrentUser = (cluster: { user_id?: unknown; userId?: unknown }) =>
+    Number(cluster.user_id) === Number(currentUser?.id) ||
+    Number(cluster.userId) === Number(currentUser?.id);
+
+  const userClusterCount = apiClusters.filter(isOwnedByCurrentUser).length;
   const userStatusProvisioning = apiClusters.filter(
-    (cluster: any) =>
-      (Number(cluster.user_id) === Number(currentUser?.id) ||
-        Number(cluster.userId) === Number(currentUser?.id)) &&
-      (cluster.cluster_status.toLowerCase() === "provisioning" || cluster.cluster_status.toLowerCase() === "creating")
+    (cluster) => isOwnedByCurrentUser(cluster) && isProvisioningStatus(cluster.cluster_status)
   ).length;
+
   const [query, setQuery] = useState("");
   const [showQuotaDialog, setShowQuotaDialog] = useState(false);
   const [requestedQuota, setRequestedQuota] = useState(0);
@@ -182,9 +52,7 @@ export function RdsList() {
   const [quotaError, setQuotaError] = useState("");
   const [touched, setTouched] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  // const { available } = useResourceAvailability();
-  const hasActiveRds = userClusterCount >= MAX_RDS;
-  console.log(hasActiveRds);
+
 
   const clusters = rows.filter((r) => r.isCluster);
   const standalones = rows.filter((r) => !r.isCluster && !r.clusterId);
@@ -215,25 +83,19 @@ export function RdsList() {
     try {
       if (row.isCluster) {
         await removeCluster(row.requestId);
-
-      } else {
-        // instance id is "${requestId}__${instanceIdentifier}" — extract instanceIdentifier
-        // const instanceIdentifier = row.dbIdentifier;
-        // await removeInstance(row.requestId, instanceIdentifier);
       }
 
-      setActiveRequest(row.requestId, 'rds-service');
-      nav('/console');
-      // toast.success(`${row.dbIdentifier} deletion initiated`);
-      // await refresh();
+      setActiveRequest(row.requestId, "rds-service");
+      nav("/console");
     } catch {
-      toast.error(`Failed to delete ${row.dbIdentifier}`);
+      alert({ title: `Failed to delete ${row.dbIdentifier}`, severity: "error" });
     }
   };
 
+
   const COLS = ["Request ID", "DB Identifier", "Status", "Role", "Engine", "Upgrade Rollout", "Region", "Size", "Created", "Actions"];
 
-  const renderRow = (row: RdsRow, depth = 0, isLast = false) => {
+  const renderRow = (row: RdsRow, depth = 0, isLast = false): ReactElement => {
     const instances = row.isCluster ? instancesOf(row.id) : [];
     const isOpen = expanded.has(row.id);
     const isInstance = depth > 0;
@@ -346,9 +208,9 @@ export function RdsList() {
     MAX_RDS - userClusterCount
   );
 
-  const quotaReached =
-    userClusterCount >= MAX_RDS || userStatusProvisioning > 0;
-    console.log("count", userStatusProvisioning);
+  const quotaReached = userClusterCount >= MAX_RDS || userStatusProvisioning > 0;
+
+
   return (
     <div>
       <Header
@@ -490,34 +352,11 @@ export function RdsList() {
           try {
             setSubmitQuota(true);
 
-            const token = localStorage.getItem("token");
-
-            const response = await fetch(
-              `${env.rds}/rds-quota/${currentUser?.id}/request`,
-              {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${token}`,
-                  "x-client-ip": (await getClientIp()) || "",
-                },
-                body: JSON.stringify({
-                  requestedQuota: requestedQuota - MAX_RDS,
-                  reason,
-                  approverEmail,
-                }),
-              }
-            );
-
-            const data = await response.json();
-
-            if (!response.ok) {
-              throw new Error(
-                data?.message ||
-                data?.error ||
-                "Failed to submit RDS quota request"
-              );
-            }
+            await requestRdsQuotaIncrease(currentUser?.id, {
+              requestedQuota: requestedQuota - MAX_RDS,
+              reason,
+              approverEmail,
+            });
 
             alert({
               title: "RDS quota request submitted successfully",
@@ -529,13 +368,12 @@ export function RdsList() {
             setReason("");
             setTouched(false);
             setQuotaError("");
-          } catch (error: any) {
+          } catch (error) {
             alert({
-              title:
-                error?.message ||
-                "Failed to submit RDS quota request",
+              title: error instanceof Error ? error.message : "Failed to submit RDS quota request",
               severity: "error",
             });
+
           } finally {
             setSubmitQuota(false);
           }

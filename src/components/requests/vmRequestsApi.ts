@@ -110,6 +110,7 @@ export interface VMRequestsQueryParams {
   status?: string;
   service?: string;
   search?: string;
+  userId?: string;
 }
 
 export interface VMRequestsResponse {
@@ -133,6 +134,7 @@ export async function fetchVMRequestsApi(params: VMRequestsQueryParams = {}): Pr
   if (params.status && params.status !== "all") query.status = params.status;
   if (params.service && params.service !== "all") query.service = params.service;
   if (params.search?.trim()) query.search = params.search.trim();
+  if (params.userId && params.userId !== "all") query.userId = params.userId;
 
   const response = await apiClient.get<ApiResponse<VMRequestsResponse>>(
     env.vmRequest,

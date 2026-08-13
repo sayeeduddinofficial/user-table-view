@@ -409,7 +409,7 @@ export const LeadershipCharts = forwardRef<HTMLDivElement, Props>(function Leade
           className="p-5"
           style={exportMode ? { minHeight: shapeCardHeight } : undefined}
         >
-          <CardHeader icon={Users} title="Top 5 users by cost" subtitle="Highest-spending consumers (AWS billing)" iconColor="#b89968" />
+          <CardHeader icon={Users} title="Top users by cost" subtitle="Highest-spending consumers (AWS billing)" iconColor="#b89968" />
           <div className="space-y-3">
             {topUsers.length === 0 ? (
               <div className="flex items-center justify-center h-[200px] text-muted-foreground text-sm">

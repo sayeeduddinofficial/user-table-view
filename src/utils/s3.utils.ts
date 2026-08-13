@@ -99,9 +99,16 @@ export interface S3Bucket {
   meta: S3BucketMeta;
 }
 
-export const regionLabel = (code: string) => {
-   AWS_REGIONS.find((region) => region.value === code);
-  return code;
+export const regionLabel = (code: string): string => code;
+
+export const formatS3Date = (value?: string): string => {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.valueOf())) return "\u2014";
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
 };
 
 export const encryptionLabel = (encryption: string) =>

@@ -28,6 +28,7 @@ export function LoadBalancersList() {
 
   const {
     lbs,
+    setLbs,
     loading,
     globalFilter,
     setGlobalFilter,
@@ -63,13 +64,28 @@ export function LoadBalancersList() {
     });
     if (!confirmed) return;
 
-    useAppStore.getState().setActiveRequest(requestId, "lb-cli-terminate-service");
-    nav("/console");
-
     try {
+      // Optimistically mark as destroying in local state so the sidebar
+      // and console see the correct status immediately on navigation.
+      setLbs((prev) =>
+        prev.map((lb) =>
+          lb.request_id === requestId ? { ...lb, status: "destroying" } : lb
+        )
+      );
+
       await lbApi.deleteSdk(id);
+
+      // Navigate only after the API call succeeds (backend has already set
+      // status = 'destroying' in the DB at this point).
+      useAppStore.getState().setActiveRequest(requestId, "lb-cli-terminate-service");
+      nav("/console");
     } catch (err: any) {
-      useAppStore.getState().setActiveRequest(null);
+      // Revert optimistic update on failure
+      setLbs((prev) =>
+        prev.map((lb) =>
+          lb.request_id === requestId ? { ...lb, status: "completed" } : lb
+        )
+      );
       alert({
         title: `Failed to delete "${name}"`,
         description: err?.message ?? "Unknown error",

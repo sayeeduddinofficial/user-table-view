@@ -962,13 +962,13 @@ export function VMRequestForm({ onSubmit, isSubmitting = false }: Props) {
               value={[diskSize]}
               onValueChange={([v]) => setDiskSize(v)}
               min={selectedAmi?.minimumDiskSize ?? 10}
-              max={100}
-              step={5}
+              max={50}
+              step={10}
               className="py-4"
             />
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>{selectedAmi?.minimumDiskSize ?? 10} GB</span>
-              <span>100 GB</span>
+              <span>50 GB</span>
             </div>
           </div>
 

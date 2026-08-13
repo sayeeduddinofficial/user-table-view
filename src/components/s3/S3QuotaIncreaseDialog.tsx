@@ -35,7 +35,7 @@ const MAX_S3_QUOTA = 10;
 export function S3QuotaIncreaseDialog({
     open, onOpenChange, currentMaxBuckets, usedBuckets,
     requestedquota, setrequestedquota, reason, setreason,
-    submitquota, quotaError, setQuotaError, touched, setTouched,
+    submitquota, quotaError, setQuotaError, setTouched,
     isMAxREached, onSubmit,
 }: Props) {
     // Use the new manager hook that handles both active managers and Super Admin fallback
