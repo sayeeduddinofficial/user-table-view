@@ -9,11 +9,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useMyManager } from "@/hooks/useMyManager";
 import {ManagerDisplay} from "@/components/common/ManagerDisplay";
-// import {
-//   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-// } from "@/components/ui/select";
-// import { ManagerOption } from "@/utils/myVMs.utils";
-
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -25,23 +20,19 @@ interface Props {
   setrequestedquota: (v: number) => void;
   reason: string;
   setreason: (v: string) => void;
-  // mEmail: string;
-  // setMEmail: (v: string) => void;
   submitquota: boolean;
   quotaError: string;
   setQuotaError: (v: string) => void;
   touched: boolean;
   setTouched: (v: boolean) => void;
   isMAxREached: boolean;
-  // managerOptions: ManagerOption[];
-  // managersLoading: boolean;
    onSubmit: (approverEmail: string) => void;
 }
 
 export function QuotaIncreaseDialog({
   open, onOpenChange, currentMaxVMs, usedVMs, activeVMs, provisioningVMs,
   requestedquota, setrequestedquota, reason, setreason,
-  submitquota, quotaError, setQuotaError, touched, setTouched,
+  submitquota, quotaError, setQuotaError, setTouched,
   isMAxREached, onSubmit,
 }: Props) {
   // Use the new manager hook that handles both active managers and Super Admin fallback
