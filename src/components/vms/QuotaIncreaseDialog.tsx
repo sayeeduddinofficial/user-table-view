@@ -32,7 +32,7 @@ interface Props {
 export function QuotaIncreaseDialog({
   open, onOpenChange, currentMaxVMs, usedVMs, activeVMs, provisioningVMs,
   requestedquota, setrequestedquota, reason, setreason,
-  submitquota, quotaError, setQuotaError, touched, setTouched,
+  submitquota, quotaError, setQuotaError, setTouched,
   isMAxREached, onSubmit,
 }: Props) {
   // Use the new manager hook that handles both active managers and Super Admin fallback

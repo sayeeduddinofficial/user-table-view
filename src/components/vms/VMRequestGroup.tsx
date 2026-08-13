@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Clock } from "lucide-react";
-import { VM, formatTime, getRuntimeInfo } from "@/utils/myVMs.utils";
+import { VM, getRuntimeInfo } from "@/utils/myVMs.utils";
 import { GroupHeader } from "@/components/vms/group/GroupHeader";
 import { VMTable } from "@/components/vms/group/VMTable";
 
