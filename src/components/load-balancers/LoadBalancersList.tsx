@@ -37,7 +37,7 @@ export function LoadBalancersList() {
     fetchLbs,
     rows,
     sorted,
-  } = useLoadBalancersListData(user?.id, MAX_LBS);
+  } = useLoadBalancersListData(user?.id);
 
   const userLbs = lbs.filter((lb: any) =>
     Number(lb.user_id) === Number(user?.id) ||
