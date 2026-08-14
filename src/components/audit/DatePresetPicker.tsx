@@ -134,7 +134,7 @@ export function DatePresetPicker({ dateRange, onDateRangeChange }: DatePresetPic
                       return range;
                     })()
                   : [],
-                hoverEnd: hoveredDate && tempDateRange?.from && !tempDateRange?.to ? hoveredDate : undefined,
+                hoverEnd: hoveredDate && tempDateRange?.from && !tempDateRange?.to ? [hoveredDate] : [],
               }}
               modifiersClassNames={{
                 hoverRange: "bg-accent/30",

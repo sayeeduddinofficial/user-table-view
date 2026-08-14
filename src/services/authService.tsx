@@ -34,7 +34,6 @@ export async function refreshAuthToken(): Promise<string | null> {
 
       const newToken = response.data.token;
       localStorage.setItem('token', newToken);
-      console.log('[refreshAuthToken] Token refreshed successfully');
       return newToken;
     } catch (error: any) {
       console.error('[refreshAuthToken] Failed:', error.response?.data?.message || error.message);
@@ -50,7 +49,6 @@ export async function refreshAuthToken(): Promise<string | null> {
 
 export async function getCurrentUser(accessToken: string) {
   try {
-    console.log("Fetching current user with token from:", env.auth);
     const response = await axios.get(
       `${env.auth}/api/auth/me`,
       {
@@ -59,7 +57,6 @@ export async function getCurrentUser(accessToken: string) {
         }
       }
     );
-    console.log("User fetched successfully:", response.data);
     return response.data;
   } catch (error: any) {
     console.error("Error fetching current user:", error);

@@ -58,7 +58,7 @@ export default function Route53() {
   // }, [refreshCurrentUser]);
 
   const maxRecords = currentUser?.maxDnsRecords ?? 0;
-  const remainingQuota = Math.max(0, maxRecords - usedRecords);
+  const remainingQuota = maxRecords - usedRecords;
   const hasReachedSystemLimit = maxRecords >= MAX_ROUTE53_QUOTA;
 
   const aliasRecordsCount = useMemo(

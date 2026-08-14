@@ -20,9 +20,6 @@ interface MeResponse {
 }
 
 export const authApi = {
-  // login: (email: string, password: string) =>
-  //   apiClient.post<LoginResponse>(env.auth, '/api/auth/login', { email, password }),
-
   me: () =>
     apiClient.get<MeResponse>(env.auth, '/api/auth/me'),
 

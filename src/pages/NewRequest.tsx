@@ -10,8 +10,6 @@ import { env } from "@/lib/env";
 const API_BASE = env.vmRequest;
 const API_AUTH = env.auth;
 
-console.log("The provision URL is ", API_BASE);
-
 export default function NewRequest() {
   const { alert } = useDialog();
   const navigate = useNavigate();
@@ -27,7 +25,6 @@ export default function NewRequest() {
   useEffect(() => {
     const loadUser = async () => {
       try {
-        console.log("NewRequest mounted → refreshing user");
 
         // Get MSAL token
         const token = await getAccessToken();
@@ -46,7 +43,6 @@ export default function NewRequest() {
         }
 
         const response = await res.json();
-        console.log("User data fetched from /api/auth/me:", response);
 
         const user = response?.data?.user;
 
@@ -93,7 +89,6 @@ export default function NewRequest() {
       });
       //  parse ONCE
       const data = await response.json();
-      console.log("Parsed JSON:", data);
 
       // HTTP error → handle here
       if (!response.ok) {
@@ -111,7 +106,6 @@ export default function NewRequest() {
       // success path
       // Instead of incrementing currentVMs locally, refresh user from backend
       await refreshCurrentUser();
-      console.log("TRIGGER: vmChanged fired");
       localStorage.setItem("vmChanged", Date.now().toString());
       alert({
         title: "Request submitted successfully",

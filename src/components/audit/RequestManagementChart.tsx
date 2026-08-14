@@ -1,8 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, Clock, ClipboardList } from "lucide-react";
+import type { AuditAnalyticsResponse } from "@/types/api";
 
-export const RequestManagementChart = ({ data }) => {
-  const calculatePercentages = (pending, approved, rejected) => {
+export const RequestManagementChart = ({ data }: { data: AuditAnalyticsResponse["requestManagement"] }) => {
+  const calculatePercentages = (pending: number, approved: number, rejected: number) => {
     const total = pending + approved + rejected;
     if (total === 0) return { pending: 0, approved: 0, rejected: 0 };
     

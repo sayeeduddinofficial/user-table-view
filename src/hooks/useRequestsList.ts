@@ -427,7 +427,6 @@ export function useRequestsList() {
       }
       else {
         const deleteResult = await deleteVMRequestApi(requestId);
-        console.log("Delete request result:", deleteResult);
 
         if (deleteResult?.status === "SUCCESS") {
           markDestroying();

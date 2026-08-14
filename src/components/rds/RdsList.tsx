@@ -203,10 +203,7 @@ export function RdsList() {
 
   const dbClusters = clusters.length;
   const dbInstances = rows.filter((r) => !r.isCluster).length;
-  const remainingQuota = Math.max(
-    0,
-    MAX_RDS - userClusterCount
-  );
+  const remainingQuota = MAX_RDS - userClusterCount;
 
   const quotaReached = userClusterCount >= MAX_RDS || userStatusProvisioning > 0;
 

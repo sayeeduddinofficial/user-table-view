@@ -3,7 +3,6 @@ import { useAppStore } from '@/store/appStore';
 import { useDialog } from '@/components/ui/dialog-context';
 import { getClientIp } from '@/utils/getClientIP';
 import { useMyManager } from '@/hooks/useMyManager';
-import { API_BASE } from '@/components/vms/runtimeExtension.constants';
 import type {
   DurationOption,
   FreeExtStatus,
@@ -17,7 +16,7 @@ interface UseRuntimeExtensionFormArgs {
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
 }
-
+const API_BASE = import.meta.env.VITE_RUNTIME_SERVICE_URL;
 export function useRuntimeExtensionForm({
   open,
   extensionContext,

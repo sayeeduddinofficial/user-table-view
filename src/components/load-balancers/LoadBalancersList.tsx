@@ -37,7 +37,7 @@ export function LoadBalancersList() {
     fetchLbs,
     rows,
     sorted,
-  } = useLoadBalancersListData(user?.id);
+  } = useLoadBalancersListData(user?.id, MAX_LBS);
 
   const userLbs = lbs.filter((lb: any) =>
     Number(lb.user_id) === Number(user?.id) ||
@@ -94,10 +94,7 @@ export function LoadBalancersList() {
     }
   };
 
-  const remainingQuota = Math.max(
-    0,
-    MAX_LBS - userLoadBalancerCount
-  );
+  const remainingQuota = MAX_LBS - userLoadBalancerCount;
 
   // provisioningLb.type tells us which kind is currently mid-flight
   const quotaReached = userLoadBalancerCount >= MAX_LBS;
@@ -106,7 +103,7 @@ export function LoadBalancersList() {
   const nlbBlocked = !!provisioningNlb || quotaReached || nlbCount >= maxPerType;
 
   const createDisabledReason = quotaReached
-    ? `Load Balancer quota reached (${MAX_LBS}).`
+    ? `Load Balancer quota reached`
     : undefined;
 
   return (

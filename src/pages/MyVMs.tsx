@@ -1,4 +1,3 @@
-// frontend/src/pages/MyVMs.tsx
 import { useState } from "react";
 import { RefreshCw, Monitor } from "lucide-react";
 import { Header } from "@/components/layout/Header";
@@ -11,9 +10,6 @@ import { QuotaIncreaseDialog } from "@/components/vms/QuotaIncreaseDialog";
 import RuntimeExtensionDialog from "@/components/vms/RuntimeExtensionDialog";
 import { useMyVMs } from "@/hooks/useMyVMs";
 import { VM } from "@/utils/myVMs.utils";
-// import { Button } from "@/components/ui/button";
-// import { syncExistingVMsApi } from "@/components/vms/myVMsApi";
-// import { toast } from "sonner";
 
 export default function MyVMs() {
   const {
@@ -22,9 +18,7 @@ export default function MyVMs() {
     activeVMs, provisioningVMs, usedVMs, remainingquota, isMAxREached,
     openExtension, setOpenExtension, extensionContext,
     showModal, setShowModal,
-    //  managerOptions, managersLoading,
     requestedquota, setrequestedquota, reason, setreason,
-    // mEmail, setMEmail, 
     submitquota, quotaError, setQuotaError, touched, setTouched,
     silentRefresh, handleCopyIp, handleRequestExtension, submitQuotaRequest,
     startVM, stopVM, deleteSingleVM, startAllVMs, stopAllVMs,
@@ -33,7 +27,6 @@ export default function MyVMs() {
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
-  // const [syncingExistingVMs, setSyncingExistingVMs] = useState(false);
 
   // ── Filtering & grouping ──────────────────────────────────────────────────
   const filteredVMs = vms.filter((vm) => {
@@ -44,7 +37,9 @@ export default function MyVMs() {
       (vm.privateIp ?? "").includes(searchQuery) ||
       (vm.requestId ?? "").toLowerCase().includes(q) ||
       (vm.instanceType ?? "").toLowerCase().includes(q);
-    const matchesRole = roleFilter === "all" || vm.role.toLowerCase() === roleFilter.toLowerCase();
+    const matchesRole =
+      roleFilter === "all" ||
+      vm.role.toLowerCase() === roleFilter.toLowerCase();
     const matchesStatus = statusFilter === "all" || vm.status === statusFilter;
     return matchesSearch && matchesRole && matchesStatus;
   });
@@ -57,26 +52,14 @@ export default function MyVMs() {
   }, {});
 
   const sortedRequestIds = Object.keys(requestGroups).sort((a, b) => {
-    const latestA = Math.max(...requestGroups[a].map((v) => new Date(v.launchedAt ?? 0).getTime()));
-    const latestB = Math.max(...requestGroups[b].map((v) => new Date(v.launchedAt ?? 0).getTime()));
+    const latestA = Math.max(
+      ...requestGroups[a].map((v) => new Date(v.launchedAt ?? 0).getTime()),
+    );
+    const latestB = Math.max(
+      ...requestGroups[b].map((v) => new Date(v.launchedAt ?? 0).getTime()),
+    );
     return latestB - latestA;
   });
-//   const handleSyncExistingVMs = async () => {
-//   try {
-//     setSyncingExistingVMs(true);
-
-//     await syncExistingVMsApi();
-
-//     await silentRefresh();
-
-//     toast.success("Existing VMs synced successfully");
-//   } catch (error) {
-//     console.error(error);
-//     toast.error("Failed to sync existing VMs");
-//   } finally {
-//     setSyncingExistingVMs(false);
-//   }
-// };
 
   const uniqueRoles = Array.from(new Set(vms.map((vm) => vm.role)));
 
@@ -100,17 +83,6 @@ export default function MyVMs() {
       />
 
       <div className="space-y-4 p-6">
-        {/* <div className="mb-4 flex justify-end">
-  <Button
-    variant="outline"
-    onClick={handleSyncExistingVMs}
-    disabled={syncingExistingVMs}
-  >
-    {syncingExistingVMs
-      ? "Syncing Existing VMs..."
-      : "Sync Existing VMs"}
-  </Button>
-</div> */}
         <VMStatsBar
           total={summary.total}
           running={summary.running}

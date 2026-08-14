@@ -69,10 +69,7 @@ export function BucketsTable({
     total: buckets.length,
     encrypted: buckets.filter((b) => !!b.meta.encryption).length,
     versioned: buckets.filter((b) => b.meta.versioning).length,
-    remainingQuota: Math.max(
-      0,
-      MAX_BUCKETS - userBucketCount
-    ),
+    remainingQuota: MAX_BUCKETS - userBucketCount,
   };
 
   return (
@@ -140,7 +137,7 @@ export function BucketsTable({
               className="bg-primary hover:bg-primary/90 text-white gap-1.5 shrink-0"
               tooltip={
                 hasReachedQuota
-                  ? `Bucket quota reached (${MAX_BUCKETS}). Request a quota increase.`
+                  ? `Bucket quota limit reached. Request a quota increase.`
                   : undefined
               }
             >

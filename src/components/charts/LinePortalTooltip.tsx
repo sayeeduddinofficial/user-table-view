@@ -9,7 +9,6 @@ export function LinePortalTooltip({ date, items, x, y }: LinePortalTooltipProps)
   const W = 180, GAP = 12;
   const H = 60 + (items.length * 20);
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
-  const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
   
   // Position to the right of cursor
   let left = x + GAP;

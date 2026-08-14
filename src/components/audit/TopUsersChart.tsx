@@ -1,6 +1,11 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Users } from "lucide-react";
+import type { TopUser } from "@/types/api";
+
+interface TopUsersChartProps {
+  data: TopUser[];
+}
 
 const USER_COLORS = [
   "#60a5fa",  // text-blue-400
@@ -10,7 +15,7 @@ const USER_COLORS = [
   "#818cf8",  // text-indigo-400
 ];
 
-export const TopUsersChart = ({ data }) => {
+export const TopUsersChart = ({ data }: TopUsersChartProps) => {
   const totalActivity = data.reduce((sum, user) => sum + user.count, 0);
   const hasData = data.length > 0;
 
@@ -29,7 +34,7 @@ export const TopUsersChart = ({ data }) => {
             {data.map((user, index) => {
               const initials = user.user_name
                 ?.split(" ")
-                .map((n) => n[0])
+                .map((n: string) => n[0])
                 .join("")
                 .toUpperCase() || "?";
 

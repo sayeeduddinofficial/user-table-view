@@ -73,7 +73,6 @@ export function LbTypeChooserDialog({
                 <span title={disabled ? reason : undefined} className="mt-4 w-fit">
                   <Button
                     size="sm"
-                    disabled={disabled}
                     onClick={() => onSelect(opt.value)}
                     className="disabled:cursor-not-allowed disabled:opacity-60"
                   >

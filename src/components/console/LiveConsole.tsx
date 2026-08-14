@@ -3,8 +3,16 @@ import { useSearchParams } from "react-router-dom";
 import { useAppStore } from "@/store/appStore";
 import { cn } from "@/lib/utils";
 import { useAwsConfig } from "@/hooks/useAwsConfig";
-import { useRequestDetails, useClearRequestLogs, useDownloadRequestLogs } from "@/hooks/useLiveConsole";
-import { fetchRequestLogsApi, fetchLiveRequestLogsStreamApi, isLiveOnlyService } from "@/components/console/liveConsoleApi";
+import {
+  useRequestDetails,
+  useClearRequestLogs,
+  useDownloadRequestLogs,
+} from "@/hooks/useLiveConsole";
+import {
+  fetchRequestLogsApi,
+  fetchLiveRequestLogsStreamApi,
+  isLiveOnlyService,
+} from "@/components/console/liveConsoleApi";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Pause, Play, Trash2, Download, Loader2 } from "lucide-react";
@@ -34,33 +42,207 @@ const statusColorMap: Record<string, string> = {
   terminated: "border-gray-500 text-gray-500",
   terminating: "border-yellow-500 text-yellow-500",
   retrying_terminate: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-  destroying: "border-yellow-500 text-yellow-500",   
-  destroyed: "border-gray-500 text-gray-500",  
+  destroying: "border-yellow-500 text-yellow-500",
+  destroyed: "border-gray-500 text-gray-500",
 };
 
-// Strip ANSI escape codes from log messages
-const stripAnsiCodes = (str: string): string => {
-  if (!str) return "";
-  return str.replace(/\u001b\[[0-9;]*m/g, "");
+const stripAnsiCodes = (value: string): string => {
+  if (!value) return "";
+  return value.replace(/\u001b\[[0-9;]*m/g, "");
 };
 
 const NOT_READY_PHRASES = ["logs not available yet", "no logs available"];
 
-/** True once the merged S3 log contains a DESTROY LOGS section. */
-// const hasDestroyLogs = (logText: string): boolean =>
-//   /DESTROY\s+LOGS/i.test(logText);
 const hasDestroyLogs = (logText: string): boolean =>
-  /DESTROY\s+LOGS/i.test(logText) || 
+  /DESTROY\s+LOGS/i.test(logText) ||
   /VPC\s+CLI\s+TERMINATION\s+LOGS/i.test(logText) ||
   /LOAD\s+BALANCER\s+CLI\s+TERMINATION\s+LOGS/i.test(logText) ||
   /INSTANCE\s+TERMINATION\s+LOGS/i.test(logText);
 
-const hasRetryLogs = (logText: string): boolean =>
-  /RETRY\s+ATTEMPT/i.test(logText);
+const hasRetryLogs = (logText: string): boolean => /RETRY\s+ATTEMPT/i.test(logText);
 
 type ArchiveFetchKey = { requestId: string; status: string } | null;
-
 type FetchResult = "ready" | "partial" | "not-ready" | "error";
+
+const getLogColor = (level: TerraformLog["level"]) => {
+  switch (level) {
+    case "success":
+      return "text-terminal-green";
+    case "warn":
+      return "text-terminal-yellow";
+    case "error":
+      return "text-terminal-red";
+    default:
+      return "text-foreground/80";
+  }
+};
+
+function ConsoleHeader({
+  requestMeta,
+  loading,
+  isAwsDisconnected,
+  isPaused,
+  setIsPaused,
+  handleClearLogs,
+  downloadLogs,
+}: {
+  requestMeta?: { requestId: string; status: string };
+  loading: boolean;
+  isAwsDisconnected: boolean;
+  isPaused: boolean;
+  setIsPaused: (paused: boolean) => void;
+  handleClearLogs: (requestId: string) => void;
+  downloadLogs: () => void;
+}) {
+  const terminalStatus =
+    requestMeta?.status === "completed" ||
+    requestMeta?.status === "terminated" ||
+    requestMeta?.status === "failed" ||
+    requestMeta?.status === "destroyed";
+
+  return (
+    <div className="flex items-center justify-between p-4 border-b border-border">
+      <div className="flex items-center gap-3">
+        <div className="flex gap-1.5">
+          <div className="w-3 h-3 rounded-full bg-destructive" />
+          <div className="w-3 h-3 rounded-full bg-warning" />
+          <div className="w-3 h-3 rounded-full bg-success" />
+        </div>
+        <span className="font-mono text-sm text-muted-foreground">terraform-console</span>
+
+        {requestMeta && (
+          <>
+            <Badge variant="outline" className="font-mono text-xs">
+              {requestMeta.requestId}
+            </Badge>
+
+            <Badge
+              variant="outline"
+              className={statusColorMap[requestMeta.status] || "border-gray-400 text-gray-400"}
+            >
+              {statusLabelMap[requestMeta.status] || requestMeta.status}
+            </Badge>
+          </>
+        )}
+
+        {loading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setIsPaused(!isPaused)}
+          tooltip={isPaused ? "Play" : "Pause"}
+          className="h-8 w-8"
+          disabled={!terminalStatus}
+        >
+          {isPaused ? <Play className="h-4 w-4 text-success" /> : <Pause className="h-4 w-4" />}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          tooltip="Clear logs"
+          disabled={isAwsDisconnected || !terminalStatus}
+          onClick={() => requestMeta && handleClearLogs(requestMeta.requestId)}
+          className="h-8 w-8"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          tooltip="Download logs"
+          onClick={downloadLogs}
+          className="h-8 w-8"
+          disabled={!terminalStatus}
+        >
+          <Download className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ConsoleBody({
+  requestMeta,
+  displayedLogs,
+  loading,
+  isAwsDisconnected,
+  isLiveMode,
+  consoleRef,
+}: {
+  requestMeta?: { requestId: string; status: string };
+  displayedLogs: TerraformLog[];
+  loading: boolean;
+  isAwsDisconnected: boolean;
+  isLiveMode: boolean;
+  consoleRef: React.RefObject<HTMLDivElement>;
+}) {
+  if (!requestMeta) {
+    return (
+      <div className="flex-1 overflow-auto p-4 bg-terminal-bg font-mono text-sm scrollbar-thin">
+        <div className="flex items-center justify-center h-full text-muted-foreground">
+          {isAwsDisconnected ? <p>AWS Disconnected</p> : <p>Select a request to view live logs</p>}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div ref={consoleRef} className="flex-1 overflow-auto p-4 bg-terminal-bg font-mono text-sm scrollbar-thin">
+      <div className="space-y-0.5">
+        {displayedLogs.map((log) => (
+          <div key={log.id} className="flex gap-3 animate-fade-in">
+            <span className="text-muted-foreground flex-shrink-0 text-xs">
+              {log.timestamp.toLocaleTimeString()}
+            </span>
+            <span className={cn(getLogColor(log.level), "break-all")}>{log.message}</span>
+          </div>
+        ))}
+
+        {loading && displayedLogs.length === 0 && (
+          <div className="flex items-center gap-2 mt-2">
+            <div className="w-2 h-4 bg-primary animate-pulse" />
+            <span className="text-xs text-muted-foreground">Connecting to live stream...</span>
+          </div>
+        )}
+
+        {isLiveMode && displayedLogs.length === 0 && !loading && (
+          <div className="flex items-center justify-center h-full text-muted-foreground">
+            <p>Waiting for logs to stream...</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ConsoleFooter({
+  displayedLogs,
+  isLiveMode,
+  isPaused,
+}: {
+  displayedLogs: TerraformLog[];
+  isLiveMode: boolean;
+  isPaused: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between p-3 border-t border-border bg-muted/30">
+      <div className="flex items-center gap-4 text-xs text-muted-foreground">
+        <span>Lines: {displayedLogs.length}</span>
+        <span>
+          Mode: <span className={cn(isLiveMode ? "text-blue-500" : "text-muted-foreground")}>{isLiveMode ? "Live" : "Archive"}</span>
+        </span>
+        {displayedLogs.length > 0 && (
+          <span>
+            Status: <span className={cn(isPaused ? "text-warning" : "text-success")}>{isPaused ? "Paused" : isLiveMode ? "Streaming" : "Playing"}</span>
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export function LiveConsole() {
   const { alert, confirm } = useDialog();
@@ -89,7 +271,6 @@ export function LiveConsole() {
   const pausedLogsRef = useRef<TerraformLog[]>([]);
   const sseCompletedRef = useRef(false);
 
-  // Use hooks for API calls
   const { data: requestMeta } = useRequestDetails(activeRequestId, activeService ?? undefined);
   const clearLogsMutation = useClearRequestLogs();
   const downloadLogsMutation = useDownloadRequestLogs();
@@ -106,37 +287,33 @@ export function LiveConsole() {
     "destroying",
   ];
 
-  // For vpc-terminate-service and lb-cli-terminate-service, 'completed' is a transient state
-  // (resource was provisioned successfully) that will transition to 'destroying'. Treat it
-  // as non-terminal so we keep polling and connect to SSE once destroying starts.
-  const isTransientCompleteService = activeService === "vpc-terminate-service" || activeService === "lb-cli-terminate-service";
+  const isTransientCompleteService =
+    activeService === "vpc-terminate-service" || activeService === "lb-cli-terminate-service";
   const effectiveTerminalStatuses = isTransientCompleteService
-    ? TERMINAL_STATUSES.filter((s) => s !== "completed")
+    ? TERMINAL_STATUSES.filter((status) => status !== "completed")
     : TERMINAL_STATUSES;
   const effectiveProvisioningStatuses = isTransientCompleteService
     ? [...PROVISIONING_STATUSES, "completed"]
     : PROVISIONING_STATUSES;
 
+  useEffect(() => {
+    activeServiceRef.current = activeService ?? null;
+  }, [activeService]);
 
+  useEffect(() => {
+    const metadataOperation =
+      ["route53-service", "s3-service"].includes(activeService ?? "") &&
+      (requestMeta?.action === "delete" ||
+        requestMeta?.last_operation === "delete" ||
+        requestMeta?.last_operation === "destroy" ||
+        ["terminated", "destroyed", "terminating", "destroying"].includes(requestMeta?.status ?? ""))
+        ? "delete"
+        : requestMeta?.action === "create"
+          ? "create"
+          : null;
 
-// Keep it in sync with the store value:
-useEffect(() => {
-    console.log("activeService changed:", activeService);
-  activeServiceRef.current = activeService ?? null;
-}, [activeService]);
-
-useEffect(() => {
-  const metadataOperation = ["route53-service", "s3-service"].includes(activeService ?? "") &&
-    (requestMeta?.action === "delete" || requestMeta?.last_operation === "delete" ||
-      requestMeta?.last_operation === "destroy" ||
-      ["terminated", "destroyed", "terminating", "destroying"].includes(requestMeta?.status ?? ""))
-    ? "delete"
-    : requestMeta?.action === "create"
-      ? "create"
-      : null;
-  activeOperationRef.current = activeOperation ?? metadataOperation;
-}, [activeOperation, activeService, requestMeta?.action, requestMeta?.last_operation, requestMeta?.status]);
-
+    activeOperationRef.current = activeOperation ?? metadataOperation;
+  }, [activeOperation, activeService, requestMeta?.action, requestMeta?.last_operation, requestMeta?.status]);
 
   useEffect(() => {
     if (isAwsDisconnected && activeRequestId) {
@@ -149,9 +326,8 @@ useEffect(() => {
   useEffect(() => {
     if (requestIdFromUrl) {
       const resolvedService = serviceFromUrl ?? activeService ?? null;
-      console.log("Setting active request from URL:", requestIdFromUrl, "service:", resolvedService);
       setActiveRequest(requestIdFromUrl, resolvedService, operationFromUrl ?? activeOperation);
-      navigate(`/console`, { replace: true });
+      navigate("/console", { replace: true });
     }
   }, [requestIdFromUrl, serviceFromUrl, operationFromUrl, setActiveRequest, navigate, activeService, activeOperation]);
 
@@ -177,30 +353,27 @@ useEffect(() => {
     }
   }, [effectiveRequestId, activeService]);
 
-
-
   const detectLogLevel = (message: string): TerraformLog["level"] => {
     const lowerMsg = message.toLowerCase();
-    if (
-      lowerMsg.includes("error") ||
-      lowerMsg.includes("failed") ||
-      lowerMsg.includes("❌")
-    )
+
+    if (lowerMsg.includes("error") || lowerMsg.includes("failed") || lowerMsg.includes("❌")) {
       return "error";
-    if (
-      lowerMsg.includes("warn") ||
-      lowerMsg.includes("warning") ||
-      lowerMsg.includes("⚠️")
-    )
+    }
+
+    if (lowerMsg.includes("warn") || lowerMsg.includes("warning") || lowerMsg.includes("⚠️")) {
       return "warn";
+    }
+
     if (
       lowerMsg.includes("success") ||
       lowerMsg.includes("completed") ||
       lowerMsg.includes("✅") ||
       lowerMsg.includes("🎉") ||
       lowerMsg.includes("[triggered by]")
-    )
+    ) {
       return "success";
+    }
+
     return "info";
   };
 
@@ -226,88 +399,75 @@ useEffect(() => {
     });
   };
 
-  // Extract timestamp from log line if present
   const extractTimestamp = (message: string): Date | null => {
     const timestampMatch = message.match(/^\[([^\]]+)\]/);
-    if (timestampMatch) {
-      try {
-        return new Date(timestampMatch[1]);
-      } catch {
-        return null;
-      }
+
+    if (!timestampMatch) {
+      return null;
     }
-    return null;
+
+    try {
+      return new Date(timestampMatch[1]);
+    } catch {
+      return null;
+    }
   };
 
-  const stripTimestamp = (message: string): string =>
-    message.replace(/^\[[^\]]+\]\s*/, "");
+  const stripTimestamp = (message: string): string => message.replace(/^\[[^\]]+\]\s*/, "");
 
   const fetchCompletedLogs = useCallback(
-    async (
-      requestId: string,
-      targetStatus: string,
-      fallbackLogs: TerraformLog[] = [],
-    ): Promise<FetchResult> => {
+    async (requestId: string, targetStatus: string, fallbackLogs: TerraformLog[] = []): Promise<FetchResult> => {
       try {
         setLoading(true);
-        // const logsData = await fetchRequestLogsApi(
-        //   requestId,
-        //   activeServiceRef.current ?? undefined,
-        //   activeOperationRef.current ?? undefined,
-        // );
 
-          const logsData = await fetchRequestLogsApi(
+        const logsData = await fetchRequestLogsApi(
           requestId,
-          isLiveOnlyService(activeServiceRef.current ?? undefined) ? undefined : activeServiceRef.current ?? undefined,
+          isLiveOnlyService(activeServiceRef.current ?? undefined)
+            ? undefined
+            : activeServiceRef.current ?? undefined,
           activeOperationRef.current ?? undefined,
         );
 
-        const logText: string = logsData.logs || "";
+        const logText = logsData.logs || "";
         const isPlaceholder =
           !logText.trim() ||
-          NOT_READY_PHRASES.some((p) =>
-            logText.trim().toLowerCase().startsWith(p),
-          );
+          NOT_READY_PHRASES.some((phrase) => logText.trim().toLowerCase().startsWith(phrase));
 
         if (isPlaceholder) {
           if (fallbackLogs.length > 0) setDisplayedLogs(fallbackLogs);
           return "not-ready";
         }
-        // s3-service archives each operation to its own dedicated file
-        // (create.log / delete.log) instead of a single combined log with
-        // "CREATE LOGS" / "DESTROY LOGS" section markers, so the marker
-        // checks below only apply to services that use the combined format.
-        const usesCombinedLogFile = activeServiceRef.current !== "route53-service" &&
+
+        const usesCombinedLogFile =
+          activeServiceRef.current !== "route53-service" &&
           activeServiceRef.current !== "s3-service" &&
           activeServiceRef.current !== "lb-cli-terminate-service";
+
         if (
           usesCombinedLogFile &&
           (targetStatus === "terminated" || targetStatus === "destroyed") &&
           !hasDestroyLogs(logText)
         ) {
-          console.log(
-            "[LiveConsole] S3 has provision logs but destroy logs not yet uploaded — retrying…",
-          );
+          console.log("[LiveConsole] S3 has provision logs but destroy logs not yet uploaded — retrying…");
           if (fallbackLogs.length > 0) setDisplayedLogs(fallbackLogs);
           return "partial";
         }
+
         if (
           usesCombinedLogFile &&
           (targetStatus === "terminated" || targetStatus === "destroyed" || targetStatus === "completed") &&
           liveStreamHadRetryRef.current &&
           !hasRetryLogs(logText)
         ) {
-          console.log(
-            "[LiveConsole] Live stream had a retry but S3 archive does not yet contain retry logs — retrying…",
-          );
+          console.log("[LiveConsole] Live stream had a retry but S3 archive does not yet contain retry logs — retrying…");
           if (fallbackLogs.length > 0) setDisplayedLogs(fallbackLogs);
           return "partial";
         }
 
         const logs: TerraformLog[] = logText
           .split("\n")
-          .filter((line: string) => line.trim())
-          .map((line: string, index: number) => ({
+          .filter((line) => line.trim())
+          .map((line, index) => ({
             id: `log-${requestId}-${index}`,
             timestamp: extractTimestamp(line) || new Date(),
             level: detectLogLevel(line),
@@ -344,22 +504,19 @@ useEffect(() => {
     [],
   );
 
-  // Connect to SSE endpoint using fetch with ReadableStream
   const connectToLiveLogs = useCallback(
     async (requestId: string, onComplete?: () => void) => {
       console.log("🔌 Connecting to live logs for:", requestId);
 
-      // Clear previous logs
       setDisplayedLogs([]);
       setAllLogs([]);
       setCurrentLogIndex(0);
       liveSseLogsRef.current = [];
+
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
 
       try {
-        console.log("📡 Fetching live SSE for:", requestId);
-        console.log("activeServiceRef.current =", activeServiceRef.current);
         const response = await fetchLiveRequestLogsStreamApi(
           requestId,
           abortController.signal,
@@ -367,28 +524,23 @@ useEffect(() => {
         );
 
         if (!response.ok) {
-          // For vpc-terminate-service, a 400 while status is still 'completed'
-          // means the destroy hasn't started yet — release the connecting lock
-          // so the next status poll can retry connecting once 'destroying' is seen.
           if (response.status === 400 && activeServiceRef.current === "vpc-terminate-service") {
             console.log("[LiveConsole] vpc-terminate SSE not ready yet (400), will retry on next status poll");
             isConnectingRef.current = false;
             setIsLiveMode(false);
             return;
           }
-          // For lb-service / lb-cli-terminate-service, a 400 means the operation
-          // already completed and logs are in S3 — release the lock so the status
-          // poll triggers archive fetch.
-          if (response.status === 400 && (
-            activeServiceRef.current === "lb-service" ||
-            activeServiceRef.current === "lb-cli-terminate-service"
-          )) {
+
+          if (
+            response.status === 400 &&
+            (activeServiceRef.current === "lb-service" || activeServiceRef.current === "lb-cli-terminate-service")
+          ) {
             console.log("[LiveConsole] lb SSE not available (400) — switching to archive");
             isConnectingRef.current = false;
             setIsLiveMode(false);
             return;
           }
-          // Any other non-ok response — release lock and stop live mode
+
           console.log(`[LiveConsole] SSE returned ${response.status} — releasing lock`);
           isConnectingRef.current = false;
           setIsLiveMode(false);
@@ -399,19 +551,14 @@ useEffect(() => {
           throw new Error("Response body is null");
         }
 
-        console.log("SSE connection established");
         setLoading(false);
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = "";
 
-        // Read stream
         while (true) {
-          console.log("READING...");
           const { done, value } = await reader.read();
-          console.log("DONE =", done);
-          console.log("VALUE LENGTH =", value?.length);
 
           if (done) {
             console.log("🏁 Stream complete");
@@ -419,45 +566,33 @@ useEffect(() => {
           }
 
           buffer += decoder.decode(value, { stream: true });
-
           const messages = buffer.split("\n\n");
           buffer = messages.pop() || "";
 
           for (const message of messages) {
             if (!message.trim()) continue;
-
-            // Skip heartbeat messages
-            if (message.startsWith(":")) {
-              console.log("💓 Heartbeat received");
-              continue;
-            }
+            if (message.startsWith(":")) continue;
 
             if (message.startsWith("data: ")) {
-
-    console.log("========== MESSAGE RECEIVED ==========");
-
               const jsonData = message.substring(6);
 
               try {
                 const data = JSON.parse(jsonData);
-                console.log("📨 SSE message:", data);
 
                 if (data.type === "connected") {
-                  console.log("🔗 Connected to logs for:", data.requestId);
                   continue;
                 }
 
                 if (data.type === "complete") {
-                  console.log("🏁 Provisioning complete:", data.status);
                   sseCompletedRef.current = true;
                   setIsLiveMode(false);
                   break;
                 }
 
-                // Regular log message
                 if (data.message) {
                   const cleanMessage = stripAnsiCodes(stripTimestamp(data.message));
-                 if (/RETRY\s+ATTEMPT/i.test(cleanMessage)) {
+
+                  if (/RETRY\s+ATTEMPT/i.test(cleanMessage)) {
                     liveStreamHadRetryRef.current = true;
                   }
 
@@ -469,10 +604,7 @@ useEffect(() => {
                     requestId,
                   };
 
-                  liveSseLogsRef.current = [
-                    ...liveSseLogsRef.current,
-                    logEntry,
-                  ];
+                  liveSseLogsRef.current = [...liveSseLogsRef.current, logEntry];
                   setDisplayedLogs((prev) => [...prev, logEntry]);
                 }
               } catch (err) {
@@ -482,16 +614,12 @@ useEffect(() => {
           }
         }
       } catch (error: any) {
-        if (error.name === "AbortError") {
-          console.log("🛑 Stream aborted");
-        } else {
+        if (error.name !== "AbortError") {
           console.error("❌ SSE error:", error);
         }
         setLoading(false);
       } finally {
-        console.log("🔌 SSE FINALLY CALLED");
         isConnectingRef.current = false;
-        // For liveOnly services, fetch archive logs after SSE stream ends
         if (sseCompletedRef.current && onComplete) {
           onComplete();
         }
@@ -500,110 +628,110 @@ useEffect(() => {
     [],
   );
 
-  // Handle log streaming based on status
   useEffect(() => {
     if (!effectiveRequestId || !requestMeta) return;
 
-    if (!effectiveRequestId) return;
+    const isLiveOnlyActive = isLiveOnlyService(activeService ?? undefined);
 
-  const isLiveOnlyActive = isLiveOnlyService(activeService ?? undefined);
+    if (isLiveOnlyActive) {
+      const currentStatus = requestMeta.status;
+      const isAlreadyTerminal = currentStatus === "terminated" || currentStatus === "failed";
 
-  // liveOnly services (e.g. ec2-service) connect to SSE immediately —
-  // no requestMeta needed because status is irrelevant for them.
-  if (isLiveOnlyActive) {
-    const currentStatus = requestMeta?.status;
-    const isAlreadyTerminal = currentStatus && (currentStatus === "terminated" || currentStatus === "failed");
+      if (isAlreadyTerminal) {
+        const fetchKey: ArchiveFetchKey = { requestId: effectiveRequestId, status: currentStatus };
+        const alreadyFetched =
+          hasFetchedArchiveRef.current?.requestId === fetchKey.requestId &&
+          hasFetchedArchiveRef.current?.status === fetchKey.status;
 
-    // If the request is already in a terminal state, skip SSE and fetch archive logs directly
-    if (isAlreadyTerminal) {
-      const fetchKey: ArchiveFetchKey = { requestId: effectiveRequestId, status: currentStatus };
-      const alreadyFetched =
-        hasFetchedArchiveRef.current?.requestId === fetchKey.requestId &&
-        hasFetchedArchiveRef.current?.status === fetchKey.status;
-      if (!alreadyFetched) {
-        hasFetchedArchiveRef.current = fetchKey;
-        setIsLiveMode(false);
-        const tryFetch = async (attemptsLeft: number) => {
-          const result = await fetchCompletedLogs(effectiveRequestId, currentStatus, []);
-          console.log(`[LiveConsole] ec2 terminal archive fetch result="${result}" attemptsLeft=${attemptsLeft}`);
-          if (result === "ready" || result === "error") return;
-          if (attemptsLeft > 0) {
-            hasFetchedArchiveRef.current = null;
-            setTimeout(() => {
-              hasFetchedArchiveRef.current = fetchKey;
-              tryFetch(attemptsLeft - 1);
-            }, 3000);
+        if (!alreadyFetched) {
+          hasFetchedArchiveRef.current = fetchKey;
+          setIsLiveMode(false);
+
+          const tryFetch = async (attemptsLeft: number) => {
+            const result = await fetchCompletedLogs(effectiveRequestId, currentStatus, []);
+            if (result === "ready" || result === "error") return;
+            if (attemptsLeft > 0) {
+              hasFetchedArchiveRef.current = null;
+              setTimeout(() => {
+                hasFetchedArchiveRef.current = fetchKey;
+                tryFetch(attemptsLeft - 1);
+              }, 3000);
+            }
+          };
+
+          tryFetch(12);
+        }
+        return;
+      }
+
+      if (!sseCompletedRef.current) {
+        const now = Date.now();
+        if (!isConnectingRef.current && now - lastSseAttemptRef.current > 5000) {
+          if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
           }
-        };
-        tryFetch(12);
+
+          isConnectingRef.current = true;
+          lastSseAttemptRef.current = now;
+          hasFetchedArchiveRef.current = null;
+          setDisplayedLogs([]);
+          setAllLogs([]);
+          setIsLiveMode(true);
+
+          const capturedRequestId = effectiveRequestId;
+          const sseSnapshot = () => [...liveSseLogsRef.current];
+
+          connectToLiveLogs(capturedRequestId, () => {
+            const snapshot = sseSnapshot();
+            const tryFetch = async (attemptsLeft: number) => {
+              const result = await fetchCompletedLogs(capturedRequestId, "completed", snapshot);
+              if (result === "ready" || result === "error") return;
+              if (attemptsLeft > 0) {
+                setTimeout(() => tryFetch(attemptsLeft - 1), 3000);
+              }
+            };
+
+            tryFetch(12);
+          });
+        }
       }
       return;
     }
 
-    if (!sseCompletedRef.current) {
-      const now = Date.now();
-      if (!isConnectingRef.current && now - lastSseAttemptRef.current > 5000) {
-        if (abortControllerRef.current) {
-          abortControllerRef.current.abort();
-          abortControllerRef.current = null;
-        }
-        isConnectingRef.current = true;
-        lastSseAttemptRef.current = now;
-        hasFetchedArchiveRef.current = null;
-        setDisplayedLogs([]);
-        setAllLogs([]);
-        setIsLiveMode(true);
-        const capturedRequestId = effectiveRequestId;
-        const sseSnapshot = () => [...liveSseLogsRef.current];
-        connectToLiveLogs(capturedRequestId, () => {
-          const snapshot = sseSnapshot();
-          const tryFetch = async (attemptsLeft: number) => {
-            const result = await fetchCompletedLogs(capturedRequestId, "completed", snapshot);
-            console.log(`[LiveConsole] ec2 archive fetch result="${result}" attemptsLeft=${attemptsLeft}`);
-            if (result === "ready" || result === "error") return;
-            if (attemptsLeft > 0) {
-              setTimeout(() => tryFetch(attemptsLeft - 1), 3000);
-            }
-          };
-          tryFetch(12);
-        });
-      }
-    }
-    return;
-  }
-
-  if (!requestMeta) return;       
-
     const status = requestMeta.status;
-    // const isLiveOnlyActive = isLiveOnlyService(activeService ?? undefined);
 
-    if (effectiveProvisioningStatuses.includes(status) || isLiveOnlyActive) {
-      // Only connect if not already streaming and enough time has passed since
-      // last attempt (5s debounce prevents reconnect loops on 400 responses).
+    if (effectiveProvisioningStatuses.includes(status)) {
       const now = Date.now();
       const msSinceLastAttempt = now - lastSseAttemptRef.current;
+
       if (!isConnectingRef.current && msSinceLastAttempt > 5000) {
         if (abortControllerRef.current) {
           abortControllerRef.current.abort();
           abortControllerRef.current = null;
         }
+
         isConnectingRef.current = true;
         lastSseAttemptRef.current = now;
         hasFetchedArchiveRef.current = null;
         setDisplayedLogs([]);
         setAllLogs([]);
         setIsLiveMode(true);
+
         if (isTransientCompleteService) {
           const capturedRequestId = effectiveRequestId;
           const sseSnapshot = () => [...liveSseLogsRef.current];
+
           connectToLiveLogs(capturedRequestId, () => {
             const snapshot = sseSnapshot();
             const tryFetch = async (attemptsLeft: number) => {
               const result = await fetchCompletedLogs(capturedRequestId, "destroyed", snapshot);
-              console.log(`[LiveConsole] lb-terminate archive fetch result="${result}" attemptsLeft=${attemptsLeft}`);
               if (result === "ready" || result === "error") return;
-              if (attemptsLeft > 0) setTimeout(() => tryFetch(attemptsLeft - 1), 3000);
+              if (attemptsLeft > 0) {
+                setTimeout(() => tryFetch(attemptsLeft - 1), 3000);
+              }
             };
+
             tryFetch(12);
           });
         } else {
@@ -611,19 +739,12 @@ useEffect(() => {
         }
       }
     } else if (effectiveTerminalStatuses.includes(status)) {
-      // Use a compound key so "completed" and "terminated" are treated as
-      // distinct fetch targets for the same requestId.
-      const fetchKey: ArchiveFetchKey = {
-        requestId: effectiveRequestId,
-        status,
-      };
-
+      const fetchKey: ArchiveFetchKey = { requestId: effectiveRequestId, status };
       const alreadyFetched =
         hasFetchedArchiveRef.current?.requestId === fetchKey.requestId &&
         hasFetchedArchiveRef.current?.status === fetchKey.status;
 
       if (!alreadyFetched) {
-        // Lock immediately to prevent duplicate concurrent fetches
         hasFetchedArchiveRef.current = fetchKey;
         setIsLiveMode(false);
 
@@ -632,70 +753,48 @@ useEffect(() => {
           abortControllerRef.current = null;
         }
 
-        // if (isLiveOnlyService(activeServiceRef.current ?? undefined)) {
-        //   const sseSnapshot = [...liveSseLogsRef.current];
-        //   setDisplayedLogs(sseSnapshot);
-        //   return;
-        // }
-
         const sseSnapshot = [...liveSseLogsRef.current];
         const tryFetch = async (attemptsLeft: number) => {
-          const result = await fetchCompletedLogs(
-            effectiveRequestId,
-            status,
-            sseSnapshot,
-          );
-
-          console.log(
-            `[LiveConsole] fetch result="${result}" attemptsLeft=${attemptsLeft}`,
-          );
+          const result = await fetchCompletedLogs(effectiveRequestId, status, sseSnapshot);
 
           if (result === "ready" || result === "error") return;
 
           if (attemptsLeft > 0) {
-            // Release the lock during the wait so the effect can re-enter if
-            // the component re-renders, but re-acquire before the next attempt.
             hasFetchedArchiveRef.current = null;
             setTimeout(() => {
               hasFetchedArchiveRef.current = fetchKey;
               tryFetch(attemptsLeft - 1);
             }, 3000);
-          } else {
-            console.warn(
-              "[LiveConsole] Max retries reached waiting for S3 logs.",
-            );
           }
         };
 
-        // Give S3 a small head-start for destroyed requests since the DB is
-        // updated *before* finalizeLogs finishes uploading to S3.
         const initialDelay = status === "terminated" || status === "destroyed" ? 2000 : 0;
         setTimeout(() => tryFetch(12), initialDelay);
       }
     }
   }, [
-    effectiveRequestId,
-    requestMeta?.status,
-    activeService,     
+    activeService,
     connectToLiveLogs,
+    effectiveRequestId,
+    effectiveProvisioningStatuses,
+    effectiveTerminalStatuses,
     fetchCompletedLogs,
+    isTransientCompleteService,
+    requestMeta,
   ]);
 
-  // Preserve/restore displayed logs when pausing/resuming archive streaming
   useEffect(() => {
     if (!isLiveMode && isPaused && displayedLogs.length > 0) {
       pausedLogsRef.current = displayedLogs;
     }
   }, [isPaused, displayedLogs, isLiveMode]);
 
-  // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
     if (consoleRef.current && !isPaused) {
       consoleRef.current.scrollTop = consoleRef.current.scrollHeight;
     }
   }, [displayedLogs, isPaused]);
 
-  // Stream logs line-by-line from S3 (for completed requests)
   useEffect(() => {
     if (allLogs.length === 0 || currentLogIndex >= allLogs.length) return;
     if (isPaused) {
@@ -714,11 +813,7 @@ useEffect(() => {
   }, [currentLogIndex, allLogs, isPaused, displayedLogs]);
 
   useEffect(() => {
-    if (
-      archiveStreamingRef.current &&
-      allLogs.length > 0 &&
-      currentLogIndex >= allLogs.length
-    ) {
+    if (archiveStreamingRef.current && allLogs.length > 0 && currentLogIndex >= allLogs.length) {
       archiveStreamingRef.current = false;
     }
   }, [currentLogIndex, allLogs.length]);
@@ -767,20 +862,7 @@ useEffect(() => {
     }
 
     prevStatusRef.current = current;
-  }, [requestMeta?.status]);
-
-  const getLogColor = (level: TerraformLog["level"]) => {
-    switch (level) {
-      case "success":
-        return "text-terminal-green";
-      case "warn":
-        return "text-terminal-yellow";
-      case "error":
-        return "text-terminal-red";
-      default:
-        return "text-foreground/80";
-    }
-  };
+  }, [alert, requestMeta?.status]);
 
   const downloadLogs = () => {
     if (!effectiveRequestId) return;
@@ -789,160 +871,26 @@ useEffect(() => {
 
   return (
     <div className="glass-panel rounded-xl h-full flex flex-col">
-      {/* Console Header */}
-      <div className="flex items-center justify-between p-4 border-b border-border">
-        <div className="flex items-center gap-3">
-          <div className="flex gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-destructive" />
-            <div className="w-3 h-3 rounded-full bg-warning" />
-            <div className="w-3 h-3 rounded-full bg-success" />
-          </div>
-          <span className="font-mono text-sm text-muted-foreground">
-            terraform-console
-          </span>
+      <ConsoleHeader
+        requestMeta={requestMeta}
+        loading={loading}
+        isAwsDisconnected={isAwsDisconnected}
+        isPaused={isPaused}
+        setIsPaused={setIsPaused}
+        handleClearLogs={handleClearLogs}
+        downloadLogs={downloadLogs}
+      />
 
-          {requestMeta && (
-            <>
-              <Badge variant="outline" className="font-mono text-xs">
-                {requestMeta.requestId}
-              </Badge>
+      <ConsoleBody
+        requestMeta={requestMeta}
+        displayedLogs={displayedLogs}
+        loading={loading}
+        isAwsDisconnected={isAwsDisconnected}
+        isLiveMode={isLiveMode}
+        consoleRef={consoleRef}
+      />
 
-              <Badge
-                variant="outline"
-                className={
-                  statusColorMap[requestMeta.status] ||
-                  "border-gray-400 text-gray-400"
-                }
-              >
-                {statusLabelMap[requestMeta.status] || requestMeta.status}
-              </Badge>
-            </>
-          )}
-
-          {loading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsPaused(!isPaused)}
-            tooltip={isPaused ? "Play" : "Pause"}
-            className="h-8 w-8"
-            disabled={
-              requestMeta?.status !== "completed" &&
-              requestMeta?.status !== "terminated" &&
-              requestMeta?.status !== "failed" &&
-              requestMeta?.status !== "destroyed"
-            }
-          >
-            {isPaused ? (
-              <Play className="h-4 w-4 text-success" />
-            ) : (
-              <Pause className="h-4 w-4" />
-            )}
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            tooltip="Clear logs"
-            disabled={
-              isAwsDisconnected ||
-              (requestMeta?.status !== "completed" &&
-                requestMeta?.status !== "terminated" &&
-                requestMeta?.status !== "failed" &&
-                 requestMeta?.status !== "destroyed"
-              )
-            }
-            onClick={() => handleClearLogs(requestMeta!.requestId)}
-            className="h-8 w-8"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            tooltip="Download logs"
-            onClick={downloadLogs}
-            className="h-8 w-8"
-            disabled={
-              requestMeta?.status !== "completed" &&
-              requestMeta?.status !== "terminated" &&
-              requestMeta?.status !== "failed" && 
-              requestMeta?.status !== "destroyed"
-            }
-          >
-            <Download className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Console Body */}
-      <div
-        ref={consoleRef}
-        className="flex-1 overflow-auto p-4 bg-terminal-bg font-mono text-sm scrollbar-thin"
-      >
-        {!effectiveRequestId ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground">
-            {isAwsDisconnected ? (
-              <p>AWS Disconnected</p>
-            ) : (
-              <p>Select a request to view live logs</p>
-            )}
-          </div>
-        ) : (
-          <div className="space-y-0.5">
-            {displayedLogs.map((log) => (
-              <div key={log.id} className="flex gap-3 animate-fade-in">
-                <span className="text-muted-foreground flex-shrink-0 text-xs">
-                  {log.timestamp.toLocaleTimeString()}
-                </span>
-                <span className={cn(getLogColor(log.level), "break-all")}>
-                  {log.message}
-                </span>
-              </div>
-            ))}
-            {loading && displayedLogs.length === 0 && (
-              <div className="flex items-center gap-2 mt-2">
-                <div className="w-2 h-4 bg-primary animate-pulse" />
-                <span className="text-xs text-muted-foreground">
-                  Connecting to live stream...
-                </span>
-              </div>
-            )}
-            {isLiveMode && displayedLogs.length === 0 && !loading && (
-              <div className="flex items-center justify-center h-full text-muted-foreground">
-                <p>Waiting for logs to stream...</p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Console Footer */}
-      <div className="flex items-center justify-between p-3 border-t border-border bg-muted/30">
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          <span>Lines: {displayedLogs.length}</span>
-          <span>
-            Mode:{" "}
-            <span
-              className={cn(
-                isLiveMode ? "text-blue-500" : "text-muted-foreground",
-              )}
-            >
-              {isLiveMode ? "Live" : "Archive"}
-            </span>
-          </span>
-          {displayedLogs.length > 0 && (
-            <span>
-              Status:{" "}
-              <span className={cn(isPaused ? "text-warning" : "text-success")}>
-                {isPaused ? "Paused" : isLiveMode ? "Streaming" : "Playing"}
-              </span>
-            </span>
-          )}
-        </div>
-      </div>
+      <ConsoleFooter displayedLogs={displayedLogs} isLiveMode={isLiveMode} isPaused={isPaused} />
     </div>
   );
 }

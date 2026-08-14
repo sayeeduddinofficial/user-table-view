@@ -123,7 +123,7 @@ export function EksList() {
       .includes(query.toLowerCase()),
   );
 
-  const remainingQuota = Math.max(0, MAX_EKS - userClusterCount);
+  const remainingQuota = MAX_EKS - userClusterCount;
   const latestVersion =
     clusters
       .map((c) => c.kubernetes_version)

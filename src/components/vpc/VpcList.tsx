@@ -79,7 +79,7 @@ export function VpcList() {
   const activeVpcs = allVpcs.filter((v: any) => v.status === "available").length;
   const hasReachedQuota = totalVpcs >= MAX_VPCS;
 
-  const remainingQuota = Math.max(0, MAX_VPCS - totalVpcs);
+  const remainingQuota = MAX_VPCS - totalVpcs;
   const activeSubnets = allVpcs.reduce((total, v) => total + (v.subnetCount ?? 0), 0);
   const withNat = allVpcs.reduce((total, v) => total + (v.natGateways ?? 0), 0);
 
@@ -187,7 +187,7 @@ export function VpcList() {
                     </span>
                   </TooltipTrigger>
                   <TooltipContent side="bottom">
-                    <p>VPC quota reached ({MAX_VPCS}). Request a quota increase.</p>
+                    <p>VPC quota limit reached. Request a quota increase.</p>
                   </TooltipContent>
                 </Tooltip>
               ) : (

@@ -42,6 +42,7 @@ export interface BucketItem {
   versioning_enabled?: boolean;
   block_public_access?: boolean;
   status?: string;
+  last_operation?: string;
   [key: string]: unknown;
 }
 

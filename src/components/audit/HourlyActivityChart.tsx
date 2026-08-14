@@ -1,5 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Flame } from "lucide-react";
+import type { HourlyActivityItem } from "@/types/api";
+
+interface HourlyActivityChartProps {
+  data: HourlyActivityItem[];
+}
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
@@ -14,7 +19,7 @@ const getColor = (count: number, max: number) => {
   return '#a7f3d0';
 };
 
-export const HourlyActivityChart = ({ data }) => {
+export const HourlyActivityChart = ({ data }: HourlyActivityChartProps) => {
   const maxCount = Math.max(...data.map(d => d.count), 1);
   const totalEvents = data.reduce((sum, d) => sum + d.count, 0);
   const hasData = data.length > 0 && totalEvents > 0;

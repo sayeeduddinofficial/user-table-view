@@ -350,10 +350,6 @@ export function LoadBalancerCreate({ kind }: Props) {
     setSubmitted(true);
     let valid = true;
 
-    if (provisioningLb) {
-      alert({ title: `"${provisioningLb.name}" is still provisioning`, description: "Wait for it to finish before creating another.", severity: "error" });
-      return;
-    }
     const nameValidationError = validateLbName(name);
     if (nameValidationError) {
       setNameErrorMsg(nameValidationError);
@@ -824,7 +820,6 @@ export function LoadBalancerCreate({ kind }: Props) {
           <LbFooterActions
             onCancel={() => navigate("/aws/load-balancers")}
             onSubmit={submit}
-            disabledReason={disabledReason}
           />
         </div>
       </div>

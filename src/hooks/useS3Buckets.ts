@@ -25,6 +25,7 @@ const mapApiBucket = (item: Awaited<ReturnType<typeof fetchBucketsApi>>[number])
     encryption: "AES256",
     bucketKey: true,
     status: item.status,
+    lastOperation: typeof item.last_operation === "string" ? item.last_operation : undefined,
     tags: [],
     sizeGB: 0,
     objects: 0,
@@ -40,7 +41,12 @@ export function useS3Buckets() {
   const loadBuckets = async (): Promise<boolean> => {
     try {
       const items = await fetchBucketsApi();
-      const mapped = items.map(mapApiBucket).filter((b) => b.meta.status?.toUpperCase() !== "FAILED");
+      const mapped = items.map(mapApiBucket).filter((b) => {
+        const status = b.meta.status?.toUpperCase();
+        const lastOp = b.meta.lastOperation?.toLowerCase();
+        // Show bucket if not failed, OR if failed due to a destroy (so user can retry)
+        return status !== "FAILED" || lastOp === "destroy";
+      });
       setBuckets(mapped);
       return true;
     } catch (error) {

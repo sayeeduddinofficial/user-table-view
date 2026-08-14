@@ -70,7 +70,7 @@ const statusConfig: Record<
 
 
 
-const normalizeStatus = (status: string) => {
+const normalizeStatus = (status: string): string => {
   switch (status) {
     case "IN_PROGRESS":
       return "provisioning";
@@ -93,7 +93,7 @@ const normalizeStatus = (status: string) => {
   }
 };
 
-const normalizeEnvironment = (env: string) => {
+const normalizeEnvironment = (env: string): string => {
   switch (env?.toLowerCase()) {
     case "dev":
     case "development":
@@ -107,32 +107,67 @@ const normalizeEnvironment = (env: string) => {
     default:
       return env;
   }
-};  
+};
 
-function getRequestSubtitle(request: Request): string {
-  console.log(`Total VMs: ${request.total_vms}`);
+const getRequestSubtitle = (request: Request): string => {
   switch (request.service) {
     case "vpc-service":
       return `VPC • ${request.region}`;
     case "s3-service":
       return `S3 Bucket • ${request.region}`;
     case "lb-service":
-      return `load balancer ${request.region}`;
+      return `Load balancer • ${request.region}`;
     case "eks-cluster-service":
       return `EKS Cluster • ${request.region}`;
     case "rds-service":
       return `RDS • ${request.region}`;
     case "route53-service":
-      return `Route53`;
-    default:{
-      if (!request.total_vms) return request.region;
+      return "Route53";
+    default: {
+      if (!request.total_vms) {
+        return request.region;
+      }
+
       return `${request.total_vms} VM${request.total_vms !== 1 ? "s" : ""} • ${request.region}`;
     }
-      
   }
+};
+
+const getRequestOperationMode = (request: Request): "create" | "delete" | undefined => {
+  if (request.service !== "route53-service") {
+    return undefined;
+  }
+
+  const currentOperation = (request.last_operation || request.action || "").toLowerCase();
+
+  if (
+    currentOperation === "delete" ||
+    currentOperation === "destroy" ||
+    request.status === "destroyed" ||
+    request.status === "destroying"
+  ) {
+    return "delete";
+  }
+
+  return "create";
+};
+
+function EmptyState() {
+  return (
+    <div className="p-4 text-center text-muted-foreground text-xs">
+      No active requests
+    </div>
+  );
 }
 
-
+function LoadingState() {
+  return (
+    <div className="flex items-center justify-center p-4 text-muted-foreground">
+      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+      <span className="text-xs">Loading...</span>
+    </div>
+  );
+}
 
 export function RequestSelector() {
   const { data: awsConfig } = useAwsConfig();
@@ -140,10 +175,10 @@ export function RequestSelector() {
   const { activeRequestId, setActiveRequest } = useAppStore();
   const { data: requests = [], isLoading: loading } = useActiveRequests();
 
-  const processedRequests = requests.map((r) => ({
-    ...r,
-    status: normalizeStatus(r.status),
-    environment: normalizeEnvironment(r.environment),
+  const processedRequests = requests.map((request) => ({
+    ...request,
+    status: normalizeStatus(request.status),
+    environment: normalizeEnvironment(request.environment),
   }));
 
   return (
@@ -158,14 +193,9 @@ export function RequestSelector() {
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-1">
           {loading && processedRequests.length === 0 ? (
-            <div className="flex items-center justify-center p-4 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              <span className="text-xs">Loading...</span>
-            </div>
+            <LoadingState />
           ) : processedRequests.length === 0 ? (
-            <div className="p-4 text-center text-muted-foreground text-xs">
-              No active requests
-            </div>
+            <EmptyState />
           ) : (
             processedRequests.map((request) => (
               <RequestItem
@@ -174,19 +204,15 @@ export function RequestSelector() {
                 isActive={request.request_id === String(activeRequestId)}
                 isAwsDisconnected={isAwsDisconnected}
                 onClick={() => {
-                  if (!isAwsDisconnected) {
-                    setActiveRequest(
-                      request.request_id,
-                      request.service ?? null,
-                      request.service === "route53-service"
-                        ? ((request.last_operation || request.action || "").toLowerCase() === "delete" ||
-                          (request.last_operation || request.action || "").toLowerCase() === "destroy" ||
-                          request.status === "destroyed" || request.status === "destroying"
-                            ? "delete"
-                            : "create")
-                        : undefined,
-                    );
+                  if (isAwsDisconnected) {
+                    return;
                   }
+
+                  setActiveRequest(
+                    request.request_id,
+                    request.service ?? null,
+                    getRequestOperationMode(request),
+                  );
                 }}
               />
             ))
@@ -220,9 +246,7 @@ function RequestItem({
       onClick={onClick}
       className={cn(
         "w-full text-left p-3 rounded-lg transition-all",
-        isAwsDisconnected
-          ? "opacity-50 cursor-not-allowed"
-          : "hover:bg-muted/50",
+        isAwsDisconnected ? "opacity-50 cursor-not-allowed" : "hover:bg-muted/50",
         isActive && !isAwsDisconnected && "bg-primary/10 border border-primary/30",
       )}
       disabled={isAwsDisconnected}
@@ -236,34 +260,21 @@ function RequestItem({
               status.animate && "animate-spin",
             )}
           />
-          <span
-            className="font-mono text-xs text-muted-foreground"
-            // title={request.request_id}
-          >
-            {request.request_id}
-          </span>
+          <span className="font-mono text-xs text-muted-foreground">{request.request_id}</span>
         </div>
         <Badge variant="outline" className="text-[10px] capitalize">
           {status.label}
         </Badge>
       </div>
 
-      <p className="text-sm font-medium text-foreground mb-1">
-        {/* {request.total_vms} VMs • {request.region} */}
-        {getRequestSubtitle(request)}
-      </p>
+      <p className="text-sm font-medium text-foreground mb-1">{getRequestSubtitle(request)}</p>
 
       <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">{request.user_name}</span>
         <span className="text-xs text-muted-foreground">
-          {request.user_name}
-        </span>
-        <span className="text-xs text-muted-foreground">
-          {formatDistanceToNow(
-            parseBackendTimestamp(
-              request.updated_at ?? request.created_at
-            ),
-            { addSuffix: true }
-          )}
+          {formatDistanceToNow(parseBackendTimestamp(request.updated_at ?? request.created_at), {
+            addSuffix: true,
+          })}
         </span>
       </div>
     </button>
@@ -272,9 +283,7 @@ function RequestItem({
   if (isAwsDisconnected) {
     return (
       <Tooltip>
-        <TooltipTrigger asChild>
-          {buttonContent}
-        </TooltipTrigger>
+        <TooltipTrigger asChild>{buttonContent}</TooltipTrigger>
         <TooltipContent side="top">
           <p>AWS Disconnected</p>
         </TooltipContent>

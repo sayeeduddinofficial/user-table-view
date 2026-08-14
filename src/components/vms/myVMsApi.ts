@@ -40,13 +40,6 @@ export async function startAllVMsApi(requestId: string): Promise<{ stop_time?: s
   return apiClient.post(env.runtime, `/api/vms/vm-requests/${requestId}/start`);
 }
 
-// export async function syncExistingVMsApi(): Promise<{ imported: number }> {
-//   return apiClient.post(
-//     env.runtime,
-//     "/api/vms/sync-existing-vms"
-//   );
-// }
-
 // CHANGED: mEmail removed from payload — backend resolves manager from Azure AD hierarchy
 export async function submitQuotaRequestApi(
   userId: string,

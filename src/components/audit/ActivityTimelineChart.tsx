@@ -5,8 +5,9 @@ import { createPortal } from "react-dom";
 import { Activity } from "lucide-react";
 import { LinePortalTooltip } from "@/components/charts/LinePortalTooltip";
 import { useChartTooltip } from "@/components/charts/useChartTooltip";
+import type { ActivityTimelineItem } from "@/types/api";
 
-const CATEGORY_COLORS = {
+const CATEGORY_COLORS: Record<string, string> = {
   Auth: "#60a5fa",
   "AWS Ops": "#34d399",
   "User Mgmt": "#f472b6",
@@ -14,12 +15,18 @@ const CATEGORY_COLORS = {
   Requests: "#818cf8",
 };
 
-export const ActivityTimelineChart = ({ data }) => {
+interface ActivityTimelineChartProps {
+  data: ActivityTimelineItem[];
+}
+
+type TimelineRow = Record<string, string | number>;
+
+export const ActivityTimelineChart = ({ data }: ActivityTimelineChartProps) => {
   const { tooltipData, handleMouseMove, handleContainerMouseMove, clearTooltip } = useChartTooltip();
 
-  const transformedData = {};
+  const transformedData: Record<string, TimelineRow> = {};
   
-  data.forEach(item => {
+  data.forEach((item) => {
     const dateKey = item.date;
     if (!transformedData[dateKey]) {
       transformedData[dateKey] = { date: dateKey };
@@ -27,10 +34,10 @@ export const ActivityTimelineChart = ({ data }) => {
     transformedData[dateKey][item.category] = item.count;
   });
 
-  const chartData = Object.values(transformedData).map((item: any) => {
-    const filledItem: any = {
+  const chartData = Object.values(transformedData).map((item) => {
+    const filledItem: TimelineRow = {
       ...item,
-      date: format(parseISO(item.date), "MMM d"),
+      date: format(parseISO(String(item.date)), "MMM d"),
     };
     
     // Fill in zeros for all categories on each date

@@ -14,7 +14,7 @@ export function RdsDetail() {
   const { cluster, loading } = useRdsCluster(requestId);
   const [tab, setTab] = useState<DetailTab>("connectivity");
   const [connectUsing, setConnectUsing] = useState<ConnectUsing>("code");
-  const [psqlPlatform, setPsqlPlatform] = useState<"macos" | "amazon-linux" | "ubuntu" | "rhel" | "suse" | "debian" | "windows">("macos");
+  const [psqlPlatform, setPsqlPlatform] = useState<"macos" | "amazon-linux" | "ubuntu" | "rhel" | "suse" | "debian" | "windows">("amazon-linux");
   // const [connectTo, setConnectTo] = useState("Writer");
   const [showTokenDialog, setShowTokenDialog] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -275,7 +275,6 @@ export function RdsDetail() {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="macos">psql (macOS)</SelectItem>
                         <SelectItem value="amazon-linux">
                           psql (Amazon Linux)
                         </SelectItem>
@@ -290,6 +289,7 @@ export function RdsDetail() {
                         <SelectItem value="windows">
                           psql (Windows Server 2025)
                         </SelectItem>
+                         <SelectItem value="macos">psql (macOS)</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>

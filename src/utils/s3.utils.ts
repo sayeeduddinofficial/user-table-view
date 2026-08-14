@@ -83,6 +83,7 @@ export interface S3BucketMeta {
   encryption: string;
   bucketKey: boolean;
   status?: string;
+  lastOperation?: string;
   tags: { k: string; v: string }[];
   sizeGB: number;
   objects: number;
