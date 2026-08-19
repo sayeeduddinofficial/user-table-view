@@ -1,0 +1,19 @@
+---
+title: FinOps / Leadership Billing Flow
+---
+flowchart TD
+  U([User]) --> P["pages/LeadershipBilling.tsx (FinOpsRoute)"]
+  P --> H["useLeadership"]
+  H --> Q["React Query cache<br/>(keys, refetch, invalidate)"]
+  Q --> A["billingApi"]
+  A --> C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
+  C --> S[("VITE_AWS_CONFIG_URL")]
+  S --> C --> Q --> P
+  subgraph UI[Page interactions]
+    S0["Cost KPIs and trend charts"]
+    S1["KPI detail dialog drill-down"]
+    S2["Breakdown by service and account"]
+    S3["Export report"]
+  end
+  P --> UI
+  C -. error .-> E["ApiErrorBoundary + toast"]

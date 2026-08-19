@@ -1,0 +1,19 @@
+---
+title: Audit Logs Service Flow
+---
+flowchart TD
+  U([User]) --> P["pages/AuditLogs.tsx"]
+  P --> H["useAuditLogsPage"]
+  H --> Q["React Query cache<br/>(keys, refetch, invalidate)"]
+  Q --> A["auditApi"]
+  A --> C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
+  C --> S[("VITE_USER_MANAGEMENT_URL")]
+  S --> C --> Q --> P
+  subgraph UI[Page interactions]
+    S0["Filter by service, user, action and date range"]
+    S1["Stat cards and analytics charts"]
+    S2["Paginated log table"]
+    S3["Export CSV / PNG / PDF"]
+  end
+  P --> UI
+  C -. error .-> E["ApiErrorBoundary + toast"]

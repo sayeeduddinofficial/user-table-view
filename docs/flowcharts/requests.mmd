@@ -1,0 +1,19 @@
+---
+title: Request Management Service Flow
+---
+flowchart TD
+  U([User]) --> P["pages/Requests.tsx + NewRequest.tsx"]
+  P --> H["useRequests"]
+  H --> Q["React Query cache<br/>(keys, refetch, invalidate)"]
+  Q --> A["requestsApi"]
+  A --> C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
+  C --> S[("VITE_VM_REQUEST_SERVICE_URL")]
+  S --> C --> Q --> P
+  subgraph UI[Page interactions]
+    S0["Create new resource request (ChooseServices dialog)"]
+    S1["Track request status timeline"]
+    S2["Approve / reject (approver role)"]
+    S3["Filter by status, service and date"]
+  end
+  P --> UI
+  C -. error .-> E["ApiErrorBoundary + toast"]

@@ -1,0 +1,98 @@
+flowchart TD
+    subgraph Entry["Application Entry"]
+        A[index.html] --> B[main.tsx]
+        B --> C[App.tsx]
+    end
+
+    C --> D[Global Providers]
+    subgraph Providers["Global Providers"]
+        D1[QueryClientProvider]
+        D2[ThemeProvider]
+        D3[AuthProvider]
+        D4[NotificationsProvider]
+        D5[Tooltip & Dialog Providers]
+    end
+
+    C --> E[BrowserRouter]
+    E --> F[AppRoutes]
+
+    subgraph PublicRoutes["Public Routes"]
+        F --> G1[/Login/]
+        F --> G2[/Microsoft Redirect/]
+        F --> G3[/Runtime Governance Action/]
+        F --> G4[/Quota Request Action/]
+    end
+
+    F --> H[ProtectedRoute]
+    H --> I{Authenticated?}
+    I -->|No| J[Redirect to /login]
+    I -->|Yes| K[MainLayout]
+
+    subgraph Layout["Main Layout"]
+        K --> L1[Header]
+        K --> L2[Sidebar Navigation]
+        K --> L3[Page Content Area]
+    end
+
+    L3 --> M[Role-Based Route Guards]
+    subgraph RoleGuards["Role Guards"]
+        M --> N1[AdminRoute]
+        M --> N2[ApproverRoute]
+        M --> N3[DashboardRoute]
+        M --> N4[AuditRoute]
+        M --> N5[FinOpsRoute]
+    end
+
+    N1 --> O[Feature Pages]
+    N2 --> O
+    N3 --> O
+    N4 --> O
+    N5 --> O
+
+    subgraph Pages["Feature Pages"]
+        O --> P1[Dashboard / Index]
+        O --> P2[My VMs]
+        O --> P3[Requests / New Request]
+        O --> P4[AWS Services]
+        O --> P5[Admin / Users / Feedback]
+        O --> P6[Audit Logs]
+        O --> P7[Leadership Billing]
+        O --> P8[Settings / Profile]
+    end
+
+    subgraph AWSServices["AWS Services"]
+        P4 --> R1[S3]
+        P4 --> R2[VPC]
+        P4 --> R3[EKS]
+        P4 --> R4[RDS]
+        P4 --> R5[Load Balancers]
+        P4 --> R6[Route 53]
+    end
+
+    P1 --> Q[Data Layer]
+    P2 --> Q
+    P3 --> Q
+    P6 --> Q
+    P7 --> Q
+    R1 --> Q
+    R2 --> Q
+    R3 --> Q
+    R4 --> Q
+    R5 --> Q
+    R6 --> Q
+
+    subgraph DataLayer["Data Layer"]
+        Q --> S1[React Query Hooks]
+        S1 --> S2[apiClient / Axios]
+        S2 --> S3[Backend Microservices]
+    end
+
+    S3 --> T[AWS APIs & Resources]
+
+    style Entry fill:#f0f9ff
+    style Providers fill:#f5f3ff
+    style PublicRoutes fill:#fff7ed
+    style Layout fill:#f0fdf4
+    style RoleGuards fill:#fef2f2
+    style Pages fill:#eff6ff
+    style DataLayer fill:#fffbeb

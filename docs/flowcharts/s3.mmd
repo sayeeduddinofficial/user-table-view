@@ -1,0 +1,19 @@
+---
+title: S3 Bucket Service Flow
+---
+flowchart TD
+  U([User]) --> P["pages/S3.tsx"]
+  P --> H["useS3Buckets / useBucketObjects"]
+  H --> Q["React Query cache<br/>(keys, refetch, invalidate)"]
+  Q --> A["bucketApi"]
+  A --> C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
+  C --> S[("VITE_BUCKET_SERVICE_URL")]
+  S --> C --> Q --> P
+  subgraph UI[Page interactions]
+    S0["List buckets"]
+    S1["Create bucket (region, versioning, encryption)"]
+    S2["Browse objects, upload and delete"]
+    S3["Manage bucket policy and lifecycle"]
+  end
+  P --> UI
+  C -. error .-> E["ApiErrorBoundary + toast"]

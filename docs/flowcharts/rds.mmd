@@ -1,0 +1,19 @@
+---
+title: RDS Service Flow
+---
+flowchart TD
+  U([User]) --> P["pages/Rds.tsx + RdsDetail / CreateRds"]
+  P --> H["useRds"]
+  H --> Q["React Query cache<br/>(keys, refetch, invalidate)"]
+  Q --> A["rdsApi"]
+  A --> C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
+  C --> S[("VITE_RDS_SERVICE_URL")]
+  S --> C --> Q --> P
+  subgraph UI[Page interactions]
+    S0["List DB instances per request"]
+    S1["Create RDS (engine, class, storage)"]
+    S2["View instance metrics and endpoints"]
+    S3["Start / stop / delete instance"]
+  end
+  P --> UI
+  C -. error .-> E["ApiErrorBoundary + toast"]

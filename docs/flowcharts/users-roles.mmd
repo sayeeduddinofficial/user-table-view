@@ -1,0 +1,19 @@
+---
+title: User and Role Management Flow
+---
+flowchart TD
+  U([User]) --> P["pages/Users.tsx (AdminRoute)"]
+  P --> H["useUsers / useRoles"]
+  H --> Q["React Query cache<br/>(keys, refetch, invalidate)"]
+  Q --> A["userApi"]
+  A --> C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
+  C --> S[("VITE_USER_MANAGEMENT_URL")]
+  S --> C --> Q --> P
+  subgraph UI[Page interactions]
+    S0["Invite user (email invitation)"]
+    S1["Activate invitation flow"]
+    S2["Assign / change role"]
+    S3["Deactivate or remove user"]
+  end
+  P --> UI
+  C -. error .-> E["ApiErrorBoundary + toast"]

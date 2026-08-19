@@ -1,0 +1,19 @@
+---
+title: VPC Service Flow
+---
+flowchart TD
+  U([User]) --> P["pages/Vpcs.tsx + VpcDetails / CreateVpc"]
+  P --> H["useVpc"]
+  H --> Q["React Query cache<br/>(keys, refetch, invalidate)"]
+  Q --> A["vpcApi"]
+  A --> C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
+  C --> S[("VITE_VPC_SERVICE_URL")]
+  S --> C --> Q --> P
+  subgraph UI[Page interactions]
+    S0["List VPCs and details"]
+    S1["Create VPC with subnets and CIDR"]
+    S2["Create Flow Log"]
+    S3["Create Encryption config"]
+  end
+  P --> UI
+  C -. error .-> E["ApiErrorBoundary + toast"]

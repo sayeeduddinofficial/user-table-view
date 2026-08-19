@@ -1,0 +1,19 @@
+---
+title: Dashboard Service Flow
+---
+flowchart TD
+  U([User]) --> P["pages/Index.tsx (Dashboard)"]
+  P --> H["useDashboard (stats, recent requests, quotas)"]
+  H --> Q["React Query cache<br/>(keys, refetch, invalidate)"]
+  Q --> A["dashboardApi"]
+  A --> C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
+  C --> S[("VITE_VM_REQUEST_SERVICE_URL + VITE_USER_MANAGEMENT_URL")]
+  S --> C --> Q --> P
+  subgraph UI[Page interactions]
+    S0["Stat cards (requests, VMs, users)"]
+    S1["Recent requests table with 15s refetch"]
+    S2["Service quota cards"]
+    S3["Navigate to feature pages"]
+  end
+  P --> UI
+  C -. error .-> E["ApiErrorBoundary + toast"]

@@ -1,0 +1,19 @@
+---
+title: Console (Live Logs) Flow
+---
+flowchart TD
+  U([User]) --> P["pages/Console.tsx"]
+  P --> H["useSocket / useConsole"]
+  H --> Q["React Query cache<br/>(keys, refetch, invalidate)"]
+  Q --> A["Socket.IO client"]
+  A --> C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
+  C --> S[("VITE_SOCKET_URL")]
+  S --> C --> Q --> P
+  subgraph UI[Page interactions]
+    S0["Open socket connection with auth token"]
+    S1["Subscribe to resource log stream"]
+    S2["Live append and autoscroll"]
+    S3["Disconnect on unmount"]
+  end
+  P --> UI
+  C -. error .-> E["ApiErrorBoundary + toast"]

@@ -1,0 +1,19 @@
+---
+title: Load Balancer Service Flow
+---
+flowchart TD
+  U([User]) --> P["pages/AwsLoadBalancers.tsx + LoadBalancerDetails / CreateLoadBalancer"]
+  P --> H["useLoadBalancers"]
+  H --> Q["React Query cache<br/>(keys, refetch, invalidate)"]
+  Q --> A["loadBalancerApi"]
+  A --> C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
+  C --> S[("VITE_LB_SERVICE_URL")]
+  S --> C --> Q --> P
+  subgraph UI[Page interactions]
+    S0["List ALB / NLB / CLB"]
+    S1["Create load balancer by kind"]
+    S2["Listeners, target groups and health checks"]
+    S3["Create security group"]
+  end
+  P --> UI
+  C -. error .-> E["ApiErrorBoundary + toast"]

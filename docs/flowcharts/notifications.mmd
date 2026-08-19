@@ -1,0 +1,19 @@
+---
+title: Notification Service Flow
+---
+flowchart TD
+  U([User]) --> P["Header bell + NotificationsProvider"]
+  P --> H["useNotificationsContext"]
+  H --> Q["React Query cache<br/>(keys, refetch, invalidate)"]
+  Q --> A["notificationApi"]
+  A --> C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
+  C --> S[("VITE_NOTIFICATION_SERVICE_URL")]
+  S --> C --> Q --> P
+  subgraph UI[Page interactions]
+    S0["Poll / receive notifications"]
+    S1["Unread badge count"]
+    S2["Mark read / mark all read"]
+    S3["Deep link to related request"]
+  end
+  P --> UI
+  C -. error .-> E["ApiErrorBoundary + toast"]

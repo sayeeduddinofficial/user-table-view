@@ -1,0 +1,19 @@
+---
+title: Route 53 Service Flow
+---
+flowchart TD
+  U([User]) --> P["pages/Route53.tsx + HostedZoneDetails / CreateRecord"]
+  P --> H["useRoute53"]
+  H --> Q["React Query cache<br/>(keys, refetch, invalidate)"]
+  Q --> A["route53Api"]
+  A --> C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
+  C --> S[("VITE_ROUTE53_SERVICE_URL")]
+  S --> C --> Q --> P
+  subgraph UI[Page interactions]
+    S0["List hosted zones"]
+    S1["View zone details and record sets"]
+    S2["Create record (A, CNAME, TXT ...)"]
+    S3["Delete record"]
+  end
+  P --> UI
+  C -. error .-> E["ApiErrorBoundary + toast"]

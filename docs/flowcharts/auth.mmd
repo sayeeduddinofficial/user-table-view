@@ -1,0 +1,20 @@
+---
+title: Authentication and Session Flow
+---
+flowchart TD
+  U([User]) --> P["Login.tsx / MicrosoftRedirect.tsx / ActivateInvitation.tsx"]
+  P --> H["useLogin (AuthProvider) + MSAL"]
+  H --> Q["React Query cache<br/>(keys, refetch, invalidate)"]
+  Q --> A["authApi"]
+  A --> C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
+  C --> S[("VITE_AUTH_URL")]
+  S --> C --> Q --> P
+  subgraph UI[Page interactions]
+    S0["Microsoft Entra ID sign-in (MSAL redirect)"]
+    S1["Handle redirect result and store tokens"]
+    S2["Fetch current user + role"]
+    S3["ProtectedRoute / Role guards (Admin, FinOps, Audit, Approver)"]
+    S4["Logout clears session and redirects to /login"]
+  end
+  P --> UI
+  C -. error .-> E["ApiErrorBoundary + toast"]

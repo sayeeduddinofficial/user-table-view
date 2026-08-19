@@ -1,0 +1,19 @@
+---
+title: Settings and Profile Flow
+---
+flowchart TD
+  U([User]) --> P["pages/Settings.tsx + Profile.tsx"]
+  P --> H["useSettings / useProfile"]
+  H --> Q["React Query cache<br/>(keys, refetch, invalidate)"]
+  Q --> A["settingsApi"]
+  A --> C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
+  C --> S[("VITE_AWS_CONFIG_URL + VITE_USER_MANAGEMENT_URL")]
+  S --> C --> Q --> P
+  subgraph UI[Page interactions]
+    S0["Theme and preferences"]
+    S1["AWS account/config settings (admin)"]
+    S2["Profile details and SSH keys"]
+    S3["Save and invalidate caches"]
+  end
+  P --> UI
+  C -. error .-> E["ApiErrorBoundary + toast"]

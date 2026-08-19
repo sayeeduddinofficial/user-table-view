@@ -1,7 +1,7 @@
-import { Server, Activity, Users, Clock } from "lucide-react";
-import { StatCard } from "@/components/dashboard/StatCard";
+import { Server, Activity, Users } from "lucide-react";
+import { StatCard } from "./StatCard";
 
-interface Props {
+export interface DashboardStatsProps {
   totalResources: number;
   activeResources: number;
   provisioningCount: number;
@@ -21,7 +21,7 @@ export function DashboardStats({
   provisioningCount,
   avgProvisionTime,
   trend,
-}: Props) {
+}: DashboardStatsProps) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
      <StatCard

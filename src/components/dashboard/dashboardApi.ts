@@ -79,6 +79,51 @@ export interface ServiceQuota {
   percentage: number;
 }
 
+export interface DashboardRequest {
+  request_id: string;
+  user_name: string;
+  action: string;
+  region: string;
+  project: string;
+  environment: string;
+  category: number | string;
+  categoryLabel?: string;
+  total_vms: number;
+  status: string;
+  created_at: string;
+  updated_at?: string;
+  vm_count: number;
+  logs_cleared_at: string | null;
+  service?: string;
+}
+
+export interface CurrentUserSummary {
+  name?: string;
+  role?: string;
+}
+
+type RecentRequestsPayload =
+  | DashboardRequest[]
+  | { data?: DashboardRequest[] }
+  | undefined;
+
+// ── Fetch Recent Requests ────────────────────────────────────────────────────
+export async function fetchRecentRequestsApi(limit: number): Promise<DashboardRequest[]> {
+  const response = await apiClient.get<{ data?: RecentRequestsPayload }>(
+    env.vmRequest,
+    "/api/requests?dashboard=true"
+  );
+
+  const payload = response?.data;
+  const requests = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.data)
+      ? payload.data
+      : [];
+
+  return requests.slice(0, limit);
+}
+
 // ── Fetch AWS Counts ─────────────────────────────────────────────────────────
 export async function fetchAWSCountsApi(): Promise<AWSSummary> {
   const response = await apiClient.get<ApiResponse<AWSSummary>>(

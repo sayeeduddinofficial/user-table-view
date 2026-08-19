@@ -13,7 +13,9 @@ import {
   fetchDashboardOverviewApi,
   fetchRoleCountsApi,
   fetchServiceQuotasApi,
+  fetchRecentRequestsApi,
 } from '@/components/dashboard/dashboardApi';
+import { RECENT_REQUESTS_LIMIT } from '@/components/dashboard/dashboardConstants';
 import { fetchVMRequestsApi } from '@/components/requests/vmRequestsApi';
 
 const QUERY_KEYS = {
@@ -26,6 +28,7 @@ const QUERY_KEYS = {
   roleCounts: ['roleCounts'] as const,
   recentActivity: ['dashboardRecentActivity'] as const,
   serviceQuotas: ['serviceQuotas'] as const,
+  recentRequests: ['recentRequests'] as const,
 };
 
 // ── Fetch AWS Counts ─────────────────────────────────────────────────────────
@@ -123,6 +126,17 @@ export function useServiceQuotas() {
     staleTime: 1000 * 60, // 1 minute
     refetchInterval: 30_000, // 30 seconds
     gcTime: 1000 * 60 * 5, // 5 minutes
+    enabled: !!localStorage.getItem("token"),
+  });
+}
+
+// ── Fetch Recent Requests ────────────────────────────────────────────────────
+export function useRecentRequests(limit: number = RECENT_REQUESTS_LIMIT) {
+  return useQuery({
+    queryKey: [...QUERY_KEYS.recentRequests, limit],
+    queryFn: () => fetchRecentRequestsApi(limit),
+    refetchInterval: 15_000, // 15 seconds
+    refetchOnWindowFocus: true,
     enabled: !!localStorage.getItem("token"),
   });
 }

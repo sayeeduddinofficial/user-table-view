@@ -1,0 +1,19 @@
+---
+title: EKS Service Flow
+---
+flowchart TD
+  U([User]) --> P["pages/Eks.tsx + EksDetails / CreateEks"]
+  P --> H["useEks"]
+  H --> Q["React Query cache<br/>(keys, refetch, invalidate)"]
+  Q --> A["eksApi"]
+  A --> C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
+  C --> S[("VITE_EKS_CLUSTER_SERVICE_URL")]
+  S --> C --> Q --> P
+  subgraph UI[Page interactions]
+    S0["List clusters and status"]
+    S1["Create cluster (version, node groups)"]
+    S2["View nodegroups, addons and workloads"]
+    S3["Delete / scale cluster"]
+  end
+  P --> UI
+  C -. error .-> E["ApiErrorBoundary + toast"]
