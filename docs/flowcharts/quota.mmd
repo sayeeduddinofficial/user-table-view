@@ -2,18 +2,17 @@
 title: Quota Request Service Flow
 ---
 flowchart TD
-  U([User]) --> P["pages/QuotaRequests.tsx + QuotaRequestAction.tsx"]
-  P --> H["useQuota"]
-  H --> Q["React Query cache<br/>(keys, refetch, invalidate)"]
-  Q --> A["quotaApi"]
-  A --> C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
-  C --> S[("VITE_VM_REQUEST_SERVICE_URL")]
-  S --> C --> Q --> P
+  U([User]) -->|"user action"| P["pages/QuotaRequests.tsx + QuotaRequestAction.tsx"]
+  P <-->|"request / rendered data"| H["useQuotaRequests"]
+  H <-->|"query request / cached response"| Q["React Query cache<br/>(keys, refetch, invalidate)"]
+  Q <-->|"fetch request / parsed response"| A["quotaRequestsApi"]
+  A <-->|"HTTP request / HTTP response"| C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
+  C <-->|"REST request / JSON response"| S[("VITE_VM_REQUEST_SERVICE_URL")]
+  P -->|"renders"| UI
   subgraph UI[Page interactions]
     S0["Submit quota increase request"]
     S1["Approver review queue"]
     S2["Email link action page (public route)"]
     S3["Quota usage vs limit cards"]
   end
-  P --> UI
-  C -. error .-> E["ApiErrorBoundary + toast"]
+  C -. "error response" .-> E["ApiErrorBoundary + toast"]

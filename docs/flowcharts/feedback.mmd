@@ -2,18 +2,17 @@
 title: Feedback Service Flow
 ---
 flowchart TD
-  U([User]) --> P["pages/feedback.tsx + AdminFeedback.tsx"]
-  P --> H["useFeedback"]
-  H --> Q["React Query cache<br/>(keys, refetch, invalidate)"]
-  Q --> A["feedbackApi"]
-  A --> C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
-  C --> S[("VITE_FEEDBACK_SERVICE_URL")]
-  S --> C --> Q --> P
+  U([User]) -->|"user action"| P["pages/feedback.tsx + AdminFeedback.tsx"]
+  P <-->|"request / rendered data"| H["useFeedback"]
+  H <-->|"query request / cached response"| Q["React Query cache<br/>(keys, refetch, invalidate)"]
+  Q <-->|"fetch request / parsed response"| A["feedbackApi"]
+  A <-->|"HTTP request / HTTP response"| C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
+  C <-->|"REST request / JSON response"| S[("VITE_FEEDBACK_SERVICE_URL")]
+  P -->|"renders"| UI
   subgraph UI[Page interactions]
     S0["Submit feedback with attachments (FormData)"]
     S1["Admin list and triage"]
     S2["Update status and respond"]
     S3["Filter by category and severity"]
   end
-  P --> UI
-  C -. error .-> E["ApiErrorBoundary + toast"]
+  C -. "error response" .-> E["ApiErrorBoundary + toast"]
