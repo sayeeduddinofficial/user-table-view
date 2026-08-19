@@ -20,11 +20,11 @@ Each service has an editable Mermaid source (`*.mmd`) and a rendered PNG in `png
 | Runtime Governance Service Flow | [`runtime-governance.mmd`](runtime-governance.mmd) | [`png/runtime-governance.png`](png/runtime-governance.png) |
 | S3 Bucket Service Flow | [`s3.mmd`](s3.mmd) | [`png/s3.png`](png/s3.png) |
 | Settings and Profile Flow | [`settings-profile.mmd`](settings-profile.mmd) | [`png/settings-profile.png`](png/settings-profile.png) |
-| User and Role Management Flow | [`users-roles.mmd`](users-roles.mmd) | [`png/users-roles.png`](png/users-roles.png) |
+| User Management Flow | [`users-roles.mmd`](users-roles.mmd) | [`png/users-roles.png`](png/users-roles.png) |
 | VM / EC2 Service Flow | [`vm-ec2.mmd`](vm-ec2.mmd) | [`png/vm-ec2.png`](png/vm-ec2.png) |
 | VPC Service Flow | [`vpc.mmd`](vpc.mmd) | [`png/vpc.png`](png/vpc.png) |
 
 ## Re-render
 ```bash
-npx @mermaid-js/mermaid-cli -i docs/flowcharts/<name>.mmd -o docs/flowcharts/png/<name>.png -b white -w 1600
+npx @mermaid-js/mermaid-cli -p puppeteer-config.json -i docs/flowcharts/<name>.mmd -o docs/flowcharts/png/<name>.png -b white -w 1600
 ```
