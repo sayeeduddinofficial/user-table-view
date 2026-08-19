@@ -10,9 +10,10 @@ flowchart TD
   C <-->|"REST request / JSON response"| S[("VITE_LB_SERVICE_URL")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    S0["List ALB / NLB / CLB"]
-    S1["Create load balancer by kind"]
+    S0["List ALB / NLB"]
+    S1["Create load balancer by type"]
     S2["Listeners, target groups and health checks"]
     S3["Create security group"]
+    S4["Request quota increase"]
   end
   C -. "error response" .-> E["ApiErrorBoundary + toast"]

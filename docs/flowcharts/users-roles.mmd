@@ -14,5 +14,7 @@ flowchart TD
     S1["Activate invitation flow"]
     S2["Assign / change role"]
     S3["Deactivate or remove user"]
+    S4["Per-user service quotas and allowed instance types"]
+    S5["User count cards, search and role filter"]
   end
   C -. "error response" .-> E["ApiErrorBoundary + toast"]
