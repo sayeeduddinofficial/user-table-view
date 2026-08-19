@@ -10,9 +10,12 @@ flowchart TD
   C <-->|"REST request / JSON response"| S[("VITE_VPC_SERVICE_URL")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    S0["List VPCs and details"]
-    S1["Create VPC with subnets and CIDR"]
-    S2["Create Flow Log"]
-    S3["Create Encryption config"]
+    S0["List VPCs"]
+    S1["VPC details page"]
+    S2["Create VPC: 'VPC only' or 'VPC and more'"]
+    S3["'VPC and more' preview panel"]
+    S4["Name tag auto-generation"]
+    S5["Delete VPC"]
+    S6["Request quota increase"]
   end
   C -. "error response" .-> E["ApiErrorBoundary + toast"]

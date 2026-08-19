@@ -12,7 +12,7 @@ flowchart TD
   subgraph UI[Page interactions]
     S0["Stat cards (requests, VMs, users)"]
     S1["Recent requests table with 15s refetch"]
-    S2["Service quota cards"]
+    S2["Service quota cards with per-service request quota increase button"]
     S3["Navigate to feature pages"]
   end
   C -. "error response" .-> E["ApiErrorBoundary + toast"]

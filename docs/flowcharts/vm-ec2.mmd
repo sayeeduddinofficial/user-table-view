@@ -2,17 +2,19 @@
 title: VM / EC2 Service Flow
 ---
 flowchart TD
-  U([User]) -->|"user action"| P["pages/MyVMs.tsx"]
-  P <-->|"request / rendered data"| H["useMyVMs"]
+  U([User]) -->|"user action"| P["pages/MyVMs.tsx + pages/NewRequest.tsx (Create VM)"]
+  P <-->|"request / rendered data"| H["useMyVMs / useVMRequestForm"]
   H <-->|"query request / cached response"| Q["React Query cache<br/>(keys, refetch, invalidate)"]
-  Q <-->|"fetch request / parsed response"| A["myVMsApi"]
+  Q <-->|"fetch request / parsed response"| A["myVMsApi / vmRequestsApi"]
   A <-->|"HTTP request / HTTP response"| C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
   C <-->|"REST request / JSON response"| S[("VITE_VM_REQUEST_SERVICE_URL")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    S0["List VMs with filters and search"]
-    S1["Start / Stop / Reboot / Terminate"]
-    S2["View instance details and tags"]
-    S3["Open web console / SSH key download"]
+    S0["Create VM page (region, AMI, Splunk / General Purpose groups)"]
+    S1["List VMs with filters and search"]
+    S2["Start / Stop / Reboot / Terminate"]
+    S3["View instance details and tags"]
+    S4["Open web console / SSH key download"]
+    S5["Request quota increase"]
   end
   C -. "error response" .-> E["ApiErrorBoundary + toast"]
