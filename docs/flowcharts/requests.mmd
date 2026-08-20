@@ -10,7 +10,7 @@ flowchart TD
   C <-->|"REST request / JSON response"| S[("VM Request Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    direction LR
+    direction TB
     S0["Create new resource request (ChooseServices dialog)"]
     S1["Track request status timeline"]
     S2["Approve / reject (approver role)"]

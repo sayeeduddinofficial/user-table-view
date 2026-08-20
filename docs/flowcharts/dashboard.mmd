@@ -10,7 +10,7 @@ flowchart TD
   C <-->|"REST request / JSON response"| S[("VM Request Service + User Management Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    direction LR
+    direction TB
     S0["Stat cards (requests, VMs, users)"]
     S1["Recent requests table with 15s refetch"]
     S2["Service quota cards with per-service request quota increase button"]

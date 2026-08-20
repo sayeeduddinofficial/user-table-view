@@ -10,7 +10,7 @@ flowchart TD
   C <-->|"REST request / JSON response"| S[("Notification Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    direction LR
+    direction TB
     S0["Poll / receive notifications"]
     S1["Unread badge count"]
     S2["Mark read / mark all read"]

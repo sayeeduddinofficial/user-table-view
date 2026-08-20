@@ -10,7 +10,7 @@ flowchart TD
   C <-->|"REST request / JSON response"| S[("Authentication Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    direction LR
+    direction TB
     S0["Microsoft Entra ID sign-in (MSAL redirect)"]
     S1["Handle redirect result and store tokens"]
     S2["Fetch current user + role"]

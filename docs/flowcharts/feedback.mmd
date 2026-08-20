@@ -10,7 +10,7 @@ flowchart TD
   C <-->|"REST request / JSON response"| S[("Feedback Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    direction LR
+    direction TB
     S0["Submit feedback with attachments (FormData)"]
     S1["Admin list and triage"]
     S2["Update status and respond"]

@@ -10,7 +10,7 @@ flowchart TD
   C <-->|"REST request / JSON response"| S[("AWS Config Service + User Management Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    direction LR
+    direction TB
     S0["Theme and preferences"]
     S1["AWS account/config settings (admin)"]
     S2["Profile details and SSH keys"]

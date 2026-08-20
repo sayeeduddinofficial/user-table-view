@@ -11,7 +11,7 @@ flowchart TD
   C <-->|"REST request / JSON response"| S[("VM Request Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    direction LR
+    direction TB
     S0["List VMs with filters and search"]
     S1["Create VM page (VMRequestForm)<br/>category, roles, schedule, justification"]
     S2["Start / Stop / Reboot / Terminate"]

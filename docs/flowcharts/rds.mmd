@@ -10,7 +10,7 @@ flowchart TD
   C <-->|"REST request / JSON response"| S[("RDS Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    direction LR
+    direction TB
     S0["List DB instances per request"]
     S1["Create RDS (engine, class, storage)"]
     S2["View instance metrics and endpoints"]

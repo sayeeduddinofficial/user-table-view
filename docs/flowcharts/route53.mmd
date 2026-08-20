@@ -10,7 +10,7 @@ flowchart TD
   C <-->|"REST request / JSON response"| S[("Route 53 Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    direction LR
+    direction TB
     S0["List hosted zones"]
     S1["View zone details and record sets"]
     S2["Create record (A, CNAME, TXT ...)"]

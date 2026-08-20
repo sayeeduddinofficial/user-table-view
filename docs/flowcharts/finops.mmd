@@ -10,7 +10,7 @@ flowchart TD
   C <-->|"REST request / JSON response"| S[("AWS Config Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    direction LR
+    direction TB
     S0["Cost KPIs and trend charts"]
     S1["KPI detail dialog drill-down"]
     S2["Breakdown by service and account"]

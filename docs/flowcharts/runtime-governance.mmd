@@ -10,7 +10,7 @@ flowchart TD
   C <-->|"REST request / JSON response"| S[("Runtime Governance Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    direction LR
+    direction TB
     S0["Schedule start/stop windows"]
     S1["Extension requests from owners"]
     S2["Approve / reject via email link (public route)"]

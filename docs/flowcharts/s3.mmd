@@ -10,7 +10,7 @@ flowchart TD
   C <-->|"REST request / JSON response"| S[("S3 Bucket Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    direction LR
+    direction TB
     S0["List buckets"]
     S1["Create bucket (region, versioning, encryption)"]
     S2["Browse objects, upload and delete"]
