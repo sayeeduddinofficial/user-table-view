@@ -10,7 +10,7 @@ flowchart TD
   C <-->|"REST request / JSON response"| S[("AWS Config Service + User Management Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    direction LR
+    direction TB
     S0["Theme and preferences"]
     S1["AWS account/config settings (admin)"]
     S2["Profile details and SSH keys"]
@@ -19,21 +19,8 @@ flowchart TD
   end
   C -. "error response" .-> E["ApiErrorBoundary + toast"]
 
-  %% ---- Condition-based paths ----
-  Q -->|"cache lookup"| D1{"Cached data<br/>still fresh?"}
-  D1 -->|"yes"| P
-  D1 -->|"no"| A
-  C -->|"before send"| D2{"Access token<br/>valid?"}
-  D2 -->|"yes"| S
-  D2 -->|"no"| RT["Refresh token"]
-  RT -->|"retry request"| S
-  RT -. "refresh failed" .-> LO["Sign out - redirect /login"]
-  S -->|"response"| D3{"HTTP 2xx?"}
-  D3 -->|"yes"| Q
-  D3 -->|"no"| D4{"403 role change?"}
-  D4 -->|"yes"| RR["Refresh role and retry"]
-  D4 -->|"no"| E
-  %% ---- Service specific decisions ----
+  %% ---- Key decisions ----
+  P -->|"evaluate"| X0
   X0{"Admin role?"} -->|"yes"| X1["Show AWS config / terraform backend sections"]
   X0 -->|"no"| X2["Show profile and preferences only"]
   X3{"Save valid?"} -->|"yes"| X4["Persist and invalidate caches"]

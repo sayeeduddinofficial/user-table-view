@@ -11,7 +11,7 @@ flowchart TD
   C <-->|"REST request / JSON response"| S[("VM Request Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    direction LR
+    direction TB
     S0["List VMs with filters and search"]
     S1["Create VM page (VMRequestForm)<br/>category, roles, schedule, justification"]
     S2["Start / Stop / Reboot / Terminate"]
@@ -22,21 +22,8 @@ flowchart TD
   end
   C -. "error response" .-> E["ApiErrorBoundary + toast"]
 
-  %% ---- Condition-based paths ----
-  Q -->|"cache lookup"| D1{"Cached data<br/>still fresh?"}
-  D1 -->|"yes"| P
-  D1 -->|"no"| A
-  C -->|"before send"| D2{"Access token<br/>valid?"}
-  D2 -->|"yes"| S
-  D2 -->|"no"| RT["Refresh token"]
-  RT -->|"retry request"| S
-  RT -. "refresh failed" .-> LO["Sign out - redirect /login"]
-  S -->|"response"| D3{"HTTP 2xx?"}
-  D3 -->|"yes"| Q
-  D3 -->|"no"| D4{"403 role change?"}
-  D4 -->|"yes"| RR["Refresh role and retry"]
-  D4 -->|"no"| E
-  %% ---- Service specific decisions ----
+  %% ---- Key decisions ----
+  P -->|"evaluate"| X0
   X0{"Category 1 selected?"} -->|"yes"| X1{"Provision mode?"}
   X0 -->|"no"| X2["Category specific infra sections"]
   X1 -->|"Splunk deployment"| X3["roles[] payload"]
