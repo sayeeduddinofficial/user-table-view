@@ -6,6 +6,7 @@ flowchart TD
   P <-->|"request / rendered data"| H["useMyVMs / useVMRequestForm"]
   H <-->|"query request / cached response"| Q["React Query cache<br/>(keys, refetch, invalidate)"]
   Q <-->|"fetch request / parsed response"| A["myVMsApi / vmRequestsApi"]
+  Q <-->|"fetch request / parsed response"| A["myVMsApi / vmRequestsApi"]
   A <-->|"HTTP request / HTTP response"| C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
   C <-->|"REST request / JSON response"| S[("VM Request Service")]
   P -->|"renders"| UI
