@@ -32,6 +32,13 @@ const TERMINAL_REQUEST_STATUSES = new Set([
 // For these services 'completed' is transient — keep polling until 'destroyed'.
 const TRANSIENT_COMPLETED_SERVICES = new Set(['vpc-terminate-service', 'ec2-service', 'lb-cli-terminate-service']);
 
+// Services that support retry — never stop polling so status updates after
+// a retry (failed → retrying → completed) are reflected in the header.
+const RETRYABLE_SERVICES = new Set(['lb-service', 'vpc-service', 's3-service', 'rds-service', 'eks-cluster-service']);
+
+// Statuses that can transition further — never stop polling on these.
+const RETRYING_STATUSES = new Set(['retrying', 'retrying_terminate']);
+
 // ── Fetch Active Requests ────────────────────────────────────────────────────
 export function useActiveRequests() {
   return useQuery({
@@ -51,9 +58,10 @@ export function useRequestDetails(requestId: string | null, service?: string) {
     staleTime: 2_000,
     refetchInterval: (query) => {
       if (!query.state.data) return 3_000;
-      const isTerminal = TERMINAL_REQUEST_STATUSES.has(query.state.data.status);
-      // Keep polling for ec2-service so LiveConsole can detect the destroying
-      // window and connect to SSE before the status flips to destroyed.
+      const status = query.state.data.status;
+      if (RETRYING_STATUSES.has(status)) return 3_000;
+      if (RETRYABLE_SERVICES.has(service ?? '')) return 3_000;
+      const isTerminal = TERMINAL_REQUEST_STATUSES.has(status);
       if (isTerminal && TRANSIENT_COMPLETED_SERVICES.has(service ?? '')) return 3_000;
       return isTerminal ? false : 3_000;
     },

@@ -340,6 +340,18 @@ export async function retryRoute53TerminateApi(requestId: string): Promise<void>
 
 
 
+// ── Fetch users who have requests (for admin filter dropdown) ───────────────
+export async function fetchRequestUsersApi(): Promise<{ id: string; name: string }[]> {
+  const rows = await apiClient.get<{ id: number; email: string; name: string }[]>(
+    env.vmRequest,
+    '/api/vm-requests/users'
+  );
+  return (Array.isArray(rows) ? rows : []).map(u => ({
+    id: String(u.id),
+    name: u.name || u.email,
+  }));
+}
+
 // vmRequestsApi.ts — add at the bottom
 
 export type RetryApiFn = (requestId: string) => Promise<void>;

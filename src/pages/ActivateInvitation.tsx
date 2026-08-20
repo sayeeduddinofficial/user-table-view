@@ -36,7 +36,6 @@ export default function ActivateInvitation() {
     // Microsoft login (survives the page reload caused by loginRedirect), skip.
     const alreadyProcessed = sessionStorage.getItem(SESSION_KEY);
     if (alreadyProcessed === token) {
-      console.log("[ActivateInvitation] Token already sent to MS login (post-redirect), skipping.");
       return;
     }
 
@@ -48,7 +47,6 @@ export default function ActivateInvitation() {
 
     async function activate() {
       try {
-        console.log("[ActivateInvitation] Processing token:", token!.substring(0, 20) + "…");
 
         if (isMounted) setStatusMessage("Verifying your invitation…");
 
@@ -60,7 +58,6 @@ export default function ActivateInvitation() {
         });
 
         const data = await res.json();
-        console.log("[ActivateInvitation] Backend response:", { status: res.status, hasData: !!data });
 
         if (!isMounted) return;
 
@@ -94,11 +91,9 @@ export default function ActivateInvitation() {
         if (isReminderToken) {
           localStorage.setItem("remindToken", token!);
           localStorage.setItem("remindEmail", invitedEmail);
-          console.log("[ActivateInvitation] Stored as remindToken for email:", invitedEmail);
         } else {
           localStorage.setItem("inviteToken", token!);
           localStorage.setItem("inviteEmail", invitedEmail);
-          console.log("[ActivateInvitation] Stored as inviteToken for email:", invitedEmail);
         }
 
         // Mark token as dispatched BEFORE calling loginRedirect so that if
@@ -110,8 +105,6 @@ export default function ActivateInvitation() {
           const tokenType = isReminderToken ? 'reminder' : 'invitation';
           setStatusMessage(`${tokenType.charAt(0).toUpperCase() + tokenType.slice(1)} verified. Opening Microsoft sign-in for ${invitedEmail}…`);
         }
-
-        console.log("[ActivateInvitation] Calling loginRedirect with email:", invitedEmail);
 
         await instance.loginRedirect({
           ...loginRequest,

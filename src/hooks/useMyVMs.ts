@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useDialog } from "@/components/ui/dialog-context";
 import { useAppStore } from "@/store/appStore";
 import { useAwsConfig } from "@/hooks/useAwsConfig";
-import { VM, normalizeStatus } from "@/utils/myVMs.utils";
+import { VM, normalizeStatus, inferCategory } from "@/utils/myVMs.utils";
 import { useNavigate } from 'react-router-dom';
 import {
   fetchVMSummaryApi,
@@ -13,11 +13,16 @@ import {
   stopVMApi,
   deleteVMApi,
   startAllVMsApi,
+  fetchRequestConnectApi,
+  fetchInstanceConnectApi,
   // syncExistingVMsApi,
   //fetchManagerEmailsApi,
   submitQuotaRequestApi,
   ApiError,
+  type RequestConnectPayload,
+  type InstanceConnectPayload,
 } from "@/components/vms/myVMsApi";
+import { fetchVMRequestsApi } from "@/components/requests/vmRequestsApi";
 
 export function useMyVMs() {
   const navigate = useNavigate();
@@ -38,6 +43,15 @@ export function useMyVMs() {
   const [extensionContext, setExtensionContext] = useState<{
     requestId: string; vm?: VM; vms?: VM[]; requestLevelEnabled?: boolean;
   } | null>(null);
+
+  const [openConnect, setOpenConnect] = useState(false);
+  const [connectContext, setConnectContext] = useState<{
+    requestId: string; vms: VM[]; category?: number; connectData?: RequestConnectPayload | InstanceConnectPayload;
+  } | null>(null);
+
+  // category per request_id, from the existing VM Requests list API (GET /api/requests,
+  // via fetchVMRequestsApi) — that endpoint already selects r.category correctly.
+  const [requestCategories, setRequestCategories] = useState<Record<string, number>>({});
 
   const [showModal, setShowModal] = useState(false);
   // const [managerOptions, setManagerOptions] = useState<ManagerOption[]>([]);
@@ -101,6 +115,20 @@ export function useMyVMs() {
     setSummary(data);
   }, []);
 
+  const fetchRequestCategories = useCallback(async () => {
+    try {
+      const { data } = await fetchVMRequestsApi({ service: "vm-service", limit: 100 });
+      const map: Record<string, number> = {};
+      data.forEach((r) => {
+        const num = Number(r.category);
+        if (Number.isFinite(num)) map[r.request_id] = num;
+      });
+      setRequestCategories(map);
+    } catch {
+      // best-effort — GroupHeader/ConnectDialog fall back to a role-based guess
+    }
+  }, []);
+
   const fetchVMList = useCallback(async () => {
     const normalized = await fetchVMListApi();
     setVMs((prev) =>
@@ -155,9 +183,9 @@ export function useMyVMs() {
   }, []);
 
   const silentRefresh = useCallback(async () => {
-    try { await Promise.all([fetchVMList(), fetchAWSCounts()]); }
+    try { await Promise.all([fetchVMList(), fetchAWSCounts(), fetchRequestCategories()]); }
     catch (error) { console.error("Silent refresh failed:", error); }
-  }, [fetchVMList, fetchAWSCounts]);
+  }, [fetchVMList, fetchAWSCounts, fetchRequestCategories]);
 
   const watchVM = useCallback((instanceId: string, vmName: string) => {
     if (watchers.current[instanceId]) return;
@@ -223,6 +251,7 @@ export function useMyVMs() {
         watchers.current[instanceId] = timeoutId;
       }
     };
+    watchers.current[instanceId] = -1 as any;  
     poll();
   }, [alert, refreshCurrentUser, silentRefresh]);
 
@@ -353,6 +382,39 @@ export function useMyVMs() {
     setOpenExtension(true);
   }, [vms]);
 
+  const handleConnect = useCallback(async (requestId: string, vm?: VM) => {
+    try {
+      const requestVms = vms.filter((v) => v.requestId === requestId);
+      const contextVms = vm ? [vm] : requestVms;
+      const category = requestCategories[requestId] ?? inferCategory(requestVms);
+
+      const connectData = vm
+        ? await fetchInstanceConnectApi(vm.instanceId)
+        : await fetchRequestConnectApi(requestId);
+
+      const resolvedVms = vm && connectData && "instance" in connectData
+        ? [{
+            ...vm,
+            publicIp: connectData.instance.publicIp ?? vm.publicIp,
+            privateIp: connectData.instance.privateIp ?? vm.privateIp,
+            status: connectData.instance.status ?? vm.status,
+            instanceType: connectData.instance.type ?? vm.instanceType,
+            name: connectData.instance.name ?? vm.name,
+            region: connectData.region ?? vm.region,
+          }]
+        : vm
+          ? [vm]
+          : requestVms;
+
+      setConnectContext({ requestId, vms: resolvedVms, category, connectData });
+      setOpenConnect(true);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to load connect details.";
+      alert({ title: message, severity: "error" });
+    }
+  }, [vms, requestCategories, alert]);
+
+
   const submitQuotaRequest = useCallback(async (approverEmail: string) => {
     if (!currentUser) return;
     if (currentUser.maxVMs >= 50) { alert({ title: "Maximum VM quota limit reached (50). Cannot request further increase.", severity: "error" }); return; }
@@ -380,7 +442,7 @@ export function useMyVMs() {
   useEffect(() => {
     setLoading(true);
     refreshCurrentUser();
-    Promise.all([fetchAWSCounts(), fetchVMList()])
+    Promise.all([fetchAWSCounts(), fetchVMList(), fetchRequestCategories()])
       .then(() => pollStatusUpdates())
       .finally(() => setLoading(false));
 
@@ -426,12 +488,13 @@ export function useMyVMs() {
     isAwsConnected, currentUser,
     activeVMs, provisioningVMs, usedVMs, remainingquota, isMAxREached,
     openExtension, setOpenExtension, extensionContext,
+    openConnect, setOpenConnect, connectContext, requestCategories,
     showModal, setShowModal,
     //  managerOptions, managersLoading,
     requestedquota, setrequestedquota, reason, setreason,
     // mEmail, setMEmail,
      submitquota, quotaError, setQuotaError, touched, setTouched,
     silentRefresh, handleCopyIp, handleRequestExtension, submitQuotaRequest,
-    startVM, stopVM, deleteSingleVM, startAllVMs, stopAllVMs,
+    startVM, stopVM, deleteSingleVM, startAllVMs, stopAllVMs, handleConnect,
   };
 }

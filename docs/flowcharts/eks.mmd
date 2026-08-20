@@ -7,12 +7,15 @@ flowchart TD
   H <-->|"query request / cached response"| Q["React Query cache<br/>(keys, refetch, invalidate)"]
   Q <-->|"fetch request / parsed response"| A["eksApi"]
   A <-->|"HTTP request / HTTP response"| C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
-  C <-->|"REST request / JSON response"| S[("VITE_EKS_CLUSTER_SERVICE_URL")]
+  C <-->|"REST request / JSON response"| S[("EKS Cluster Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
+    direction LR
     S0["List clusters and status"]
     S1["Create cluster (version, node groups)"]
     S2["View nodegroups, addons and workloads"]
     S3["Delete / scale cluster"]
+    S4["Request quota increase"]
+    S0 ~~~ S1 ~~~ S2 ~~~ S3 ~~~ S4
   end
   C -. "error response" .-> E["ApiErrorBoundary + toast"]

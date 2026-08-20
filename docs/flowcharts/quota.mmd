@@ -7,12 +7,14 @@ flowchart TD
   H <-->|"query request / cached response"| Q["React Query cache<br/>(keys, refetch, invalidate)"]
   Q <-->|"fetch request / parsed response"| A["quotaRequestsApi"]
   A <-->|"HTTP request / HTTP response"| C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
-  C <-->|"REST request / JSON response"| S[("VITE_VM_REQUEST_SERVICE_URL")]
+  C <-->|"REST request / JSON response"| S[("VM Request Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
+    direction LR
     S0["Submit quota increase request"]
     S1["Approver review queue"]
     S2["Email link action page (public route)"]
     S3["Quota usage vs limit cards"]
+    S0 ~~~ S1 ~~~ S2 ~~~ S3
   end
   C -. "error response" .-> E["ApiErrorBoundary + toast"]

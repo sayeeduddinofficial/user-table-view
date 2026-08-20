@@ -193,7 +193,6 @@ export default function Profile() {
     .join("")
     .toUpperCase();
 
-  console.log("profile", profile);
   return (
     <div className="min-h-screen flex flex-col">
       <Header

@@ -1,11 +1,12 @@
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Power, Play, ChevronDown, Clock } from "lucide-react";
-import { VM, formatTime } from "@/utils/myVMs.utils";
+import { Power, Play, ChevronDown, Clock, Plug } from "lucide-react";
+import { VM, formatTime, CATEGORY_SHORT_LABELS, inferCategory } from "@/utils/myVMs.utils";
 
 interface Props {
   requestId: string;
   vms: VM[];
+  category?: number;
   expanded: boolean;
   onToggleExpanded: () => void;
   isAwsConnected: boolean;
@@ -19,13 +20,16 @@ interface Props {
   onStartAll: (requestId: string) => void;
   onStopAll: (requestId: string) => void;
   onRequestExtension: (requestId: string, vm?: VM, requestLevelEnabled?: boolean) => void;
+  onConnect: (requestId: string, vm?: VM, requestLevelEnabled?: boolean) => void;
 }
 
 export function GroupHeader({
-  requestId, vms, expanded, onToggleExpanded, isAwsConnected,
+  requestId, vms, category, expanded, onToggleExpanded, isAwsConnected,
   anyStopped, anyRunning, allSameStopTime, showStopAndTimer, launchedAt,
-  syncedStopTime, headerStatus, onStartAll, onStopAll, onRequestExtension,
+  syncedStopTime, headerStatus, onStartAll, onStopAll, onRequestExtension, onConnect
 }: Props) {
+  const resolvedCategory = category ?? inferCategory(vms);
+  const allVmsStopped = vms.length > 0 && vms.every((vm) => vm.status === "stopped" || vm.status === "terminated");
   return (
     <div
       onClick={onToggleExpanded}
@@ -33,6 +37,12 @@ export function GroupHeader({
     >
       <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} />
       <span className="font-mono font-semibold text-foreground text-sm">{requestId}</span>
+
+      <span className="text-xs text-muted-foreground">
+        Category {resolvedCategory}
+        {CATEGORY_SHORT_LABELS[resolvedCategory] && <> · {CATEGORY_SHORT_LABELS[resolvedCategory]}</>}
+      </span>
+
       <span className="text-xs text-muted-foreground">{vms.length} VM{vms.length !== 1 ? "s" : ""}</span>
 
       {vms[0]?.environment && (
@@ -65,6 +75,19 @@ export function GroupHeader({
             <Power className="h-3 w-3" /> Stop All
           </Button>
         )}
+         
+         <Button size="sm" variant="outline" disabled={!isAwsConnected || allVmsStopped}
+            className="h-7 gap-1.5 border-primary/50 text-primary hover:text-primary hover:bg-primary/10 text-xs"
+            tooltip={
+              !isAwsConnected ? "AWS Disconnected"
+              : allVmsStopped ? "Connect is disabled because all VMs in this request are stopped or terminated"
+              : "Connect to all running VMs in this request"
+            }
+            onClick={() => onConnect(requestId, undefined, allSameStopTime)}>
+              <Plug size={14} className="mr-1.5" />
+              Connect
+            </Button>
+            
         {anyRunning && (
           <Button size="sm" variant="outline" disabled={!isAwsConnected || !allSameStopTime}
             className="h-7 gap-1.5 border-primary/50 text-primary hover:text-primary hover:bg-primary/10 text-xs"

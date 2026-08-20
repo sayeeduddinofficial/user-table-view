@@ -4,6 +4,47 @@ import { VM, normalizeStatus } from '@/utils/myVMs.utils';
 
 export interface VMSummary { total: number; running: number; stopped: number; }
 
+export interface ConnectInstanceRow {
+  name: string;
+  instanceId: string;
+  type?: string | null;
+  publicIp?: string | null;
+  privateIp?: string | null;
+  availabilityZone?: string | null;
+  status?: string | null;
+  sshCommand?: string | null;
+  rdpCommand?: string | null;
+  splunkUrl?: string | null;
+}
+
+export interface ConnectAlbData {
+  dns?: string | null;
+  targetGroup?: string | null;
+  dnsRecord?: string | null;
+  url?: string | null;
+  shcNodes?: any[];
+}
+
+export interface RequestConnectPayload {
+  requestId: string;
+  region?: string | null;
+  category?: number | null;
+  keyPair?: string | null;
+  sshUser?: string | null;
+  instances: ConnectInstanceRow[];
+  alb: ConnectAlbData;
+}
+
+export interface InstanceConnectPayload {
+  requestId: string;
+  region?: string | null;
+  category?: number | null;
+  keyPair?: string | null;
+  sshUser?: string | null;
+  instance: ConnectInstanceRow;
+  alb: ConnectAlbData;
+}
+
 export async function fetchVMSummaryApi(): Promise<VMSummary> {
   const res = await apiClient.get<ApiResponse<VMSummary>>(env.runtime, '/api/vms/summary/db');
   return res.data!;
@@ -38,6 +79,16 @@ export async function deleteVMApi(instanceId: string): Promise<void> {
 
 export async function startAllVMsApi(requestId: string): Promise<{ stop_time?: string | null }> {
   return apiClient.post(env.runtime, `/api/vms/vm-requests/${requestId}/start`);
+}
+
+export async function fetchRequestConnectApi(requestId: string): Promise<RequestConnectPayload> {
+  const res = await apiClient.get<{ success?: boolean; data?: RequestConnectPayload }>(env.vmRequest, `/api/vm-requests/${requestId}/connect`);
+  return (res?.data ?? res) as RequestConnectPayload;
+}
+
+export async function fetchInstanceConnectApi(instanceId: string): Promise<InstanceConnectPayload> {
+  const res = await apiClient.get<{ success?: boolean; data?: InstanceConnectPayload }>(env.runtime, `/api/vms/${instanceId}/connect`);
+  return (res?.data ?? res) as InstanceConnectPayload;
 }
 
 // CHANGED: mEmail removed from payload — backend resolves manager from Azure AD hierarchy

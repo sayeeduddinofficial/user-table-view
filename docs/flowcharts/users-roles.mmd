@@ -7,12 +7,17 @@ flowchart TD
   H <-->|"query request / cached response"| Q["React Query cache<br/>(keys, refetch, invalidate)"]
   Q <-->|"fetch request / parsed response"| A["userManagementApi"]
   A <-->|"HTTP request / HTTP response"| C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
-  C <-->|"REST request / JSON response"| S[("VITE_USER_MANAGEMENT_URL")]
+  C <-->|"REST request / JSON response"| S[("User Management Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
+    direction LR
     S0["Invite user (email invitation)"]
     S1["Activate invitation flow"]
     S2["Assign / change role"]
-    S3["Deactivate or remove user"]
+    S3["Edit service quotas per user<br/>(VMs, buckets, VPCs, LBs, EKS, DNS, RDS)"]
+    S4["Allowed instance types and categories"]
+    S5["Work schedule and time zone"]
+    S6["Deactivate or remove user"]
+    S0 ~~~ S1 ~~~ S2 ~~~ S3 ~~~ S4 ~~~ S5 ~~~ S6
   end
   C -. "error response" .-> E["ApiErrorBoundary + toast"]

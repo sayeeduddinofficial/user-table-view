@@ -19,7 +19,7 @@ export const LB_STATUS_CONFIG: Record<string, { color: string; label: string; te
   deleted: { color: "bg-gray-500/20 text-gray-400 border-gray-500/30", label: "Deleted", text: "text-gray-400" },
   terminated: { color: "bg-gray-500/20 text-gray-400 border-gray-500/30", label: "Terminated", text: "text-gray-400" },
   retrying: { color: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30", label: "Retrying", text: "text-indigo-400" },
-  retrying_terminate: { color: "bg-purple-500/20 text-purple-400 border-purple-500/30", label: "Retrying Terminate", text: "text-purple-400" },
+  retrying_terminate: { color: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30", label: "Retrying", text: "text-indigo-400" },
 };
 
 export function getLbStatusColor(status: string): string {

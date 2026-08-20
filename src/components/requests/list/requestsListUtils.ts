@@ -41,8 +41,8 @@ export const statusConfig: Record<string, { color: string; label: string }> = {
     label: "Retrying",
   },
   retrying_terminate: {
-    color: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-    label: "Retrying Terminate",
+    color: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30",
+    label: "Retrying",
   },
 };
 

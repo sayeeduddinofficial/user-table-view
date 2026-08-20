@@ -12,7 +12,6 @@ import { deleteRoute53Record } from "@/services/route53Api";
 import { fetchVpcListApi } from "@/services/vpcService";
 import { deleteBucketApi } from "@/services/bucketService";
 import { deleteEksClusterService } from "@/services/eksClusterService";
-import { fetchUsersApi } from "@/components/users/userManagementApi";
 import {
   fetchVMRequestsApi,
   fetchVMRequestApi,
@@ -26,6 +25,7 @@ import {
   deleteRdsRequestApi,
   RETRY_PROVISION_API,
   RETRY_TERMINATE_API,
+  fetchRequestUsersApi,
   type VMRequest as Request,
 } from "@/components/requests/vmRequestsApi";
 import { ACTIVE_STATUSES, sortRequestsByLatestActivity } from "@/components/requests/list/requestsListUtils";
@@ -133,8 +133,8 @@ export function useRequestsList() {
 
   useEffect(() => {
     if (!isAdmin) return;
-    fetchUsersApi()
-      .then((list) => setUsers(list.map((u) => ({ id: u.id, name: u.name }))))
+    fetchRequestUsersApi()
+      .then((list) => setUsers(list))
       .catch(() => {});
   }, [isAdmin]);
 
@@ -313,7 +313,7 @@ export function useRequestsList() {
       await retryFn(requestId);
 
       alert({
-        title: "Retry Terminate in Progress",
+        title: "Retrying in Progress",
         severity: "loading",
       });
 

@@ -163,11 +163,11 @@ const SERVICE_ENDPOINTS: Record<string, ServiceEndpoints> = {
     clearLogs: (id) => `/clusters/${id}/logs`,
   },
    "route53-service": {
-    base: env.route53Service,
-    logs: (id, operation = "create") => `/logs/${id}/${operation}/${operation}.log`,
-    logsFormat: "text",
-    clearLogs: (id) => `/records/${id}/logs`,
-    live: (id) => `/records/${id}/live-logs`,
+  base: env.route53Service,
+  logs: (id) => `/records/${id}/logs`,                    
+  download: (id) => `/records/${id}/logs/download`,       
+  clearLogs: (id) => `/records/${id}/logs`,
+  live: (id) => `/records/${id}/live-logs`,
   },
   "ec2-service": {
     base: env.runtime,

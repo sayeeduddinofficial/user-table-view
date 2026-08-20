@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 import { format, subDays } from 'date-fns';
 import { DateRange } from 'react-day-picker';
 import { toast } from 'sonner';
@@ -20,9 +20,9 @@ import { KpiDetailDialog } from '@/components/leadership/KpiDetailDialog';
 import { BillingDetailDialog } from '@/components/leadership/BillingDetailDialog';
 import { useUnifiedDashboard } from '@/hooks/useUnifiedDashboard';
 import { useKPIData } from '@/hooks/useKPIData';
-import { useAuditFilters } from '@/hooks/useAuditLogs';
 import { cn } from '@/lib/utils';
 import { INSTANCE_TYPES, AWS_REGIONS, AWS_SERVICES } from '@/types';
+import { useAppStore } from '@/store/appStore';
 
 type RangeDays = 7 | 30 | 90;
 
@@ -48,9 +48,35 @@ type StatCard = {
 };
 
 export default function Leadership() {
-  const { data: filters } = useAuditFilters();
+  const currentUser = useAppStore((s) => s.currentUser);
+  const isApprover = currentUser?.role === 'SplunkOps.Approver';
 
-  // Initialize date range to match "This Month" preset (1st of current month to today)
+  // Approver-scoped allowed users (self + reportings)
+  const [approverUsers, setApproverUsers] = useState<{ id: number; name: string }[]>([]);
+  const [approverUserIds, setApproverUserIds] = useState<number[] | undefined>(undefined);
+
+  useEffect(() => {
+    if (!isApprover) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    fetch(`${env.vmRequest}/api/leadership-billing/users-with-approvers`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (res.type === 'approver' && res.data?.[0]) {
+          const entry = res.data[0];
+          const users = [
+            { id: entry.id, name: entry.name },
+            ...entry.reportings.map((r: any) => ({ id: r.id, name: r.name }))
+          ];
+          setApproverUsers(users);
+          setApproverUserIds(users.map(u => u.id));
+        }
+      })
+      .catch(console.error);
+  }, [isApprover]);
+
   const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
     const today = new Date();
     const from = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -76,11 +102,32 @@ export default function Leadership() {
   }, []);
 
   const uniqueUsers = useMemo(() => {
-    if (filters?.users) {
-      return filters.users.map(u => ({ id: u.user_id, name: u.user_name }));
-    }
+    if (isApprover) return approverUsers;
+    // For non-approver roles, fetch from audit filters via a separate inline fetch
     return [];
-  }, [filters]);
+  }, [isApprover, approverUsers]);
+
+  // For non-approver: load users from audit filters
+  const [auditFilterUsers, setAuditFilterUsers] = useState<{ id: number; name: string }[]>([]);
+  useEffect(() => {
+    if (isApprover) return;
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    fetch(`${env.vmRequest}/api/leadership-billing/users-with-approvers`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (res.type === 'all_users' && res.users) {
+          setAuditFilterUsers(res.users.map((u: any) => ({ id: u.id, name: u.name })));
+        }
+      })
+      .catch(console.error);
+  }, [isApprover]);
+
+  const allUsers = useMemo(() => {
+    return isApprover ? approverUsers : auditFilterUsers;
+  }, [isApprover, approverUsers, auditFilterUsers]);
 
   const uniqueShapes = useMemo(() => INSTANCE_TYPES.map(t => t.value), []);
   const uniqueRegions = useMemo(() => AWS_REGIONS, []);
@@ -90,9 +137,19 @@ export default function Leadership() {
   const selectedUserIds = useMemo(() => {
     if (userFilters.length === 0) return undefined;
     return userFilters
-      .map(name => uniqueUsers.find(u => u.name === name)?.id)
+      .map(name => allUsers.find(u => u.name === name)?.id)
       .filter((id): id is number => id !== undefined);
-  }, [userFilters, uniqueUsers]);
+  }, [userFilters, allUsers]);
+
+  // Effective userIds: if approver, always scope to allowed; merge with user filter selection
+  const effectiveUserIds = useMemo(() => {
+    if (isApprover && approverUserIds) {
+      return selectedUserIds?.length
+        ? selectedUserIds.filter(id => approverUserIds.includes(id))
+        : approverUserIds;
+    }
+    return selectedUserIds;
+  }, [isApprover, approverUserIds, selectedUserIds]);
 
   // Fetch KPI data from new endpoint
   const { data: kpiDataFromAPI } = useKPIData();
@@ -101,17 +158,17 @@ export default function Leadership() {
   const { data: unifiedData, loading, error } = useUnifiedDashboard({
     startDate: dateRange?.from || subDays(new Date(), 30),
     endDate: dateRange?.to || new Date(),
-    userIds: selectedUserIds,
+    userIds: effectiveUserIds,
     instanceTypes: shapeFilters.length > 0 ? shapeFilters : undefined,
     regions: regionFilters.length > 0 ? regionFilters : undefined,
     services: serviceFilters.length > 0 ? serviceFilters : undefined
   });
 
-  // Fetch unfiltered data for KPIs (always current data)
+  // Fetch unfiltered data for KPIs (scoped to approver if applicable)
   const { data: kpiData } = useUnifiedDashboard({
     startDate: kpiDateRange.from,
     endDate: kpiDateRange.to,
-    userIds: undefined,
+    userIds: isApprover ? approverUserIds : undefined,
     instanceTypes: undefined,
     regions: undefined,
     services: undefined
@@ -193,8 +250,8 @@ export default function Leadership() {
       params.append('startDate', startDate);
       params.append('endDate', endDate);
 
-      if (selectedUserIds && selectedUserIds.length > 0) {
-        selectedUserIds.forEach(id => params.append('userId', id.toString()));
+      if (effectiveUserIds && effectiveUserIds.length > 0) {
+        effectiveUserIds.forEach(id => params.append('userId', id.toString()));
       }
       if (shapeFilters.length > 0) {
         shapeFilters.forEach(shape => params.append('instanceType', shape));
@@ -442,16 +499,16 @@ export default function Leadership() {
               <div className="flex gap-3 flex-wrap items-center">
                 {/* All Users dropdown */}
                 <MultiSelect
-                  options={uniqueUsers.map((u) => ({
+                  options={allUsers.map((u) => ({
                     label: u.name,
                     value: String(u.id),
                   }))}
                   selected={userFilters.map(name => {
-                    const user = uniqueUsers.find(u => u.name === name);
+                    const user = allUsers.find(u => u.name === name);
                     return user ? String(user.id) : '';
                   }).filter(Boolean)}
                   onChange={(values) => {
-                    const names = values.map(id => uniqueUsers.find(u => String(u.id) === id)?.name).filter(Boolean) as string[];
+                    const names = values.map(id => allUsers.find(u => String(u.id) === id)?.name).filter(Boolean) as string[];
                     setUserFilters(names);
                   }}
                   placeholder="All Users"
@@ -550,6 +607,7 @@ export default function Leadership() {
         title="MTD Spend"
         subtitle="Month to date from aws_billing_history"
         color="#b89968"
+        userIds={isApprover ? approverUserIds : undefined}
       />
 
       {/* Hidden export container */}
@@ -570,7 +628,7 @@ export default function Leadership() {
               <div>
                 <span className="text-muted-foreground">Users: </span>
                 <span className="text-foreground font-medium">
-                  {userFilters.length > 0 ? userFilters.join(', ') : 'All Users'}
+                  {userFilters.length > 0 ? userFilters.join(', ') : isApprover ? 'My Team' : 'All Users'}
                 </span>
               </div>
               <div>

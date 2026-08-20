@@ -8,6 +8,7 @@ import { VMFilterBar } from "@/components/vms/VMFilterBar";
 import { VMRequestGroup } from "@/components/vms/VMRequestGroup";
 import { QuotaIncreaseDialog } from "@/components/vms/QuotaIncreaseDialog";
 import RuntimeExtensionDialog from "@/components/vms/RuntimeExtensionDialog";
+import { ConnectDialog } from "@/components/vms/ConnectDialog";
 import { useMyVMs } from "@/hooks/useMyVMs";
 import { VM } from "@/utils/myVMs.utils";
 
@@ -17,11 +18,12 @@ export default function MyVMs() {
     isAwsConnected, currentUser,
     activeVMs, provisioningVMs, usedVMs, remainingquota, isMAxREached,
     openExtension, setOpenExtension, extensionContext,
+    openConnect, setOpenConnect, connectContext, requestCategories,
     showModal, setShowModal,
     requestedquota, setrequestedquota, reason, setreason,
     submitquota, quotaError, setQuotaError, touched, setTouched,
     silentRefresh, handleCopyIp, handleRequestExtension, submitQuotaRequest,
-    startVM, stopVM, deleteSingleVM, startAllVMs, stopAllVMs,
+    startVM, stopVM, deleteSingleVM, startAllVMs, stopAllVMs, handleConnect
   } = useMyVMs();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -123,6 +125,7 @@ export default function MyVMs() {
                   key={reqId}
                   requestId={reqId}
                   vms={requestGroups[reqId]}
+                  category={requestCategories[reqId]}
                   operatingVMs={operatingVMs}
                   copiedIp={copiedIp}
                   isAwsConnected={isAwsConnected}
@@ -133,6 +136,7 @@ export default function MyVMs() {
                   onStartAll={startAllVMs}
                   onStopAll={stopAllVMs}
                   onRequestExtension={handleRequestExtension}
+                  onConnect={handleConnect}
                 />
               ))
             )}
@@ -166,6 +170,17 @@ export default function MyVMs() {
         extensionContext={extensionContext}
         onSuccess={silentRefresh}
       />
+
+      {connectContext && (
+        <ConnectDialog
+          open={openConnect}
+          onOpenChange={setOpenConnect}
+          requestId={connectContext.requestId}
+          vms={connectContext.vms}
+          category={connectContext.category}
+          connectData={connectContext.connectData}
+        />
+      )}
     </div>
   );
 }

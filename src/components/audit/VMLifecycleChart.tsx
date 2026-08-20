@@ -17,7 +17,7 @@ const LIFECYCLE_ICONS = {
   destroyed: Trash2,
 };
 
-export const VMLifecycleChart = ({ data }: { data: Record<string, number> }) => {
+export const VMLifecycleChart = ({ data }) => {
   const chartData = [
     { name: "Requested", value: data.requested, color: LIFECYCLE_COLORS.requested, icon: LIFECYCLE_ICONS.requested },
     { name: "Created", value: data.created, color: LIFECYCLE_COLORS.created, icon: LIFECYCLE_ICONS.created },

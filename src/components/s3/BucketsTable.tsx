@@ -215,6 +215,7 @@ export function BucketsTable({
 
                     <td className="px-5 py-4 whitespace-nowrap text-muted-foreground">
                       {formatS3Date(r.createdAt)}
+                      {formatS3Date(r.createdAt)}
                     </td>
                     <td className="px-5 py-4 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1">

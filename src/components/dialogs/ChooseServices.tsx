@@ -361,7 +361,6 @@ export default function ChooseServices({
             {services.map((service) => {
               const { limit, remaining, reached, availabilityEntry } = getServiceQuotaInfo(service.id);
               const disabled = reached;
-              console.log("serviceid", service.id, "limit", limit, "remaining", remaining, "reached", reached, "availabilityEntry", availabilityEntry);
               const isSelected = selectedService === service.id;
               const className = `
       relative

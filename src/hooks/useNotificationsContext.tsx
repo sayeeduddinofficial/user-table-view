@@ -110,7 +110,6 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     socketRef.current = socket;
 
     socket.on("connect", () => {
-      console.log("[Socket] Connected to notification service");
       loadNotifications();
     });
 

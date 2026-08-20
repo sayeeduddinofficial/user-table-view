@@ -7,13 +7,15 @@ flowchart TD
   H <-->|"query request / cached response"| Q["React Query cache<br/>(keys, refetch, invalidate)"]
   Q <-->|"fetch request / parsed response"| A["authApi"]
   A <-->|"HTTP request / HTTP response"| C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
-  C <-->|"REST request / JSON response"| S[("VITE_AUTH_URL")]
+  C <-->|"REST request / JSON response"| S[("Authentication Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
+    direction LR
     S0["Microsoft Entra ID sign-in (MSAL redirect)"]
     S1["Handle redirect result and store tokens"]
     S2["Fetch current user + role"]
     S3["ProtectedRoute / Role guards (Admin, FinOps, Audit, Approver)"]
     S4["Logout clears session and redirects to /login"]
+    S0 ~~~ S1 ~~~ S2 ~~~ S3 ~~~ S4
   end
   C -. "error response" .-> E["ApiErrorBoundary + toast"]

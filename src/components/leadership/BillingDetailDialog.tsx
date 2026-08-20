@@ -12,9 +12,10 @@ type Props = {
   title: string;
   subtitle: string;
   color: string;
+  userIds?: number[];
 };
 
-export function BillingDetailDialog({ open, onOpenChange, title, subtitle, color }: Props) {
+export function BillingDetailDialog({ open, onOpenChange, title, subtitle, color, userIds }: Props) {
   const today = new Date();
   const monthStart = startOfMonth(today);
 
@@ -50,6 +51,9 @@ export function BillingDetailDialog({ open, onOpenChange, title, subtitle, color
         }
         if (dateRange?.to) {
           params.append('endDate', format(dateRange.to, 'yyyy-MM-dd'));
+        }
+        if (userIds && userIds.length > 0) {
+          userIds.forEach(id => params.append('userId', id.toString()));
         }
         
         const url = `${API_BASE}/api/leadership-billing/mtd-daily-db?${params.toString()}`;

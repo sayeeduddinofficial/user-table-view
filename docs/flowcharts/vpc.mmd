@@ -7,12 +7,18 @@ flowchart TD
   H <-->|"query request / cached response"| Q["React Query cache<br/>(keys, refetch, invalidate)"]
   Q <-->|"fetch request / parsed response"| A["vpcApi / vpcService"]
   A <-->|"HTTP request / HTTP response"| C["apiClient (Axios)<br/>token injection - 401 refresh - 403 role refresh"]
-  C <-->|"REST request / JSON response"| S[("VITE_VPC_SERVICE_URL")]
+  C <-->|"REST request / JSON response"| S[("VPC Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    S0["List VPCs and details"]
-    S1["Create VPC with subnets and CIDR"]
-    S2["Create Flow Log"]
-    S3["Create Encryption config"]
+    direction LR
+    S0["List VPCs with stat cards and row selection"]
+    S1["VPC details screen<br/>(resource map, CIDRs, tags)"]
+    S2["Create VPC - 'VPC only' option"]
+    S3["Create VPC - 'VPC and more' option<br/>(subnets, NAT gateways, endpoints)"]
+    S4["Live preview panel with connector lines<br/>('VPC and more' only)"]
+    S5["Name tag auto-generation for<br/>subnets, route tables and NAT gateways"]
+    S6["Delete VPC"]
+    S7["Request quota increase"]
+    S0 ~~~ S1 ~~~ S2 ~~~ S3 ~~~ S4 ~~~ S5 ~~~ S6 ~~~ S7
   end
   C -. "error response" .-> E["ApiErrorBoundary + toast"]

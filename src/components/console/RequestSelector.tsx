@@ -63,7 +63,7 @@ const statusConfig: Record<
   retrying_terminate: {
     icon: Loader2,
     color: "text-purple-500",
-    label: "Retrying Terminate",
+    label: "Retrying",
     animate: true,
   },
 };

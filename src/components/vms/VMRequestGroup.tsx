@@ -7,6 +7,7 @@ import { VMTable } from "@/components/vms/group/VMTable";
 interface Props {
   requestId: string;
   vms: VM[];
+  category?: number;
   operatingVMs: Set<string>;
   copiedIp: string | null;
   isAwsConnected: boolean;
@@ -17,11 +18,12 @@ interface Props {
   onStartAll: (requestId: string) => void;
   onStopAll: (requestId: string) => void;
   onRequestExtension: (requestId: string, vm?: VM, requestLevelEnabled?: boolean) => void;
+  onConnect: (requestId: string, vm?: VM, requestLevelEnabled?: boolean) => void;
 }
 
 export function VMRequestGroup({
-  requestId, vms, operatingVMs, copiedIp, isAwsConnected,
-  onCopyIp, onStartVM, onStopVM, onDeleteVM, onStartAll, onStopAll, onRequestExtension,
+  requestId, vms, category, operatingVMs, copiedIp, isAwsConnected,
+  onCopyIp, onStartVM, onStopVM, onDeleteVM, onStartAll, onStopAll, onRequestExtension, onConnect
 }: Props) {
   const [expanded, setExpanded] = useState(true);
   const [, setTick] = useState(0);
@@ -91,6 +93,7 @@ export function VMRequestGroup({
       <GroupHeader
         requestId={requestId}
         vms={vms}
+        category={category}
         expanded={expanded}
         onToggleExpanded={() => setExpanded((p) => !p)}
         isAwsConnected={isAwsConnected}
@@ -104,6 +107,7 @@ export function VMRequestGroup({
         onStartAll={onStartAll}
         onStopAll={onStopAll}
         onRequestExtension={onRequestExtension}
+        onConnect={onConnect}
       />
 
       {expanded && (
@@ -119,6 +123,7 @@ export function VMRequestGroup({
           onStopVM={onStopVM}
           onDeleteVM={onDeleteVM}
           onRequestExtension={onRequestExtension}
+          onConnect={onConnect}
         />
       )}
     </div>

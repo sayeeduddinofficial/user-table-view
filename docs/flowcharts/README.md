@@ -26,5 +26,5 @@ Each service has an editable Mermaid source (`*.mmd`) and a rendered PNG in `png
 
 ## Re-render
 ```bash
-npx @mermaid-js/mermaid-cli -p puppeteer-config.json -i docs/flowcharts/<name>.mmd -o docs/flowcharts/png/<name>.png -b white -w 1600
+npx @mermaid-js/mermaid-cli -p puppeteer-config.json -c docs/flowcharts/mermaid-mono.json -i docs/flowcharts/<name>.mmd -o docs/flowcharts/png/<name>.png -b white -w 1600
 ```

@@ -34,4 +34,4 @@ export const canViewAuditLogs = (role?: Role | string) =>
   role === "SplunkOps.Admin" || role === "SuperAdmin" || role === "SplunkOps.Auditor";
 
 export const canViewFinOps = (role?: Role | string) =>
-  role === "SplunkOps.Admin" || role === "SuperAdmin" || role === "SplunkOps.Auditor" || role === "SplunkOps.Stakeholder";
+  role === "SplunkOps.Admin" || role === "SuperAdmin" || role === "SplunkOps.Auditor" || role === "SplunkOps.Stakeholder" || role === "SplunkOps.Approver";

@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/table";
 import {
   Power, Trash2, Play, Copy, Check, Clock, AlertTriangle,
+  Plug,
 } from "lucide-react";
 import { VM, statusConfig, roleMap, getRuntimeInfo } from "@/utils/myVMs.utils";
 
@@ -23,11 +24,12 @@ interface Props {
   onStopVM: (instanceId: string, name: string) => void;
   onDeleteVM: (instanceId: string, name: string) => void;
   onRequestExtension: (requestId: string, vm?: VM, requestLevelEnabled?: boolean) => void;
+  onConnect: (requestId: string, vm?: VM, requestLevelEnabled?: boolean) => void;
 }
 
 export function VMTable({
   requestId, vms, operatingVMs, copiedIp, isAwsConnected, allSameStopTime,
-  onCopyIp, onStartVM, onStopVM, onDeleteVM, onRequestExtension,
+  onCopyIp, onStartVM, onStopVM, onDeleteVM, onRequestExtension, onConnect
 }: Props) {
   return (
     <div className="border border-t-0 border-border/50 rounded-b-xl overflow-x-auto">
@@ -52,6 +54,7 @@ export function VMTable({
             const isOp = operatingVMs.has(vm.instanceId);
             const isTerminated = vm.status === "terminated" || vm.status === "terminating";
             const isTransitioning = vm.status === "starting" || vm.status === "stopping";
+            const isConnectDisabled = !isAwsConnected || vm.status !== "running" || isTransitioning;
 
             const barColor = vmExpired || vmUrgency === "red" ? "bg-red-500" : vmUrgency === "amber" ? "bg-amber-400" : "bg-emerald-400";
             const textColor = vmExpired || vmUrgency === "red" ? "text-red-400" : vmUrgency === "amber" ? "text-amber-400" : "text-green-400";
@@ -158,6 +161,19 @@ export function VMTable({
                   <div className="flex items-center justify-end gap-0.5">
                     {!isTerminated && (
                       <>
+                       
+                          <Button variant="ghost" size="icon" disabled={isConnectDisabled}
+                            className={`h-7 w-7 ${isConnectDisabled ? "text-muted-foreground/40 cursor-not-allowed" : "text-muted-foreground hover:text-emerald-400"}`}
+                            tooltip={
+                              !isAwsConnected ? "AWS Disconnected"
+                              : vm.status !== "running" ? "Connect is disabled for stopped or terminated VMs"
+                              : isTransitioning ? "Connect is unavailable while the VM is transitioning"
+                              : "Connect"
+                            }
+                            onClick={() => onConnect(requestId, vm, allSameStopTime)}>
+                            <Plug  className="h-3.5 w-3.5" />
+                          </Button>
+                       
                         {vm.status === "running" && (
                           <Button variant="ghost" size="icon" disabled={!isAwsConnected}
                             className={`h-7 w-7 ${!isAwsConnected ? "text-muted-foreground/40 cursor-not-allowed" : "text-muted-foreground hover:text-emerald-400"}`}

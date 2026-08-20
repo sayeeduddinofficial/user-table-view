@@ -301,8 +301,7 @@ export interface AuditLogsResponse {
 }
 
 export interface AuditFiltersResponse {
-  users: { user_id: number; user_name: string }[];
-  categories: string[];
+  users: { id: number; display_name: string; email: string }[];
 }
 
 export interface AuditCategoryCountsResponse {

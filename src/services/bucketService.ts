@@ -102,6 +102,7 @@ export async function fetchBucketsApi(): Promise<BucketItem[]> {
 
 export async function createBucketApi(payload: CreateBucketRequest): Promise<CreateBucketResponse> {
   return apiClient.post<CreateBucketResponse, CreateBucketRequest>(env.bucketService, 'buckets', payload);
+  return apiClient.post<CreateBucketResponse, CreateBucketRequest>(env.bucketService, 'buckets', payload);
 }
 
 export async function deleteBucketApi(requestId: string): Promise<DeleteBucketResponse> {

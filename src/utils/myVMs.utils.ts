@@ -9,6 +9,7 @@ export interface VM {
   instanceType?: string;
   publicIp: string;
   privateIp: string;
+  splunkUrl?: string | null;
   region: string;
   status:
     | "running" | "stopped" | "starting" | "stopping" | "pending"
@@ -27,6 +28,16 @@ export interface ManagerOption {
   name: string;
 }
 
+// Short labels for the request-group header / Connect dialog, mirroring
+// CATEGORY_OPTIONS in @/types (full descriptions live there for the request form).
+export const CATEGORY_SHORT_LABELS: Record<number, string> = {
+  1: "Manual",
+  2: "All-in-one",
+  3: "Standard Cluster",
+  4: "HA Cluster",
+  5: "HA Cluster + ALB",
+};
+
 export const statusConfig: Record<string, { color: string; label: string }> = {
   running:    { color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30", label: "Running" },
   stopped:    { color: "bg-amber-500/20 text-amber-400 border-amber-500/30",       label: "Stopped" },
@@ -40,6 +51,18 @@ export const statusConfig: Record<string, { color: string; label: string }> = {
 export const roleMap: Record<string, string> = Object.fromEntries(
   ROLE_NAMES.map((r) => [r.name.toLowerCase(), r.id])
 );
+
+const STANDARD_CLUSTER_ROLE_IDS = new Set(["sh", "idx", "cm", "ds", "hf", "uf", "lm"]);
+
+export function inferCategory(vms: VM[]): number {
+  const roleIds = vms.map((vm) => roleMap[vm.role.toLowerCase()]);
+  const has = (id: string) => roleIds.includes(id);
+
+  if (has("aio")) return 2;
+  if (has("shc") || has("deployer")) return 4;
+  if (roleIds.some((id) => STANDARD_CLUSTER_ROLE_IDS.has(id))) return 3;
+  return 1;
+}
 
 export function formatTime(dateStr?: string | null) {
   if (!dateStr) return "—";

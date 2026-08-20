@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { PieChart as PieChartIcon } from "lucide-react";
 
-const CATEGORY_COLORS: Record<string, string> = {
+const CATEGORY_COLORS = {
   Auth: "#60a5fa",
   "AWS Ops": "#34d399",
   "User Mgmt": "#f472b6",
@@ -69,11 +69,7 @@ function DonutPortalTooltip({ hover, total }: { hover: { name: string; value: nu
   );
 }
 
-interface CategorySplitChartProps {
-  data: Record<string, number>;
-}
-
-export const CategorySplitChart = ({ data }: CategorySplitChartProps) => {
+export const CategorySplitChart = ({ data }) => {
   const [donutHover, setDonutHover] = useState<{ name: string; value: number; fill: string; x: number; y: number } | null>(null);
   const [activeIndex, setActiveIndex] = useState<number | undefined>(undefined);
 
@@ -91,11 +87,11 @@ export const CategorySplitChart = ({ data }: CategorySplitChartProps) => {
 
   const chartData = Object.entries(data).map(([category, count]) => ({
     name: category,
-    value: Number(count),
+    value: count,
     color: CATEGORY_COLORS[category] || "#64748b",
   }));
 
-  const total = chartData.reduce((sum, item) => sum + item.value, 0);
+  const total = chartData.reduce((sum, item) => sum + (+item.value), 0);
   const hasData = total > 0;
 
   return (
@@ -158,7 +154,7 @@ export const CategorySplitChart = ({ data }: CategorySplitChartProps) => {
             {/* Legend with Progress Bars */}
             <div className="flex-1 w-full md:w-auto space-y-3">
               {chartData.map((item) => {
-                const percentage = ((item.value / total) * 100).toFixed(1);
+                const percentage = ((+item.value / total) * 100).toFixed(1);
                 return (
                   <div key={item.name} className="flex items-center gap-3 text-xs">
                     {/* Dot and Label */}
@@ -181,7 +177,7 @@ export const CategorySplitChart = ({ data }: CategorySplitChartProps) => {
                     {/* Percentage and Count */}
                     <div className="flex items-center gap-3">
                       <span className="text-muted-foreground min-w-[45px] text-right">{percentage}%</span>
-                      <span className="font-semibold text-foreground min-w-[40px] text-right">{item.value}</span>
+                      <span className="font-semibold text-foreground min-w-[40px] text-right">{+item.value}</span>
                     </div>
                   </div>
                 );

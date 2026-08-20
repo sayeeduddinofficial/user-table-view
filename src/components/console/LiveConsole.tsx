@@ -28,7 +28,7 @@ const statusLabelMap: Record<string, string> = {
   retrying: "Retrying",
   terminated: "Terminated",
   terminating: "Terminating",
-  retrying_terminate: "Retrying Terminate",
+  retrying_terminate: "Retrying",
   destroying: "Terminating",
   destroyed: "Terminated",
 };
@@ -41,9 +41,9 @@ const statusColorMap: Record<string, string> = {
   failed: "border-red-500 text-red-500",
   terminated: "border-gray-500 text-gray-500",
   terminating: "border-yellow-500 text-yellow-500",
-  retrying_terminate: "bg-purple-500/20 text-purple-400 border-purple-500/30",
-  destroying: "border-yellow-500 text-yellow-500",
-  destroyed: "border-gray-500 text-gray-500",
+  retrying_terminate: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30",
+  destroying: "border-yellow-500 text-yellow-500",   
+  destroyed: "border-gray-500 text-gray-500",  
 };
 
 const stripAnsiCodes = (value: string): string => {
