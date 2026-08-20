@@ -19,3 +19,26 @@ flowchart TD
     S0 ~~~ S1 ~~~ S2 ~~~ S3 ~~~ S4
   end
   C -. "error response" .-> E["ApiErrorBoundary + toast"]
+
+  %% ---- Condition-based paths ----
+  Q -->|"cache lookup"| D1{"Cached data<br/>still fresh?"}
+  D1 -->|"yes"| P
+  D1 -->|"no"| A
+  C -->|"before send"| D2{"Access token<br/>valid?"}
+  D2 -->|"yes"| S
+  D2 -->|"no"| RT["Refresh token"]
+  RT -->|"retry request"| S
+  RT -. "refresh failed" .-> LO["Sign out - redirect /login"]
+  S -->|"response"| D3{"HTTP 2xx?"}
+  D3 -->|"yes"| Q
+  D3 -->|"no"| D4{"403 role change?"}
+  D4 -->|"yes"| RR["Refresh role and retry"]
+  D4 -->|"no"| E
+  %% ---- Service specific decisions ----
+  X0{"Existing session?"} -->|"yes"| X1["Restore session -> /providers"]
+  X0 -->|"no"| X2["MSAL redirect sign-in"]
+  X2 --> X3{"Redirect result valid?"}
+  X3 -->|"yes"| X4{"Role allowed for route?"}
+  X3 -->|"no"| LO
+  X4 -->|"yes"| X5["Render protected page"]
+  X4 -->|"no"| X6["Show not authorized"]
