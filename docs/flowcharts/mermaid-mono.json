@@ -33,5 +33,13 @@
     "noteBorderColor": "#000000",
     "noteTextColor": "#000000",
     "fontFamily": "arial"
+  },
+  "flowchart": {
+    "curve": "linear",
+    "htmlLabels": true,
+    "nodeSpacing": 45,
+    "rankSpacing": 55,
+    "useMaxWidth": false,
+    "padding": 20
   }
 }

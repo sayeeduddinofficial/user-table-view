@@ -10,7 +10,7 @@ flowchart TD
   C <-->|"REST request / JSON response"| S[("RDS Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    direction TB
+    direction LR
     S0["List DB instances per request"]
     S1["Create RDS (engine, class, storage)"]
     S2["View instance metrics and endpoints"]
@@ -19,6 +19,7 @@ flowchart TD
     S0 ~~~ S1 ~~~ S2 ~~~ S3 ~~~ S4
   end
   C -. "error response" .-> E["ApiErrorBoundary + toast"]
+  E ~~~ UI
 
   %% ---- Key decisions ----
   P -->|"evaluate"| X0
@@ -27,3 +28,23 @@ flowchart TD
   X0 -->|"modifying"| X3["Disable actions"]
   X4{"Quota available?"} -->|"yes"| X5["Create DB instance"]
   X4 -->|"no"| X6["Request quota increase"]
+
+%% ---- styles ----
+classDef actor fill:#fde2e4,stroke:#b3546a,stroke-width:1.5px,color:#12263f;
+classDef page fill:#dbe7fb,stroke:#2f5d9e,stroke-width:1.5px,color:#12263f;
+classDef hook fill:#e6ddf5,stroke:#6b4fa0,stroke-width:1.5px,color:#12263f;
+classDef cache fill:#fdf0d5,stroke:#b58324,stroke-width:1.5px,color:#12263f;
+classDef api fill:#d8f0e6,stroke:#2e7d5b,stroke-width:1.5px,color:#12263f;
+classDef client fill:#d5eef7,stroke:#22708c,stroke-width:1.5px,color:#12263f;
+classDef svc fill:#e6e2dc,stroke:#7a6a55,stroke-width:1.5px,color:#12263f;
+classDef err fill:#fbdcdc,stroke:#b03a3a,stroke-width:1.5px,color:#12263f;
+classDef dec fill:#fff3cd,stroke:#b58324,stroke-width:1.5px,color:#12263f;
+class A api;
+class C client;
+class E err;
+class H hook;
+class P page;
+class Q cache;
+class S svc;
+class U actor;
+class X0,X1,X2,X3,X4,X5,X6 dec;

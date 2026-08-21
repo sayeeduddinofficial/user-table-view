@@ -1,6 +1,8 @@
 # Service Flowcharts
 
-Each service has an editable Mermaid source (`*.mmd`) and a rendered PNG in `png/`.
+Each service has an editable Mermaid source (`*.mmd`) and a rendered color-coded PNG in `png/`.
+
+Every chart is end-to-end: UI page -> hook -> React Query -> API module -> Axios client -> backend microservice (auth middleware, business logic) -> PostgreSQL database and AWS SDK -> AWS APIs, and back.
 
 | Service | Source | Image |
 |---|---|---|
@@ -26,5 +28,5 @@ Each service has an editable Mermaid source (`*.mmd`) and a rendered PNG in `png
 
 ## Re-render
 ```bash
-npx @mermaid-js/mermaid-cli -p puppeteer-config.json -c docs/flowcharts/mermaid-mono.json -i docs/flowcharts/<name>.mmd -o docs/flowcharts/png/<name>.png -b white -w 1600
+npx @mermaid-js/mermaid-cli -p puppeteer-config.json -c docs/flowcharts/mermaid-color.json -i docs/flowcharts/<name>.mmd -o docs/flowcharts/png/<name>.png -b white -w 1600
 ```

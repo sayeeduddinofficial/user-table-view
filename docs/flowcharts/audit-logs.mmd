@@ -10,7 +10,7 @@ flowchart TD
   C <-->|"REST request / JSON response"| S[("User Management Service")]
   P -->|"renders"| UI
   subgraph UI[Page interactions]
-    direction TB
+    direction LR
     S0["Filter by service, user, action and date range"]
     S1["Stat cards and analytics charts"]
     S2["Paginated log table"]
@@ -18,6 +18,7 @@ flowchart TD
     S0 ~~~ S1 ~~~ S2 ~~~ S3
   end
   C -. "error response" .-> E["ApiErrorBoundary + toast"]
+  E ~~~ UI
 
   %% ---- Key decisions ----
   P -->|"evaluate"| X0
@@ -29,3 +30,23 @@ flowchart TD
   X4 --> X6{"Export format?"}
   X6 -->|"CSV"| X7["Download CSV"]
   X6 -->|"PNG / PDF"| X8["Render image / document"]
+
+%% ---- styles ----
+classDef actor fill:#fde2e4,stroke:#b3546a,stroke-width:1.5px,color:#12263f;
+classDef page fill:#dbe7fb,stroke:#2f5d9e,stroke-width:1.5px,color:#12263f;
+classDef hook fill:#e6ddf5,stroke:#6b4fa0,stroke-width:1.5px,color:#12263f;
+classDef cache fill:#fdf0d5,stroke:#b58324,stroke-width:1.5px,color:#12263f;
+classDef api fill:#d8f0e6,stroke:#2e7d5b,stroke-width:1.5px,color:#12263f;
+classDef client fill:#d5eef7,stroke:#22708c,stroke-width:1.5px,color:#12263f;
+classDef svc fill:#e6e2dc,stroke:#7a6a55,stroke-width:1.5px,color:#12263f;
+classDef err fill:#fbdcdc,stroke:#b03a3a,stroke-width:1.5px,color:#12263f;
+classDef dec fill:#fff3cd,stroke:#b58324,stroke-width:1.5px,color:#12263f;
+class A api;
+class C client;
+class E err;
+class H hook;
+class P page;
+class Q cache;
+class S svc;
+class U actor;
+class X0,X1,X2,X3,X4,X5,X6,X7,X8 dec;
